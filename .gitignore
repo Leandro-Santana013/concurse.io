@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+venv/
+.env
+
+# SQLite databases
+*.db
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp
+*.log
+pw_dl_*/
+
+*.db
+test.pdf
+test_overlap.py
+pw_user_data/
+pdfs/
+static/pdfs/
+qc_cookies.json
