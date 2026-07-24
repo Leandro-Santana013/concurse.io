@@ -6,6 +6,10 @@ import traceback
 import requests
 import functools
 import google.generativeai as genai
+# Note: google-genai is used now via standard imports, wait we will replace this entirely
+from google import genai
+from google.genai import types
+
 MODEL_CASCADE = [
     "gemini-3.6-flash",
     "gemini-3.5-flash",
@@ -99,13 +103,14 @@ class RateLimitManager:
 
 rate_limit_manager = RateLimitManager()
 
-# Monkey-patch no requests.Session.send para interceptar headers do Gemini
-_original_send = requests.Session.send
+# Monkey-patch no httpx.Client.send para interceptar headers do Gemini
+import httpx
+_original_send = httpx.Client.send
 
 @functools.wraps(_original_send)
 def _hooked_send(self, request, **kwargs):
     response = _original_send(self, request, **kwargs)
-    if "googleapis.com" in request.url:
+    if "googleapis.com" in str(request.url):
         limit_str = response.headers.get("x-ratelimit-limit-requests")
         remaining_str = response.headers.get("x-ratelimit-remaining-requests")
         reset_str = response.headers.get("x-ratelimit-reset-requests")
@@ -120,7 +125,7 @@ def _hooked_send(self, request, **kwargs):
                 pass
     return response
 
-requests.Session.send = _hooked_send
+httpx.Client.send = _hooked_send
 
 class ApiKeyManager:
     def __init__(self):
@@ -132,9 +137,10 @@ class ApiKeyManager:
         keys_str = os.environ.get("GEMINI_API_KEY", "")
         self.keys = [k.strip() for k in keys_str.split(",") if k.strip()]
         self.current_index = 0
+        self.clients = {}
         
         if self.keys:
-            genai.configure(api_key=self.keys[0], transport='rest')
+            self.clients[self.keys[0]] = genai.Client(api_key=self.keys[0], http_options={'api_version':'v1beta'})
             print(f"[ApiKeyManager] Inicializado com {len(self.keys)} chave(s). Usando Chave 1.")
             
     def rotate_key(self, model_manager=None):
@@ -147,17 +153,16 @@ class ApiKeyManager:
                 self.current_index = (self.current_index + 1) % len(self.keys)
                 new_key = self.keys[self.current_index]
                 if rate_limit_manager.is_key_available(new_key):
-                    genai.configure(api_key=new_key, transport='rest')
-                    if model_manager:
-                        model_manager._init_models()
+                    if new_key not in self.clients:
+                        self.clients[new_key] = genai.Client(api_key=new_key, http_options={'api_version':'v1beta'})
                     print(f"[ApiKeyManager] ROTATIVO ATIVADO: Alternando para a Chave {self.current_index + 1}/{len(self.keys)}")
                     return True
             
             # Se todas bloqueadas, gira de qualquer forma para não travar num índice só, mas vai exigir wait no loop
             self.current_index = (original_index + 1) % len(self.keys)
-            genai.configure(api_key=self.keys[self.current_index], transport='rest')
-            if model_manager:
-                model_manager._init_models()
+            fallback_key = self.keys[self.current_index]
+            if fallback_key not in self.clients:
+                self.clients[fallback_key] = genai.Client(api_key=fallback_key, http_options={'api_version':'v1beta'})
             print(f"[ApiKeyManager] Aviso: Todas as chaves esgotadas/bloqueadas. Retornando falso (aguardar cota).")
             return False
 
@@ -166,6 +171,14 @@ class ApiKeyManager:
             if not self.keys:
                 return None
             return self.keys[self.current_index]
+            
+    def get_current_client(self):
+        with self.lock:
+            if not self.keys: return None
+            key = self.keys[self.current_index]
+            if key not in self.clients:
+                self.clients[key] = genai.Client(api_key=key, http_options={'api_version':'v1beta'})
+            return self.clients[key]
 
 class ModelManager:
     def __init__(self):
@@ -173,13 +186,10 @@ class ModelManager:
         self._init_models()
 
     def _init_models(self):
-        try:
-            self.models["gemini-3.5-flash"] = genai.GenerativeModel('gemini-3.5-flash')
-            self.models["gemini-2.5-flash"] = genai.GenerativeModel('gemini-2.5-flash')
-            self.models["gemini-3.1-flash-lite"] = genai.GenerativeModel('gemini-3.1-flash-lite')
-            self.models["gemini-2.5-flash-lite"] = genai.GenerativeModel('gemini-2.5-flash-lite')
-        except Exception as e:
-            print("Aviso: Falha ao carregar alguns modelos no manager. Detalhes:", e)
+        self.models["gemini-3.5-flash"] = 'gemini-3.5-flash'
+        self.models["gemini-2.5-flash"] = 'gemini-2.5-flash'
+        self.models["gemini-3.1-flash-lite"] = 'gemini-3.1-flash-lite'
+        self.models["gemini-2.5-flash-lite"] = 'gemini-2.5-flash-lite'
 
     def get_model(self, name):
         if name in self.models:
@@ -266,7 +276,7 @@ class TaskStack:
                 print(f"[Orchestrator] Erro na tarefa {task.id} (Exame {task.exam_id}): {error_msg}")
                 
                 # Handling limits and deprecated models
-                if "429" in error_msg or "Quota" in error_msg or "exhausted" in error_msg.lower() or "404" in error_msg or "not found" in error_msg.lower():
+                if "429" in error_msg or "Quota" in error_msg or "exhausted" in error_msg.lower() or "404" in error_msg or "not found" in error_msg.lower() or "503" in error_msg or "unavailable" in error_msg.lower():
                     # PRIORIDADE 3: Circuit Breaker
                     curr_key = self.api_key_manager.get_current_key()
                     if curr_key:
@@ -342,7 +352,8 @@ class TaskStack:
         if self.on_exam_progress:
             self.on_exam_progress(task.exam_id, f"Extraindo bloco {chunk_info} com {task.model_name}...", 50)
             
-        model = self.model_manager.get_model(task.model_name)
+        model_name = self.model_manager.get_model(task.model_name)
+        client = self.api_key_manager.get_current_client()
         
         # Método Híbrido: extrai texto do PDF com PyMuPDF (fitz) primeiro (grátis, sem quota de upload)
         # Só usa Vision se o texto for insuficiente (PDF escaneado) ou se possuir imagens
@@ -411,25 +422,26 @@ REGRAS:
         uploaded_file = None
         # Faz upload do arquivo se use_vision foi ativado por ter imagens ou texto escasso
         if file_path and use_vision:
-            import google.generativeai as genai
             try:
-                uploaded_file = genai.upload_file(path=file_path, mime_type="application/pdf")
+                uploaded_file = client.files.upload(file=file_path, config={'mime_type': 'application/pdf'})
                 contents.append(uploaded_file)
             except Exception as e:
                 print(f"Erro no upload para Vision: {type(e).__name__}: {str(e)[:100]}")
                 
         try:
-            response = model.generate_content(contents, generation_config={"response_mime_type": "application/json"})
+            from google.genai import types
+            response = client.models.generate_content(
+                model=model_name,
+                contents=contents,
+                config=types.GenerateContentConfig(response_mime_type="application/json")
+            )
         finally:
             if uploaded_file:
                 try:
-                    import google.generativeai as genai
-                    genai.delete_file(uploaded_file.name)
+                    client.files.delete(name=uploaded_file.name)
                 except Exception:
                     pass
         
-
-            
         raw = response.text.strip()
         if '```json' in raw:
             raw = raw.split('```json')[1].split('```')[0].strip()
@@ -440,6 +452,7 @@ REGRAS:
         import re as _re
         raw = _re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', raw)
         
+        import json
         try:
             task.result = json.loads(raw)
         except json.JSONDecodeError as je:
@@ -503,6 +516,7 @@ REGRAS:
                 
                 best_page = -1
                 best_y = -1
+                best_x = -1
                 max_overlap = 0
                 
                 best_block_idx = -1
@@ -514,9 +528,10 @@ REGRAS:
                             max_overlap = overlap
                             best_page = page_num
                             best_y = b["bbox"][1] # y0
+                            best_x = b["bbox"][0] # x0
                             best_block_idx = idx
                             
-                question_positions.append({"index": i, "page": best_page, "y": best_y, "block_idx": best_block_idx})
+                question_positions.append({"index": i, "page": best_page, "y": best_y, "x": best_x, "block_idx": best_block_idx})
             
             # Varrer as páginas buscando imagens
             for page_num in range(len(doc)):
@@ -544,6 +559,7 @@ REGRAS:
                     if rect.width < 50 and rect.height < 50: continue
                     
                     img_y = rect.y0
+                    img_x = rect.x0
                     
                     # Tenta descobrir o block_idx da imagem na lista de blocos
                     img_block_idx = -1
@@ -552,18 +568,29 @@ REGRAS:
                             img_block_idx = idx
                             break
                     
-                    # Se houver questões na página, associa à mais próxima na ordem de leitura (block_idx)
+                    # Se houver questões na página, associa à questão à qual a imagem pertence (aquela que começou antes da imagem)
                     if page_qs:
                         if img_block_idx != -1:
-                            # Tenta achar a primeira questão DEPOIS da imagem na ordem de leitura
-                            after_qs = [q for q in page_qs if q["block_idx"] >= img_block_idx]
-                            if after_qs:
-                                best_q = after_qs[0]
+                            # Tenta achar a última questão que começou ANTES (ou junto) da imagem na ordem de leitura
+                            before_qs = [q for q in page_qs if q["block_idx"] <= img_block_idx]
+                            if before_qs:
+                                best_q = before_qs[-1]
                             else:
-                                best_q = page_qs[-1] # se a imagem for a última coisa, atrela à última questão
+                                best_q = page_qs[0] # se a imagem vier antes de qualquer questão na página, atrela à primeira
                         else:
-                            # Fallback para distância Y se não achar o bloco
-                            best_q = min(page_qs, key=lambda q: abs(q["y"] - img_y))
+                            # Fallback usando a posição Y (última questão acima da imagem) E considerando a coluna (eixo X lateral)
+                            # Assume que colunas distam cerca de 150-200 pixels uma da outra
+                            before_qs_same_col = [q for q in page_qs if q["y"] <= img_y and abs(q.get("x", 0) - img_x) < 200]
+                            
+                            if before_qs_same_col:
+                                best_q = before_qs_same_col[-1]
+                            else:
+                                # Se nenhuma questão acima bater com a coluna, ignora o eixo X (pode ser imagem centralizada)
+                                before_qs_any_col = [q for q in page_qs if q["y"] <= img_y]
+                                if before_qs_any_col:
+                                    best_q = before_qs_any_col[-1]
+                                else:
+                                    best_q = page_qs[0]
                             
                         assigned_q_idx = best_q["index"]
                         
@@ -593,7 +620,8 @@ REGRAS:
         if self.on_exam_progress:
             self.on_exam_progress(task.exam_id, f"Gerando prova simulada via {task.model_name}...", 50)
             
-        model = self.model_manager.get_model(task.model_name)
+        model_name = self.model_manager.get_model(task.model_name)
+        client = self.api_key_manager.get_current_client()
         prompt = f"""
 Você é um especialista em concursos públicos brasileiros. O download do PDF original falhou, mas precisamos entregar a prova para o usuário.
 Crie 10 questões realistas e de alta qualidade no exato estilo e nível da seguinte prova: "{title}".
@@ -612,7 +640,7 @@ Formato obrigatório:
 
 As questões DEVEM ser desafiadoras e no estilo típico da banca (se estiver no título).
 """
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(model=model_name, contents=prompt)
         raw = response.text.strip()
         if '```json' in raw:
             raw = raw.split('```json')[1].split('```')[0].strip()

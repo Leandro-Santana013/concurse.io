@@ -2,16 +2,16 @@
 Test Gemini PDF URL suggestion
 """
 import os, json
-import google.generativeai as genai
+from google import genai
 from dotenv import load_dotenv
 
 load_dotenv()
 api_key = os.environ.get("GEMINI_API_KEY")
-genai.configure(api_key=api_key)
+client = genai.Client(api_key=api_key)
 
 query = "trabalhador portuario avulso"
 
-model = genai.GenerativeModel('gemini-2.5-flash')
+# model = genai.GenerativeModel('gemini-2.5-flash')
 prompt = f"""
 Você é um especialista em concursos públicos brasileiros. O usuário quer encontrar provas reais em PDF de:
 "{query}"
@@ -33,6 +33,6 @@ Formato:
 ]
 """
 
-response = model.generate_content(prompt)
+response = client.models.generate_content(prompt)
 print("Resposta Gemini:")
 print(response.text)

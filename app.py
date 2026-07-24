@@ -5,7 +5,6 @@ import os
 import requests
 from bs4 import BeautifulSoup
 import json
-import google.generativeai as genai
 from dotenv import load_dotenv
 from local_pdf_parser import parse_exam_text_local
 from orchestrator import orchestrator
@@ -108,11 +107,9 @@ def get_gemini_key():
 _boot_keys = get_gemini_key()
 if _boot_keys:
     from orchestrator import orchestrator
-    import google.generativeai as genai
     _keys_list = [k.strip() for k in _boot_keys.split(",") if k.strip()]
     if _keys_list:
         orchestrator.api_key_manager.keys = _keys_list
-        genai.configure(api_key=_keys_list[0])
         print(f"[App] Orchestrator configurado no boot com {len(_keys_list)} chaves do banco.")
 
 # Global state for progress tracking (moved to top)
@@ -151,12 +148,10 @@ def manage_gemini_key():
         
         # Injeta dinamicamente as novas chaves no orchestrator em tempo real
         from orchestrator import orchestrator
-        import google.generativeai as genai
         final_keys_list = [k.strip() for k in config.value.split(",") if k.strip()]
         if final_keys_list:
             orchestrator.api_key_manager.keys = final_keys_list
             orchestrator.api_key_manager.current_index = 0
-            genai.configure(api_key=final_keys_list[0])
             print(f"[ApiKeyManager] Atualizado com {len(final_keys_list)} chaves via UI.")
 
         session.close()
@@ -395,27 +390,25 @@ def _gemini_find_pdf_urls(query, api_key_val):
     try:
         import orchestrator as orch_module
         from orchestrator import orchestrator
-        import google.generativeai as genai
         import json
+        from google import genai
         
         max_attempts = len(orchestrator.api_key_manager.keys) if orchestrator.api_key_manager.keys else 1
         for attempt in range(max_attempts):
             try:
                 if orchestrator.api_key_manager.keys:
-                    current_key = orchestrator.api_key_manager.keys[orchestrator.api_key_manager.current_index]
-                    genai.configure(api_key=current_key)
+                    client = orchestrator.api_key_manager.get_current_client()
                 else:
-                    genai.configure(api_key=api_key_val)
+                    client = genai.Client(api_key=api_key_val)
                     
                 model_name = orch_module.MODEL_CASCADE[-2] # Usa modelo Lite para economizar cota
-                model = orchestrator.model_manager.get_model(model_name)
                 prompt = f"""
 Você é um especialista em concursos públicos brasileiros. O usuário quer encontrar provas em PDF de: "{query}"
 Forneça URLs REAIS de arquivos PDF de provas de concurso. Use fontes como CEBRASPE (cdn.cebraspe.org.br), CESGRANRIO, FCC, gov.br.
 Retorne APENAS JSON válido: [{{"title": "...", "url": "https://...pdf"}}]
 Se não souber, retorne: []
 """
-                response = model.generate_content(prompt)
+                response = client.models.generate_content(model=model_name, contents=prompt)
                 raw = response.text.strip()
                 if '```' in raw:
                     raw = raw.split('```')[1].split('```')[0].replace('json','').strip()
@@ -515,8 +508,7 @@ def search_exams():
         try:
             import orchestrator as orch_module
             from orchestrator import orchestrator
-            import google.generativeai as genai
-            
+                        
             max_attempts = len(orchestrator.api_key_manager.keys) if orchestrator.api_key_manager.keys else 1
             for attempt in range(max_attempts):
                 try:
@@ -547,7 +539,7 @@ def search_exams():
                       "query_otimizada": "Uma string de busca limpa e otimizada para encontrar a prova em PDF"
                     }}
                     """
-                    response = model.generate_content(prompt)
+                    response = client.models.generate_content(model=model_name, contents=prompt)
                     clean_json = response.text.replace('```json', '').replace('```', '').strip()
                     data = json.loads(clean_json)
                     break # Sucesso, sai do loop de tentativas
@@ -1623,12 +1615,11 @@ def get_keys_status():
     for i, key in enumerate(keys):
         key_suffix = '...' + key[-4:] if len(key) > 4 else key
         try:
-            import google.generativeai as genai
+            from google import genai
             import orchestrator as orch_module
-            genai.configure(api_key=key)
-            model_name = orch_module.MODEL_CASCADE[-2] # Usa modelo Lite para teste
-            model = genai.GenerativeModel(model_name)
-            model.generate_content('Olá', generation_config={'max_output_tokens': 5})
+            client = genai.Client(api_key=key)
+            model_name = orch_module.MODEL_CASCADE[-2]
+            client.models.generate_content(model=model_name, contents='Olá')
             results.append({"index": i + 1, "suffix": key_suffix, "status": "active", "label": "Ativa"})
         except Exception as e:
             print(f"DEBUG EXCEPTION: {repr(e)}")
@@ -1678,14 +1669,12 @@ def explain_question(question_id):
     
     # Obter a chave ativa e fazer a chamada
     try:
+        from google import genai
         import orchestrator as orch_module
         from orchestrator import orchestrator
-        import google.generativeai as genai
-        active_key = orchestrator.api_key_manager.keys[orchestrator.api_key_manager.current_index]
-        genai.configure(api_key=active_key)
-        model_name = orch_module.MODEL_CASCADE[-2] # Usa modelo Lite para economizar cota
-        model = orchestrator.model_manager.get_model(model_name)
-        response = model.generate_content(prompt)
+        client = orchestrator.api_key_manager.get_current_client()
+        model_name = orch_module.MODEL_CASCADE[-2]
+        response = client.models.generate_content(model=model_name, contents=prompt)
         explanation = response.text
         return jsonify({"explanation": explanation})
     except Exception as e:

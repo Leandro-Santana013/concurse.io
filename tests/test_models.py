@@ -1,6 +1,6 @@
 import os, time, sys
 from dotenv import load_dotenv
-import google.generativeai as genai
+from google import genai
 from orchestrator import ModelManager, ApiKeyManager
 
 load_dotenv()

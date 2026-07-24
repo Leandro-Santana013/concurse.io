@@ -188,20 +188,20 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('Erro de conexão ao salvar chave.', 'error');
         }
     });
-    
+
     document.getElementById('btn-close-api-key').addEventListener('click', () => {
         document.getElementById('api-key-modal').style.display = 'none';
     });
 
-    window.editApiKeys = function() {
+    window.editApiKeys = function () {
         document.getElementById('api-key-modal').style.display = 'flex';
         document.getElementById('btn-close-api-key').style.display = 'block';
     };
 
-    window.addApiKey = async function() {
+    window.addApiKey = async function () {
         const key = prompt("Cole a nova chave do Gemini API (AIzaSy...) para adicionar à cascata:");
         if (!key) return;
-        
+
         try {
             const res = await fetch(`${API_BASE}/config/gemini_key`, {
                 method: 'POST',
@@ -244,7 +244,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (viewId !== 'view-exam') stopExamTimer();
         if (viewId === 'view-stats') loadGlobalStats();
         if (viewId === 'view-errors') loadErrorStats();
-        
+
     }
 
     async function loadGlobalStats() {
@@ -255,7 +255,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('stat-total-questions').textContent = data.total_questions || 0;
             document.getElementById('stat-accuracy').textContent = (data.global_accuracy || 0) + '%';
             document.getElementById('stat-streak').textContent = data.streak || 0;
-        } catch(e) { console.error('Erro ao carregar stats:', e); }
+        } catch (e) { console.error('Erro ao carregar stats:', e); }
     }
 
     document.querySelector('.logo').addEventListener('click', () => {
@@ -649,7 +649,7 @@ document.addEventListener('DOMContentLoaded', () => {
             folder.exams.forEach(exam => {
                 const card = document.createElement('div');
                 card.className = 'exam-card fade-in';
-                
+
                 // Stats de tentativas
                 let statsHtml = '';
                 if (exam.attempt_count > 0) {
@@ -661,7 +661,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     `;
                 }
-                
+
                 card.innerHTML = `
                     <h3 class="exam-card-title">${exam.title}</h3>
                     ${statsHtml}
@@ -928,7 +928,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ===== FLAG FOR REVIEW =====
-    window.toggleFlag = function(idx) {
+    window.toggleFlag = function (idx) {
         if (flaggedQuestions.has(idx)) flaggedQuestions.delete(idx);
         else flaggedQuestions.add(idx);
         renderCurrentQuestion();
@@ -973,13 +973,13 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault(); currentQuestionIndex--; renderCurrentQuestion();
         }
         // Number keys for options
-        else if (q.options && ['1','2','3','4','5'].includes(e.key)) {
+        else if (q.options && ['1', '2', '3', '4', '5'].includes(e.key)) {
             const opts = Object.keys(q.options);
             const idx = parseInt(e.key) - 1;
             if (idx < opts.length) window.answerQuestion(opts[idx]);
         }
         // Letter keys for options
-        else if (q.options && ['a','b','c','d','e'].includes(e.key.toLowerCase())) {
+        else if (q.options && ['a', 'b', 'c', 'd', 'e'].includes(e.key.toLowerCase())) {
             const key = e.key.toUpperCase();
             if (q.options[key]) window.answerQuestion(key);
         }
@@ -1155,9 +1155,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (timerDisplay) timerDisplay.remove();
     }
 
-    window.explainWithAI = async function(questionId, userAnswer) {
+    window.explainWithAI = async function (questionId, userAnswer) {
         showToast('Professor IA está analisando a questão...', 'info');
-        
+
         try {
             const response = await fetch(`${API_BASE}/explain/${questionId}`, {
                 method: 'POST',
@@ -1165,9 +1165,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ user_answer: userAnswer })
             });
             const data = await response.json();
-            
+
             if (!response.ok) throw new Error(data.error || 'Erro na IA');
-            
+
             // Show modal
             const overlay = document.createElement('div');
             overlay.style.cssText = `position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; align-items: center; justify-content: center;`;
@@ -1188,14 +1188,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    window.loadErrorStats = async function() {
+    window.loadErrorStats = async function () {
         const container = document.getElementById('error-stats-container');
         if (!container) return;
-        
+
         try {
             const res = await fetch(`${API_BASE}/notebook/stats`);
             const stats = await res.json();
-            
+
             if (!stats || stats.length === 0) {
                 container.innerHTML = `
                     <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-muted);">
@@ -1206,7 +1206,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 `;
                 return;
             }
-            
+
             container.innerHTML = stats.map(s => `
                 <div class="card stat-card" style="padding: 20px; border-left: 4px solid var(--danger-color); cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease;"
                      onclick="window.startErrorNotebook('${s.subject}')"
@@ -1227,14 +1227,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>
             `).join('');
-            
+
         } catch (e) {
             console.error(e);
             container.innerHTML = `<div style="grid-column: 1 / -1; color: var(--danger-color); padding: 20px;">Erro ao carregar estatísticas.</div>`;
         }
     };
 
-    window.startErrorNotebook = async function(subject = null) {
+    window.startErrorNotebook = async function (subject = null) {
         showToast('Carregando Caderno de Erros...', 'info');
         try {
             const url = subject ? `${API_BASE}/notebook?subject=${encodeURIComponent(subject)}` : `${API_BASE}/notebook`;
@@ -1251,7 +1251,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    window.generateCustomExam = async function() {
+    window.generateCustomExam = async function () {
         showToast('Gerando simulado...', 'info');
         try {
             const res = await fetch(`${API_BASE}/generate_exam`, {
@@ -1277,11 +1277,11 @@ document.addEventListener('DOMContentLoaded', () => {
         currentQuestionIndex = 0;
         currentExamAnswers = {};
         flaggedQuestions = new Set();
-        
+
         document.getElementById('exam-title').textContent = examData.title;
         document.querySelectorAll('.view-section').forEach(el => el.style.display = 'none');
         document.getElementById('view-exam').style.display = 'block';
-        
+
         const qContainer = document.getElementById('question-container');
         if (!qContainer) {
             // Need to reconstruct exam view if it was destroyed by finish exam
@@ -1322,14 +1322,14 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('next-question').style.display = 'block';
             document.getElementById('question-counter').style.display = 'block';
         }
-        
+
         buildNavigationGrid();
         renderCurrentQuestion();
         startExamTimer();
     }
 
     // ===== RETRY WRONG QUESTIONS =====
-    window.retryWrongQuestions = function() {
+    window.retryWrongQuestions = function () {
         const wrongIndexes = currentExamQuestions.map((q, i) => {
             const given = currentExamAnswers[i] || 'N/A';
             return given.trim().toUpperCase() !== (q.correct_answer || '').trim().toUpperCase() ? i : null;
@@ -1360,7 +1360,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentPciExamId = null;
     let currentPciCard = null;
 
-    window.openPciManualModal = function(examId, url, cardElement) {
+    window.openPciManualModal = function (examId, url, cardElement) {
         currentPciExamId = examId;
         currentPciCard = cardElement;
         pciManualLink.href = url;
@@ -1437,7 +1437,7 @@ document.addEventListener('DOMContentLoaded', () => {
         isZenMode = !isZenMode;
         if (isZenMode) {
             document.body.classList.add('zen-mode');
-            
+
             // Show hint
             const hint = document.createElement('div');
             hint.className = 'zen-hint';
@@ -1482,7 +1482,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Override renderCurrentQuestion to also update zen counter
     const _originalRenderQuestion = renderCurrentQuestion;
-    renderCurrentQuestion = function() {
+    renderCurrentQuestion = function () {
         _originalRenderQuestion();
         const zenCounter = document.getElementById('zen-counter');
         if (zenCounter && isZenMode && currentExamQuestions) {
@@ -1499,7 +1499,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function initGlobalDownloads() {
         const btn = document.getElementById('global-download-btn');
         if (btn) btn.addEventListener('click', () => switchView('view-downloads'));
-        
+
         if (globalDownloadsInterval) clearInterval(globalDownloadsInterval);
         globalDownloadsInterval = setInterval(pollGlobalDownloads, 2000);
         pollGlobalDownloads();
@@ -1511,15 +1511,15 @@ document.addEventListener('DOMContentLoaded', () => {
             if (res.ok) {
                 const data = await res.json();
                 const downloads = data;
-                
+
                 globalActiveDownloads = downloads.filter(d => d.progress >= 0 && d.progress < 100).length;
-                
+
                 const btn = document.getElementById('global-download-btn');
                 const badge = document.getElementById('global-download-badge');
                 if (btn && badge) {
                     // Botão sempre visível
                     btn.style.display = 'flex';
-                    
+
                     if (globalActiveDownloads > 0) {
                         badge.style.display = 'flex';
                         badge.textContent = globalActiveDownloads;
@@ -1556,10 +1556,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const statusClass = isError ? 'status-error' : isDone ? 'status-done' : 'status-running';
             const statusIcon = isError ? 'ph-warning' : isDone ? 'ph-check-circle' : 'ph-spinner ph-spin';
             const pctText = isError ? 'Erro' : isDone ? 'OK' : d.progress + '%';
-            
+
             const barWidth = isError ? 100 : (d.progress < 0 ? 0 : d.progress);
             const barColor = isError ? 'var(--danger-color)' : isDone ? 'var(--success-color)' : 'var(--primary-color)';
-            
+
             return `
             <div class="download-card">
                 <div class="download-card-header" style="align-items: flex-start;">
