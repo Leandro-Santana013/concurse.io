@@ -3,6 +3,7 @@ sqlalchemy
 beautifulsoup4
 requests
 google-genai
+google-generativeai
 python-dotenv
 PyMuPDF
 playwright
