@@ -2,9 +2,13 @@ flask
 sqlalchemy
 beautifulsoup4
 requests
-google-genai
+openai
 python-dotenv
 PyMuPDF
 playwright
 ddgs
 pillow
+authlib
+flask-login
+psycopg2-binary
+gunicorn

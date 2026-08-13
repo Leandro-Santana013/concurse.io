@@ -1,5 +1,5 @@
 """
-Test real scraping from IDCAP, IDECAN and other banca sites
+Test real scraping from IDCAP and other banca sites
 """
 import requests
 from bs4 import BeautifulSoup
@@ -13,7 +13,6 @@ headers = {
 
 tests = [
     ("IDCAP", "https://www.idcap.org.br/concursos-realizados"),
-    ("IDECAN", "https://www.idecan.org.br/processos-seletivos"),
     ("IBFC", "https://www.ibfc.org.br/concurso"),
     ("VUNESP provas", "https://www.vunesp.com.br/VPUB0001/Paginas/ListaPorAssunto.aspx"),
     ("PCI Concursos", "https://www.pciconcursos.com.br/provas/?p=1&q=trabalhador+portuario"),

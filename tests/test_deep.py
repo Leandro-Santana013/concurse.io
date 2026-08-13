@@ -1,5 +1,5 @@
 """
-Scrape IDECAN concurso pages and PCI Concursos for PDFs
+Scrape PCI Concursos for PDFs
 """
 import requests
 from bs4 import BeautifulSoup
@@ -11,24 +11,7 @@ headers = {
     'Accept-Language': 'pt-BR,pt;q=0.9',
 }
 
-# Test IDECAN concurso detail page (pick one and look for PDFs)
-print("=== IDECAN Concurso Details ===")
-concurso_ids = [258, 253, 278, 249, 248]
-for cid in concurso_ids[:3]:
-    try:
-        url = f"https://concurso.idecan.org.br/Concurso.aspx?ID={cid}"
-        r = requests.get(url, headers=headers, timeout=10)
-        soup = BeautifulSoup(r.text, 'html.parser')
-        title = soup.find('h1') or soup.find('h2')
-        print(f"\nID {cid} -> Status {r.status_code}: {title.text.strip() if title else 'sem titulo'}")
-        
-        pdfs = [(a.text.strip(), a['href']) for a in soup.find_all('a', href=True) 
-                if '.pdf' in a.get('href','').lower()]
-        print(f"  PDFs: {len(pdfs)}")
-        for t, h in pdfs[:5]:
-            print(f"    '{t}' -> {h[:100]}")
-    except Exception as e:
-        print(f"  ID {cid} -> ERRO: {e}")
+
 
 # Test PCI Concursos search  
 print("\n=== PCI Concursos Busca ===")

@@ -1,19 +1,17 @@
 import sys
 import os
-import sqlite3
 import json
+from models import Session, Question
 from playwright.sync_api import sync_playwright
 
 def scrape_qc(exam_id, url):
     cookie_path = os.path.join(os.path.dirname(__file__), 'qc_cookies.json')
-    db_path = os.path.join(os.path.dirname(__file__), 'concurse.db')
     
     if not os.path.exists(cookie_path):
         print("Erro: Sessão do QConcursos não encontrada. Conecte sua conta primeiro!")
         sys.exit(1)
         
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
+    db_session = Session()
     
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -68,48 +66,33 @@ def scrape_qc(exam_id, url):
                     comentario_prof = "Comentário premium do QConcursos recuperado via sessão autenticada do usuário."
                     
                     options_json = json.dumps(opcoes, ensure_ascii=False)
-                    cursor.execute("""
-                        INSERT INTO questions (exam_id, statement, options, correct_answer, subject, explanation)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    """, (exam_id, enunciado, options_json, gabarito, "Geral", comentario_prof))
+                    q = Question(
+                        exam_id=exam_id,
+                        statement=enunciado,
+                        options=options_json,
+                        correct_answer=gabarito,
+                        subject="Geral",
+                        explanation=comentario_prof
+                    )
+                    db_session.add(q)
                     saved_count += 1
                 except Exception as ex:
                     print(f"Erro em uma questão: {ex}")
                     continue
                     
-            conn.commit()
-            if saved_count > 0:
-                print(f"Sucesso: {saved_count} questões do QC salvas.")
-            else:
-                print("Erro: Nenhuma questão extraída.")
+            if saved_count == 0:
+                print("Erro: Estrutura da página mudou ou as questões estavam vazias. Nenhuma questão salva.")
                 sys.exit(1)
                 
+            db_session.commit()
+            print(f"Sucesso: {saved_count} questões salvas!")
+            
         except Exception as e:
-            print(f"Erro fatal ao raspar QC: {e}")
+            print(f"Erro ao processar página: {e}")
             sys.exit(1)
         finally:
             browser.close()
-            conn.close()
-
-if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        print("Uso: python qc_scraper.py <exam_id> <url>")
-        sys.exit(1)
-    scrape_qc(int(sys.argv[1]), sys.argv[2])
-            conn.commit()
-            if saved_count > 0:
-                print(f"Sucesso: {saved_count} questões do QC salvas.")
-            else:
-                print("Erro: Nenhuma questão extraída.")
-                sys.exit(1)
-                
-        except Exception as e:
-            print(f"Erro fatal ao raspar QC: {e}")
-            sys.exit(1)
-        finally:
-            browser.close()
-            conn.close()
-
+            db_session.close()
 if __name__ == "__main__":
     if len(sys.argv) < 3:
         print("Uso: python qc_scraper.py <exam_id> <url>")

@@ -20,7 +20,7 @@ Sua tarefa: fornecer URLs REAIS e ACESSÍVEIS de arquivos PDF de provas de concu
 
 Fontes preferidas (em ordem):
 1. Sites gov.br
-2. Sites de bancas: IDECAN, IDCAP, IBFC, CEBRASPE, FCC, VUNESP, CESGRANRIO
+2. Sites de bancas: IDCAP, IBFC, CEBRASPE, FCC, VUNESP, CESGRANRIO
 
 IMPORTANTE:
 - Retorne APENAS um JSON válido

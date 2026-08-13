@@ -1,5 +1,5 @@
 """
-Test specific IDCAP and IDECAN pages and Google search for PDFs
+Test specific IDCAP pages and Google search for PDFs
 """
 import requests
 from bs4 import BeautifulSoup
@@ -15,9 +15,8 @@ headers = {
 # Test DuckDuckGo HTML with IDCAP/IDECAN specific searches
 test_queries = [
     'site:idcap.org.br prova pdf',
-    'site:idecan.org.br prova pdf',
     'site:ibfc.org.br prova concurso pdf',
-    'trabalhador portuario prova concurso pdf site:gov.br OR site:idcap.org.br OR site:idecan.org.br',
+    'trabalhador portuario prova concurso pdf site:gov.br OR site:idcap.org.br',
     'prova concurso "trabalhador portuario" filetype:pdf',
 ]
 
@@ -40,14 +39,11 @@ for query in test_queries:
         print(f"  ERRO: {e}")
 
 # Also test direct IDCAP URL variations
-print("\n=== Testando URLs diretos IDCAP/IDECAN ===")
+print("\n=== Testando URLs diretos IDCAP ===")
 direct_urls = [
     "https://idcap.org.br/concursos-realizados",
     "https://idcap.org.br/provas",
     "https://www.idcap.org.br/provas",
-    "https://idecan.org.br",
-    "https://www.idecan.org.br",
-    "https://www.idecan.org.br/concursos",
 ]
 for url in direct_urls:
     try:

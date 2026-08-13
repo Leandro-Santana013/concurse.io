@@ -73,9 +73,12 @@ document.addEventListener('DOMContentLoaded', () => {
     function initThemeToggle() {
         const btn = document.getElementById('theme-toggle-btn');
         if (!btn) return;
-        const currentTheme = localStorage.getItem('theme') || 'dark';
+        const currentTheme = localStorage.getItem('theme') || 'light';
         if (currentTheme === 'light') {
             document.documentElement.setAttribute('data-theme', 'light');
+            btn.innerHTML = '<i class="ph ph-moon"></i> <span>Modo Escuro</span>';
+        } else {
+            document.documentElement.removeAttribute('data-theme');
             btn.innerHTML = '<i class="ph ph-sun"></i> <span>Modo Claro</span>';
         }
         btn.addEventListener('click', () => {
@@ -197,21 +200,68 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('api-key-modal').style.display = 'flex';
         document.getElementById('btn-close-api-key').style.display = 'block';
     };
-
-    window.addApiKey = async function () {
-        const key = prompt("Cole a nova chave do Gemini API (AIzaSy...) para adicionar à cascata:");
-        if (!key) return;
-
+    
+    async function fetchKeysStatus() {
+        const listEl = document.getElementById('apiKeysList');
+        if (!listEl) return;
         try {
-            const res = await fetch(`${API_BASE}/config/gemini_key`, {
+            const res = await fetch(`${API_BASE}/config/glm_key`);
+            if (res.ok) {
+                const data = await res.json();
+                const rawKey = data.api_key || '';
+                const keys = rawKey.split(',').map(k => k.trim()).filter(k => k);
+                
+                if (keys.length > 0) {
+                    listEl.innerHTML = keys.map((k, i) => `
+                        <div class="api-key-item" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: rgba(255,255,255,0.03); border-radius: 8px; margin-bottom: 6px;">
+                            <span>Chave ${i+1}: <code>${k.substring(0, 10)}...</code></span>
+                            <button class="btn btn-secondary btn-sm" onclick="removeApiKey('${k}')"><i class="ph ph-trash"></i> Remover</button>
+                        </div>
+                    `).join('');
+                } else {
+                    listEl.innerHTML = `<p class="text-muted" style="color: var(--text-secondary); font-size: 0.9rem;">Nenhuma chave configurada.</p>`;
+                }
+            }
+        } catch (e) {
+            console.error('Erro ao buscar status de chaves:', e);
+        }
+    }
+    
+    window.removeApiKey = async (keyToRemove) => {
+        if (!keyToRemove) return;
+        if (!confirm('Deseja remover esta chave de API?')) return;
+        try {
+            const res = await fetch(`${API_BASE}/config/glm_key`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ api_key: key, action: 'append' })
+                body: JSON.stringify({ api_key: keyToRemove, action: 'remove' })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast('Chave removida com sucesso!', 'info');
+                fetchKeysStatus();
+            } else {
+                showToast('Erro ao remover chave: ' + (data.error || 'Erro desconhecido'), 'error');
+            }
+        } catch (e) {
+            showToast('Erro de conexão ao remover chave.', 'error');
+        }
+    };
+    
+    window.addApiKey = async () => {
+        const key = prompt("Cole a nova chave da API (NVIDIA/GLM) para adicionar:");
+        if (!key || !key.trim()) return;
+        
+        try {
+            const res = await fetch(`${API_BASE}/config/glm_key`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ api_key: key.trim(), action: 'append' })
             });
             const data = await res.json();
             if (data.success) {
                 showToast(`Chave adicionada com sucesso!`, 'success');
-                if (typeof fetchKeysStatus === 'function') fetchKeysStatus();
+                fetchKeysStatus();
             } else {
                 showToast('Erro ao salvar chave: ' + data.error, 'error');
             }
@@ -244,7 +294,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (viewId !== 'view-exam') stopExamTimer();
         if (viewId === 'view-stats') loadGlobalStats();
         if (viewId === 'view-errors') loadErrorStats();
-
+        if (viewId === 'view-ranking') loadRanking();
     }
 
     async function loadGlobalStats() {
@@ -255,6 +305,13 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('stat-total-questions').textContent = data.total_questions || 0;
             document.getElementById('stat-accuracy').textContent = (data.global_accuracy || 0) + '%';
             document.getElementById('stat-streak').textContent = data.streak || 0;
+            
+            const timeEl = document.getElementById('stat-time');
+            if (timeEl) timeEl.textContent = data.study_time || '0m';
+            
+            const rankEl = document.getElementById('stat-rank');
+            if (rankEl) rankEl.textContent = data.rank || '-';
+            
         } catch (e) { console.error('Erro ao carregar stats:', e); }
     }
 
@@ -263,14 +320,55 @@ document.addEventListener('DOMContentLoaded', () => {
         switchView('view-dashboard');
     });
 
-    const navManager = document.getElementById('nav-manager');
-    if (navManager) {
-        navManager.addEventListener('click', (e) => {
+    const userProfileBtn = document.getElementById('user-profile-btn');
+    if (userProfileBtn) {
+        userProfileBtn.addEventListener('click', (e) => {
             e.preventDefault();
             document.querySelectorAll('.sidebar .nav-item').forEach(el => el.classList.remove('active'));
-            navManager.classList.add('active');
-            switchView('view-manager');
+            switchView('view-profile');
+            document.querySelector('.sidebar')?.classList.remove('open');
+            document.getElementById('sidebar-overlay')?.classList.remove('active');
         });
+    }
+
+    window.openManagerView = function() {
+        document.querySelectorAll('.sidebar .nav-item').forEach(el => el.classList.remove('active'));
+        switchView('view-manager');
+    };
+
+    async function loadRanking() {
+        try {
+            const res = await fetch(`${API_BASE}/ranking`);
+            const data = await res.json();
+            const list = document.getElementById('ranking-list');
+            if (!list) return;
+            if (data.length === 0) {
+                list.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 20px; color: var(--text-muted);">Nenhum dado de ranking disponível.</td></tr>`;
+                return;
+            }
+            list.innerHTML = data.map((user, index) => {
+                let badge = `${index + 1}º`;
+                if (index === 0) badge = `<span style="color: #fbbf24; font-weight: bold; font-size: 1.2rem;"><i class="ph ph-medal"></i> 1º</span>`;
+                else if (index === 1) badge = `<span style="color: #94a3b8; font-weight: bold; font-size: 1.1rem;"><i class="ph ph-medal"></i> 2º</span>`;
+                else if (index === 2) badge = `<span style="color: #b45309; font-weight: bold; font-size: 1.1rem;"><i class="ph ph-medal"></i> 3º</span>`;
+                
+                return `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;">
+                        <td style="padding: 16px 12px; font-weight: 600;">${badge}</td>
+                        <td style="padding: 16px 12px; display: flex; align-items: center; gap: 12px;">
+                            <img src="${user.picture}" alt="Profile" style="width: 32px; height: 32px; border-radius: 50%;">
+                            <span style="font-weight: 500;">${user.name}</span>
+                        </td>
+                        <td style="padding: 16px 12px; font-weight: bold;">${user.total_questions}</td>
+                        <td style="padding: 16px 12px; color: ${user.accuracy > 70 ? 'var(--success-color)' : (user.accuracy > 50 ? 'var(--warning-color)' : 'var(--danger-color)')}; font-weight: bold;">${user.accuracy}%</td>
+                    </tr>
+                `;
+            }).join('');
+        } catch (e) {
+            console.error('Erro ao carregar ranking:', e);
+            const list = document.getElementById('ranking-list');
+            if(list) list.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--danger-color);">Erro ao carregar ranking.</td></tr>`;
+        }
     }
 
     // ===== ORCHESTRATOR POLLING =====
@@ -334,13 +432,19 @@ document.addEventListener('DOMContentLoaded', () => {
             container.innerHTML = data.keys.map(k => {
                 const colors = { active: '#10b981', exhausted: '#ef4444', invalid: '#f59e0b' };
                 const icons = { active: 'ph-check-circle', exhausted: 'ph-x-circle', invalid: 'ph-warning' };
+                const rawParam = (k.raw || '').replace(/'/g, "\\'");
                 return `
-                    <div style="display: flex; align-items: center; gap: 10px; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px; border-left: 3px solid ${colors[k.status]};">
-                        <i class="ph ${icons[k.status]}" style="color: ${colors[k.status]}; font-size: 20px;"></i>
-                        <div>
-                            <span style="font-family: monospace; font-size: 0.9rem;">Chave ${k.index} (${k.suffix})</span><br>
-                            <span style="font-size: 0.8rem; color: ${colors[k.status]}; font-weight: 600;">${k.label}</span>
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px; border-left: 3px solid ${colors[k.status] || '#10b981'};">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <i class="ph ${icons[k.status] || 'ph-check-circle'}" style="color: ${colors[k.status] || '#10b981'}; font-size: 20px;"></i>
+                            <div>
+                                <span style="font-family: monospace; font-size: 0.9rem;">Chave ${k.index} (${k.suffix})</span><br>
+                                <span style="font-size: 0.8rem; color: ${colors[k.status] || '#10b981'}; font-weight: 600;">${k.label}</span>
+                            </div>
                         </div>
+                        <button class="btn btn-secondary btn-sm" onclick="window.removeApiKey('${rawParam}')" style="padding: 4px 10px; font-size: 0.8rem; color: var(--danger-color);">
+                            <i class="ph ph-trash"></i> Remover
+                        </button>
                     </div>
                 `;
             }).join('');
@@ -397,7 +501,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function showSearchSkeleton() {
         let skeletonHtml = `<div class="search-status-text"><i class="ph ph-spinner ph-spin"></i>Consultando fontes de provas...</div>`;
-        for (let i = 0; i < 4; i++) {
+        for (let i = 0; i < 6; i++) {
             skeletonHtml += `
                 <div class="skeleton-card">
                     <div class="skeleton-line w40"></div>
@@ -427,7 +531,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function getSourceLabel(source) {
         const labels = {
             idcap: 'IDCAP', pci: 'PCI Concursos',
-            web: 'Web', qconcursos: 'QConcursos', gemini: 'Gemini IA', banco: 'Banco Interno'
+            web: 'Web', qconcursos: 'QConcursos', glm: 'GLM IA', banco: 'Banco Interno'
         };
         return labels[source] || 'Web';
     }
@@ -614,21 +718,36 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderFoldersMenu(folders) {
+        const foldersList = document.getElementById('folders-list');
+        if (!foldersList) return;
         foldersList.innerHTML = '';
+        if (folders.length === 0) {
+            foldersList.innerHTML = `
+                <div class="empty-state" style="grid-column: 1 / -1;">
+                    <i class="ph ph-folder-open"></i>
+                    <p style="margin-bottom: 16px;">Você ainda não possui provas baixadas.</p>
+                    <button class="btn btn-primary" onclick="document.querySelector('.nav-item[data-view=\\'dashboard\\']').click();"><i class="ph ph-magnifying-glass"></i> Buscar Novas Provas</button>
+                </div>
+            `;
+            return;
+        }
         folders.forEach(folder => {
-            const a = document.createElement('a');
-            a.href = "#";
-            a.className = "nav-item";
-            a.innerHTML = `<i class="ph ph-folder"></i><span>${folder.name} (${folder.exams.length})</span>`;
-            a.addEventListener('click', (e) => {
+            const card = document.createElement('div');
+            card.className = "card fade-in";
+            card.style.cssText = "background: var(--bg-card); padding: 24px; border-radius: 12px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 12px;";
+            card.innerHTML = `
+                <h3 style="font-size: 1.1rem; color: var(--text-primary);"><i class="ph ph-folder" style="color: var(--primary-color);"></i> ${folder.name}</h3>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">${folder.exams.length} prova(s) disponíveis</p>
+                <div style="margin-top: auto; padding-top: 16px;">
+                    <button class="btn btn-primary" style="width: 100%; justify-content: center;"><i class="ph ph-folder-open"></i> Abrir Pasta</button>
+                </div>
+            `;
+            const btn = card.querySelector('.btn-primary');
+            btn.addEventListener('click', (e) => {
                 e.preventDefault();
-                document.querySelectorAll('.sidebar .nav-item').forEach(el => el.classList.remove('active'));
-                a.classList.add('active');
                 openFolder(folder);
-                document.querySelector('.sidebar')?.classList.remove('open');
-                document.getElementById('sidebar-overlay')?.classList.remove('active');
             });
-            foldersList.appendChild(a);
+            foldersList.appendChild(card);
         });
     }
 
@@ -894,7 +1013,29 @@ document.addEventListener('DOMContentLoaded', () => {
                     </button>
                 </div>
                 ${recurrenceBadge}
-                <p style="margin-bottom: 24px; font-size: 1.1rem; line-height: 1.6; white-space: pre-wrap;">${q.statement}</p>
+                <div style="margin-bottom: 24px; font-size: 1.1rem; line-height: 1.6;">
+                    ${(() => {
+                        const txt = q.statement || '';
+                        if (txt.includes('\\n') || txt.includes('\n')) {
+                            return txt.split(/\\n|\n/).filter(p => p.trim() !== '').map(p => `<p style="margin-bottom: 16px;">${p}</p>`).join('');
+                        }
+                        // Separação artificial por regex: Ponto final seguido de espaço e letra Maiúscula.
+                        let marked = txt.replace(/([a-z\)]\.)\s+([A-Z])/g, "$1|SPLIT|$2");
+                        let sentences = marked.split('|SPLIT|');
+                        if (sentences.length <= 2) return `<p style="margin-bottom: 16px;">${txt}</p>`;
+                        
+                        let html = '';
+                        let temp = [];
+                        for (let i = 0; i < sentences.length; i++) {
+                            temp.push(sentences[i]);
+                            if (temp.length >= 3 || i === sentences.length - 1) {
+                                html += `<p style="margin-bottom: 16px;">${temp.join(' ')}</p>`;
+                                temp = [];
+                            }
+                        }
+                        return html;
+                    })()}
+                </div>
                 ${imagesHtml}
                 ${optionsHtml}
             </div>
@@ -1373,17 +1514,26 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (btnSubmitPciManual) {
-        btnSubmitPciManual.addEventListener('click', async () => {
-            const pdfUrl = pciManualInput.value.trim();
-            if (!pdfUrl) { showToast('Por favor, insira o link do PDF.', 'warning'); return; }
+        btnSubmitPciManual.onclick = async () => {
+            const pdfUrl = document.getElementById('pci-manual-input').value.trim();
+            
+            if (!pdfUrl) {
+                showToast('Cole o link do PDF.', 'warning');
+                return;
+            }
+            
             btnSubmitPciManual.disabled = true;
-            btnSubmitPciManual.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Baixando e Processando...';
+            btnSubmitPciManual.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Processando...';
+            
             try {
-                const res = await fetch(`/api/exams/${currentPciExamId}/manual_pdf`, {
+                const formData = new FormData();
+                if (pdfUrl) formData.append('pdf_url', pdfUrl);
+
+                const res = await fetch(`${API_BASE}/exams/${currentPciExamId}/manual_pdf`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pdf_url: pdfUrl })
+                    body: formData
                 });
+                
                 const data = await res.json();
                 if (!res.ok) {
                     showToast('Erro: ' + (data.error || 'Falha ao baixar o PDF.'), 'error', 6000);
@@ -1411,7 +1561,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 btnSubmitPciManual.disabled = false;
                 btnSubmitPciManual.innerHTML = 'Baixar e Processar Prova';
             }
-        });
+        };
     }
 
     // ===== ZEN MODE =====

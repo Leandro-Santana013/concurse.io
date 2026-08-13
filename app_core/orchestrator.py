@@ -1,3 +1,5 @@
+import os
+import sqlite3
 import time
 import threading
 import uuid
@@ -5,18 +7,10 @@ import json
 import traceback
 import requests
 import functools
-import google.generativeai as genai
-# Note: google-genai is used now via standard imports, wait we will replace this entirely
-from google import genai
-from google.genai import types
+import openai
 
 MODEL_CASCADE = [
-    "gemini-3.6-flash",
-    "gemini-3.5-flash",
-    "gemini-3.0-flash",
-    "gemini-2.5-flash",
-    "gemini-3.1-flash-lite",
-    "gemini-2.5-flash-lite",
+    "z-ai/glm-5.2",
 ]
 
 class Task:
@@ -103,48 +97,60 @@ class RateLimitManager:
 
 rate_limit_manager = RateLimitManager()
 
-# Monkey-patch no httpx.Client.send para interceptar headers do Gemini
-import httpx
-_original_send = httpx.Client.send
-
-@functools.wraps(_original_send)
-def _hooked_send(self, request, **kwargs):
-    response = _original_send(self, request, **kwargs)
-    if "googleapis.com" in str(request.url):
-        limit_str = response.headers.get("x-ratelimit-limit-requests")
-        remaining_str = response.headers.get("x-ratelimit-remaining-requests")
-        reset_str = response.headers.get("x-ratelimit-reset-requests")
-        if limit_str and remaining_str and reset_str:
-            try:
-                api_key = request.headers.get("x-goog-api-key")
-                if api_key:
-                    rate_limit_manager.update_limits(
-                        api_key, int(limit_str), int(remaining_str), int(reset_str)
-                    )
-            except ValueError:
-                pass
-    return response
-
-httpx.Client.send = _hooked_send
+# Monkey-patch no httpx.Client.send removido (API OpenAI lida com os limites internamente/diferente)
 
 class ApiKeyManager:
-    def __init__(self):
+    def __init__(self, db_keys=None):
         import os
         from dotenv import load_dotenv
         load_dotenv()
         
-        self.lock = threading.Lock()
-        keys_str = os.environ.get("GEMINI_API_KEY", "")
-        self.keys = [k.strip() for k in keys_str.split(",") if k.strip()]
+        self.keys = []
         self.current_index = 0
+        self.lock = threading.Lock()
         self.clients = {}
         
-        if self.keys:
-            self.clients[self.keys[0]] = genai.Client(api_key=self.keys[0], http_options={'api_version':'v1beta'})
-            print(f"[ApiKeyManager] Inicializado com {len(self.keys)} chave(s). Usando Chave 1.")
+        # Load from DB or environment
+        keys_str = os.environ.get("GLM_API_KEY", "")
+        self.keys = [k.strip() for k in keys_str.split(",") if k.strip()]
+        if not self.keys:
+            self._load_keys_from_db()
             
+        if self.keys:
+            self.clients[self.keys[0]] = self.create_client_for_key(self.keys[0])
+            print(f"[ApiKeyManager] Inicializado com {len(self.keys)} chave(s). Usando Chave 1.")
+
+    def create_client_for_key(self, key):
+        if key.startswith("AIza"):
+            return openai.OpenAI(api_key=key, base_url='https://generativelanguage.googleapis.com/v1beta/openai/')
+        return openai.OpenAI(api_key=key, base_url='https://integrate.api.nvidia.com/v1')
+
+    def get_current_model_name(self):
+        key = self.get_current_key()
+        if key and key.startswith("AIza"):
+            return "gemini-1.5-flash"
+        return MODEL_CASCADE[0]
+
+    def _load_keys_from_db(self):
+        try:
+            from models import Session, AppConfig
+            db_session = Session()
+            config = db_session.query(AppConfig).filter_by(key='GLM_API_KEY').first()
+            if config and config.value:
+                self.keys = [k.strip() for k in config.value.split(",") if k.strip()]
+            db_session.close()
+        except Exception as e:
+            print(f"[ApiKeyManager] Falha ao carregar chaves do DB: {e}")
+        if not getattr(self, 'keys', None):
+            env_key = os.environ.get('GLM_API_KEY')
+            if env_key:
+                self.keys = [k.strip() for k in env_key.split(",") if k.strip()]
+            else:
+                self.keys = []
     def rotate_key(self, model_manager=None):
         with self.lock:
+            if not self.keys:
+                self._load_keys_from_db()
             if len(self.keys) <= 1:
                 return False # Não há chaves suficientes para rodízio
                 
@@ -154,7 +160,7 @@ class ApiKeyManager:
                 new_key = self.keys[self.current_index]
                 if rate_limit_manager.is_key_available(new_key):
                     if new_key not in self.clients:
-                        self.clients[new_key] = genai.Client(api_key=new_key, http_options={'api_version':'v1beta'})
+                        self.clients[new_key] = self.create_client_for_key(new_key)
                     print(f"[ApiKeyManager] ROTATIVO ATIVADO: Alternando para a Chave {self.current_index + 1}/{len(self.keys)}")
                     return True
             
@@ -162,23 +168,45 @@ class ApiKeyManager:
             self.current_index = (original_index + 1) % len(self.keys)
             fallback_key = self.keys[self.current_index]
             if fallback_key not in self.clients:
-                self.clients[fallback_key] = genai.Client(api_key=fallback_key, http_options={'api_version':'v1beta'})
+                self.clients[fallback_key] = self.create_client_for_key(fallback_key)
             print(f"[ApiKeyManager] Aviso: Todas as chaves esgotadas/bloqueadas. Retornando falso (aguardar cota).")
             return False
 
     def get_current_key(self):
         with self.lock:
             if not self.keys:
+                self._load_keys_from_db()
+            if not self.keys:
                 return None
             return self.keys[self.current_index]
             
     def get_current_client(self):
         with self.lock:
+            if not self.keys:
+                self._load_keys_from_db()
             if not self.keys: return None
             key = self.keys[self.current_index]
             if key not in self.clients:
-                self.clients[key] = genai.Client(api_key=key, http_options={'api_version':'v1beta'})
+                self.clients[key] = self.create_client_for_key(key)
             return self.clients[key]
+
+    def get_keys_status(self):
+        with self.lock:
+            statuses = []
+            for i, k in enumerate(self.keys):
+                masked = f"...{k[-4:]}" if len(k) >= 4 else "***"
+                is_avail = rate_limit_manager.is_key_available(k)
+                wait = rate_limit_manager.get_wait_time(k)
+                status = "active" if is_avail else "exhausted"
+                label = f"Disponível (Chave {i+1})" if is_avail else f"Aguardando Reset ({int(wait)}s)"
+                statuses.append({
+                    "index": i + 1,
+                    "suffix": masked,
+                    "status": status,
+                    "label": label,
+                    "raw": k
+                })
+            return statuses
 
 class ModelManager:
     def __init__(self):
@@ -186,15 +214,12 @@ class ModelManager:
         self._init_models()
 
     def _init_models(self):
-        self.models["gemini-3.5-flash"] = 'gemini-3.5-flash'
-        self.models["gemini-2.5-flash"] = 'gemini-2.5-flash'
-        self.models["gemini-3.1-flash-lite"] = 'gemini-3.1-flash-lite'
-        self.models["gemini-2.5-flash-lite"] = 'gemini-2.5-flash-lite'
+        self.models["z-ai/glm-5.2"] = 'z-ai/glm-5.2'
 
     def get_model(self, name):
         if name in self.models:
             return self.models[name]
-        return self.models.get("gemini-3.5-flash")
+        return self.models.get("z-ai/glm-5.2", "z-ai/glm-5.2")
 
 class TaskStack:
     def __init__(self):
@@ -226,11 +251,16 @@ class TaskStack:
         return task.id
 
     def get_status(self):
+        with self.queue_lock:
+            q_copy = [{"id": t.id, "exam_id": t.exam_id, "type": t.task_type, "model": t.model_name, "status": t.status} for t in list(self.queue)]
+            hist_len = len(self.history)
+            q_len = len(self.queue)
+            models = list(self.model_manager.models.keys())
         return {
-            "queue_length": len(self.queue),
-            "history_length": len(self.history),
-            "queue": [{"id": t.id, "exam_id": t.exam_id, "type": t.task_type, "model": t.model_name, "status": t.status} for t in self.queue],
-            "models_loaded": list(self.model_manager.models.keys())
+            "queue_length": q_len,
+            "history_length": hist_len,
+            "queue": q_copy,
+            "models_loaded": models
         }
 
     def _loop(self):
@@ -415,34 +445,22 @@ REGRAS:
 - Se não houver NENHUMA questão real no texto (por ser apenas capa ou rascunho), retorne uma lista vazia: []
 """
         
-        contents = [prompt]
+        content_text = prompt
         if text:
-            contents[0] += f"\n\nTexto de Referência:\n{text}\n"
+            content_text += f"\n\nTexto de Referência:\n{text}\n"
             
-        uploaded_file = None
-        # Faz upload do arquivo se use_vision foi ativado por ter imagens ou texto escasso
-        if file_path and use_vision:
-            try:
-                uploaded_file = client.files.upload(file=file_path, config={'mime_type': 'application/pdf'})
-                contents.append(uploaded_file)
-            except Exception as e:
-                print(f"Erro no upload para Vision: {type(e).__name__}: {str(e)[:100]}")
-                
         try:
-            from google.genai import types
-            response = client.models.generate_content(
+            if not client:
+                raise Exception("API Key não configurada. Por favor, adicione uma chave GLM_API_KEY válida nas configurações.")
+                
+            response = client.chat.completions.create(
                 model=model_name,
-                contents=contents,
-                config=types.GenerateContentConfig(response_mime_type="application/json")
+                messages=[{"role": "user", "content": content_text}],
             )
-        finally:
-            if uploaded_file:
-                try:
-                    client.files.delete(name=uploaded_file.name)
-                except Exception:
-                    pass
+        except Exception as e:
+            raise e
         
-        raw = response.text.strip()
+        raw = response.choices[0].message.content.strip()
         if '```json' in raw:
             raw = raw.split('```json')[1].split('```')[0].strip()
         elif '```' in raw:
@@ -533,7 +551,16 @@ REGRAS:
                             
                 question_positions.append({"index": i, "page": best_page, "y": best_y, "x": best_x, "block_idx": best_block_idx})
             
-            # Varrer as páginas buscando imagens
+            # Pré-analisar imagens repetidas (Logotipos, Brasões, Marcas d'água)
+            # Imagens de questões legítimas costumam aparecer em apenas 1 página.
+            # Se uma imagem (xref) aparece em mais de 2 páginas, é lixo visual de cabeçalho/fundo.
+            xref_counts = {}
+            for page_num in range(len(doc)):
+                for img in doc[page_num].get_images(full=True):
+                    xref = img[0]
+                    xref_counts[xref] = xref_counts.get(xref, 0) + 1
+            
+            # Varrer as páginas buscando imagens válidas
             for page_num in range(len(doc)):
                 page = doc[page_num]
                 blocks = page.get_text('dict')['blocks']
@@ -547,6 +574,11 @@ REGRAS:
                 
                 for img_idx, img in enumerate(images):
                     xref = img[0]
+                    
+                    # Filtro de Marcas d'água / Logos: Ignora se aparece em mais de 2 páginas
+                    if xref_counts.get(xref, 0) > 2:
+                        continue
+                        
                     # PyMuPDF extrai as coordenadas da imagem
                     try:
                         rects = page.get_image_rects(xref)
@@ -554,66 +586,60 @@ REGRAS:
                         continue
                     if not rects: continue
                     
-                    # Ignorar imagens muito pequenas (geralmente logos de cabeçalho)
+                    # Ignorar imagens muito pequenas ou logos (menos de 70x70) ou linhas de espaçamento (height < 30)
                     rect = rects[0]
-                    if rect.width < 50 and rect.height < 50: continue
+                    if rect.width < 70 and rect.height < 70: continue
+                    if rect.height < 30: continue
                     
                     img_y = rect.y0
                     img_x = rect.x0
                     
-                    # Tenta descobrir o block_idx da imagem na lista de blocos
-                    img_block_idx = -1
-                    for idx, b in enumerate(blocks):
-                        if b['type'] == 1 and abs(b['bbox'][1] - img_y) < 5:
-                            img_block_idx = idx
-                            break
-                    
-                    # Se houver questões na página, associa à questão à qual a imagem pertence (aquela que começou antes da imagem)
-                    if page_qs:
+                    if not page_qs:
+                        assigned_q_idx = question_positions[-1]["index"] if question_positions else 0
+                    else:
+                        img_block_idx = -1
+                        for idx, b in enumerate(blocks):
+                            if b.get('type') == 1 and abs(b['bbox'][1] - img_y) < 5:
+                                img_block_idx = idx
+                                break
+                        
                         if img_block_idx != -1:
-                            # Tenta achar a última questão que começou ANTES (ou junto) da imagem na ordem de leitura
                             before_qs = [q for q in page_qs if q["block_idx"] <= img_block_idx]
-                            if before_qs:
-                                best_q = before_qs[-1]
-                            else:
-                                best_q = page_qs[0] # se a imagem vier antes de qualquer questão na página, atrela à primeira
+                            best_q = before_qs[-1] if before_qs else page_qs[0]
                         else:
-                            # Fallback usando a posição Y (última questão acima da imagem) E considerando a coluna (eixo X lateral)
-                            # Assume que colunas distam cerca de 150-200 pixels uma da outra
                             before_qs_same_col = [q for q in page_qs if q["y"] <= img_y and abs(q.get("x", 0) - img_x) < 200]
-                            
                             if before_qs_same_col:
                                 best_q = before_qs_same_col[-1]
                             else:
-                                # Se nenhuma questão acima bater com a coluna, ignora o eixo X (pode ser imagem centralizada)
                                 before_qs_any_col = [q for q in page_qs if q["y"] <= img_y]
-                                if before_qs_any_col:
-                                    best_q = before_qs_any_col[-1]
-                                else:
-                                    best_q = page_qs[0]
-                            
+                                best_q = before_qs_any_col[-1] if before_qs_any_col else page_qs[0]
+                                
                         assigned_q_idx = best_q["index"]
+                    
+                    # Extrai a imagem
+                    base_image = doc.extract_image(xref)
+                    image_bytes = base_image["image"]
+                    image_ext = base_image["ext"]
+                    img_filename = f"exam_{exam_id}_q_{assigned_q_idx}_img_{img_idx}.{image_ext}"
+                    img_path = os.path.join(img_dir, img_filename)
+                    
+                    with open(img_path, "wb") as f:
+                        f.write(image_bytes)
                         
-                        # Extrai a imagem
-                        base_image = doc.extract_image(xref)
-                        image_bytes = base_image["image"]
-                        image_ext = base_image["ext"]
-                        img_filename = f"exam_{exam_id}_q_{assigned_q_idx}_img_{img_idx}.{image_ext}"
-                        img_path = os.path.join(img_dir, img_filename)
-                        
-                        with open(img_path, "wb") as f:
-                            f.write(image_bytes)
-                            
-                        # Anexa a imagem à questão
-                        q_obj = questions[assigned_q_idx]
-                        if "images" not in q_obj:
-                            q_obj["images"] = []
-                        q_obj["images"].append(f"/static/pdfs/images/{img_filename}")
-                        print(f"[Orchestrator] Imagem extraída e atrelada à questão index {assigned_q_idx}")
-                        
-            doc.close()
+                    # Anexa a imagem à questão
+                    q_obj = questions[assigned_q_idx]
+                    if "images" not in q_obj:
+                        q_obj["images"] = []
+                    q_obj["images"].append(f"/static/pdfs/images/{img_filename}")
+                    print(f"[Orchestrator] Imagem extraída e atrelada à questão index {assigned_q_idx}")
         except Exception as e:
             print(f"[Orchestrator] Erro no pós-processamento de imagens: {e}")
+        finally:
+            if doc:
+                try:
+                    doc.close()
+                except Exception:
+                    pass
         
     def _process_fallback_create(self, task):
         title = task.payload.get("title", "")
@@ -622,8 +648,7 @@ REGRAS:
             
         model_name = self.model_manager.get_model(task.model_name)
         client = self.api_key_manager.get_current_client()
-        prompt = f"""
-Você é um especialista em concursos públicos brasileiros. O download do PDF original falhou, mas precisamos entregar a prova para o usuário.
+        prompt = f"""Você é um especialista em concursos públicos brasileiros. O download do PDF original falhou, mas precisamos entregar a prova para o usuário.
 Crie 10 questões realistas e de alta qualidade no exato estilo e nível da seguinte prova: "{title}".
 
 Retorne APENAS um JSON válido — uma lista de objetos — sem nenhum texto adicional.
@@ -640,14 +665,29 @@ Formato obrigatório:
 
 As questões DEVEM ser desafiadoras e no estilo típico da banca (se estiver no título).
 """
-        response = client.models.generate_content(model=model_name, contents=prompt)
-        raw = response.text.strip()
+        if not client:
+            raise Exception("API Key não configurada. Por favor, adicione uma chave GLM_API_KEY válida nas configurações.")
+            
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        raw = response.choices[0].message.content.strip()
         if '```json' in raw:
             raw = raw.split('```json')[1].split('```')[0].strip()
         elif '```' in raw:
             raw = raw.split('```')[1].split('```')[0].strip()
             
-        task.result = json.loads(raw)
+        import re as _re
+        raw = _re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', raw)
+        try:
+            task.result = json.loads(raw)
+        except Exception:
+            try:
+                import json_repair
+                task.result = json_repair.loads(raw)
+            except Exception:
+                task.result = []
 
 # Instância Global
 orchestrator = TaskStack()
