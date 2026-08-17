@@ -50,6 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadFolders();
     loadRecentSearches();
     initMobileSidebar();
+    initFloatingNav();
     initFilterChips();
     initThemeToggle();
     // ===== MOBILE SIDEBAR =====
@@ -67,6 +68,41 @@ document.addEventListener('DOMContentLoaded', () => {
                 overlay.classList.remove('active');
             });
         }
+    }
+
+    // ===== FLOATING NAV LOGIC =====
+    function initFloatingNav() {
+        const sidebar = document.querySelector('.sidebar');
+        if (!sidebar) return;
+        
+        const mainContent = document.querySelector('.main-content');
+        if (!mainContent) return;
+
+        let lastScrollY = mainContent.scrollTop;
+        
+        mainContent.addEventListener('scroll', () => {
+            const currentScrollY = mainContent.scrollTop;
+            if (currentScrollY > lastScrollY && currentScrollY > 60) {
+                // Scrolling down
+                if (!sidebar.matches(':hover')) {
+                    sidebar.classList.add('nav-hidden');
+                }
+            } else {
+                // Scrolling up
+                sidebar.classList.remove('nav-hidden');
+            }
+            lastScrollY = currentScrollY;
+        });
+
+        sidebar.addEventListener('mouseleave', () => {
+            if (mainContent.scrollTop > 60) {
+                sidebar.classList.add('nav-hidden');
+            }
+        });
+        
+        sidebar.addEventListener('mouseenter', () => {
+            sidebar.classList.remove('nav-hidden');
+        });
     }
 
     // ===== THEME TOGGLE =====
@@ -148,10 +184,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // ===== API KEY MODAL =====
     async function checkApiKey() {
         try {
-            const res = await fetch(`${API_BASE}/config/gemini_key`);
+            const res = await fetch(`${API_BASE}/config/keys_status`);
             if (res.ok) {
                 const data = await res.json();
-                if (!data.has_key) {
+                if (data.total === 0) {
                     document.getElementById('api-key-modal').style.display = 'flex';
                 }
             }
@@ -171,13 +207,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const keys = [key1, key2, key3].filter(k => k);
-        const combinedKeys = keys.join(',');
 
         try {
-            const res = await fetch(`${API_BASE}/config/gemini_key`, {
+            const res = await fetch(`${API_BASE}/config/keys/bulk`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ api_key: combinedKeys })
+                body: JSON.stringify({ keys: keys })
             });
             const data = await res.json();
             if (data.success) {
@@ -640,19 +675,21 @@ document.addEventListener('DOMContentLoaded', () => {
                             barEl.style.backgroundColor = 'var(--primary-color)';
                         }
                         if (progData.progress === 100 || progData.progress === -1) {
-                            clearInterval(progressInterval);
-                            if (progData.progress === 100) {
-                                barEl.style.backgroundColor = '#10b981';
-                                barEl.classList.remove('progress-bar-processing');
-                                const ba = cardElement.querySelector('.btn-approve');
-                                if (ba) ba.innerHTML = '<i class="ph ph-check"></i> Processado';
-                                showToast('Prova processada com sucesso!', 'success');
-                                setTimeout(() => { removeCard(); loadFolders(); }, 1500);
-                            } else {
-                                barEl.style.backgroundColor = '#ef4444';
-                                barEl.classList.remove('progress-bar-processing');
-                                const ba = cardElement.querySelector('.btn-approve');
-                                if (ba) { ba.innerHTML = '<i class="ph ph-warning"></i> Erro'; ba.classList.add('btn-danger'); ba.classList.remove('btn-success'); }
+                            if (progressInterval) {
+                                clearInterval(progressInterval);
+                                progressInterval = null; // Prevent multiple executions
+                                if (progData.progress === 100) {
+                                    barEl.style.backgroundColor = '#10b981';
+                                    barEl.classList.remove('progress-bar-processing');
+                                    const ba = cardElement.querySelector('.btn-approve');
+                                    if (ba) ba.innerHTML = '<i class="ph ph-check"></i> Processado';
+                                    showToast('Prova processada com sucesso!', 'success');
+                                    setTimeout(() => { removeCard(); loadFolders(); }, 1500);
+                                } else {
+                                    barEl.style.backgroundColor = '#ef4444';
+                                    barEl.classList.remove('progress-bar-processing');
+                                    const ba = cardElement.querySelector('.btn-approve');
+                                    if (ba) { ba.innerHTML = '<i class="ph ph-warning"></i> Erro'; ba.classList.add('btn-danger'); ba.classList.remove('btn-success'); }
                                 // Contextual error message
                                 const errType = progData.error_type || 'unknown';
                                 let errAction = '';
@@ -664,6 +701,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     errAction = ' A prova é muito grande. Tente novamente.';
                                 }
                                 showToast(progData.status + errAction, 'error', 8000);
+                            }
                             }
                         } else {
                             // Pulse animation during AI processing
@@ -1016,27 +1054,54 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div style="margin-bottom: 24px; font-size: 1.1rem; line-height: 1.6;">
                     ${(() => {
                         const txt = q.statement || '';
+                        let paragraphs = [];
                         if (txt.includes('\\n') || txt.includes('\n')) {
-                            return txt.split(/\\n|\n/).filter(p => p.trim() !== '').map(p => `<p style="margin-bottom: 16px;">${p}</p>`).join('');
-                        }
-                        // Separação artificial por regex: Ponto final seguido de espaço e letra Maiúscula.
-                        let marked = txt.replace(/([a-z\)]\.)\s+([A-Z])/g, "$1|SPLIT|$2");
-                        let sentences = marked.split('|SPLIT|');
-                        if (sentences.length <= 2) return `<p style="margin-bottom: 16px;">${txt}</p>`;
-                        
-                        let html = '';
-                        let temp = [];
-                        for (let i = 0; i < sentences.length; i++) {
-                            temp.push(sentences[i]);
-                            if (temp.length >= 3 || i === sentences.length - 1) {
-                                html += `<p style="margin-bottom: 16px;">${temp.join(' ')}</p>`;
-                                temp = [];
+                            paragraphs = txt.split(/\\n|\n/).filter(p => p.trim() !== '');
+                        } else {
+                            // Separação artificial por regex: Ponto final seguido de espaço e letra Maiúscula.
+                            let marked = txt.replace(/([a-z\)]\.)\s+([A-Z])/g, "$1|SPLIT|$2");
+                            let sentences = marked.split('|SPLIT|');
+                            let temp = [];
+                            for (let i = 0; i < sentences.length; i++) {
+                                temp.push(sentences[i]);
+                                if (temp.length >= 2 || i === sentences.length - 1) {
+                                    paragraphs.push(temp.join(' '));
+                                    temp = [];
+                                }
                             }
                         }
+                        
+                        let html = '';
+                        let imageInserted = false;
+                        const hasImages = q.images && q.images.length > 0;
+                        
+                        for (let i = 0; i < paragraphs.length; i++) {
+                            html += `<p style="margin-bottom: 16px;">${paragraphs[i]}</p>`;
+                            
+                            if (hasImages && !imageInserted) {
+                                let pLower = paragraphs[i].toLowerCase();
+                                if (pLower.includes("texto seguinte") || 
+                                    pLower.includes("texto abaixo") || 
+                                    pLower.includes("leia o texto") ||
+                                    pLower.includes("figura") ||
+                                    pLower.includes("quadro") ||
+                                    pLower.includes("charge") ||
+                                    pLower.includes("tira") ||
+                                    pLower.includes("analise")) {
+                                    html += imagesHtml;
+                                    imageInserted = true;
+                                }
+                            }
+                        }
+                        
+                        if (hasImages && !imageInserted) {
+                            // Default to top if no trigger words matched
+                            html = imagesHtml + html;
+                        }
+                        
                         return html;
                     })()}
                 </div>
-                ${imagesHtml}
                 ${optionsHtml}
             </div>
         `;

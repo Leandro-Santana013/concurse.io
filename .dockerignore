@@ -1,0 +1,16 @@
+venv/
+__pycache__/
+.git/
+.env
+.agents/
+scratch/
+skills-lock.json
+
+# Arquivos locais de banco e logs
+concurse.db
+*.log
+out_*.txt
+
+# Arquivos temporários / testes
+*.pdf
+temp/

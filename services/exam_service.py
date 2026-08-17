@@ -42,32 +42,40 @@ def search_exams():
             from app_core.orchestrator import orchestrator
             import app_core.orchestrator as orch_module
             from app_core.orchestrator import orchestrator
-            max_attempts = len(orchestrator.api_key_manager.keys) if orchestrator.api_key_manager.keys else 1
+            max_attempts = 3
             for attempt in range(max_attempts):
                 try:
                     import openai
-                    if orchestrator.api_key_manager.keys:
-                        client = orchestrator.api_key_manager.get_current_client()
-                        model_name = orchestrator.api_key_manager.get_current_model_name()
-                    else:
+                    from app_core.orchestrator import orchestrator, get_client_for_key
+                    key_data = None
+                    try:
+                        key_data = orchestrator.key_manager.get_best_key()
+                        client = get_client_for_key(key_data)
+                        model_name = "gemini-1.5-flash" if key_data['provider'] != 'nvidia' else "z-ai/glm-5.2"
+                    except Exception:
                         valid_api_key = api_key_val.split(',')[0].strip()
                         if valid_api_key.startswith('AIza'):
                             client = openai.OpenAI(api_key=valid_api_key, base_url='https://generativelanguage.googleapis.com/v1beta/openai/')
                             model_name = 'gemini-1.5-flash'
                         else:
-                            client = orch_module.api_key_manager.create_client_for_key(valid_api_key)
+                            client = openai.OpenAI(api_key=valid_api_key, base_url='https://integrate.api.nvidia.com/v1')
                             model_name = 'z-ai/glm-5.2'
+                            
                     prompt = f'\n                    O usuário digitou a seguinte busca para encontrar provas de concurso: "{query}".\n                    Interprete essa busca e extraia as informações estruturadas. \n                    IMPORTANTE: Não invente, deduza ou assuma uma "banca" ou "órgão" se o usuário não citou explicitamente na busca.\n                    Retorne APENAS um JSON válido no seguinte formato e nada mais:\n                    {{\n                      "orgao": "Nome do órgão (ou vazio se não souber)",\n                      "banca": "Nome da banca explícita na busca (ou vazio)",\n                      "ano": "Ano (ou vazio)",\n                      "cargo": "Cargo (ou vazio)",\n                      "local": "Local/Cidade/Estado (ou vazio)",\n                      "query_otimizada": "Uma string de busca limpa e otimizada para encontrar a prova em PDF (inclua apenas as infos dadas pelo usuario)"\n                    }}\n                    '
                     response = client.chat.completions.create(model=model_name, messages=[{'role': 'user', 'content': prompt}])
                     clean_json = response.choices[0].message.content.replace('```json', '').replace('```', '').strip()
                     data = json.loads(clean_json)
+                    if key_data:
+                        orchestrator.key_manager.release_key(key_data)
                     break
                 except Exception as e:
                     print(f'Erro ao usar Gemini (Tentativa {attempt + 1}/{max_attempts}):', e, flush=True)
-                    if ('429' in str(e) or 'quota' in str(e).lower()) and orchestrator.api_key_manager.keys:
-                        print('Limite da chave atingido na busca NLP. Rotacionando chave...', flush=True)
-                        orchestrator.api_key_manager.rotate_key()
+                    if key_data and ('429' in str(e) or 'quota' in str(e).lower() or '401' in str(e)):
+                        error_type = "429" if '429' in str(e) or 'quota' in str(e).lower() else "401"
+                        orchestrator.key_manager.report_error(key_data, error_type=error_type)
                     else:
+                        if key_data:
+                            orchestrator.key_manager.release_key(key_data, success=False)
                         data = {}
                         break
             if not data:
@@ -239,7 +247,8 @@ def search_exams():
 def _real_scrape_exam(session, exam):
     """Baixa o PDF e usa o GLM para extrair as questões."""
     if session.query(Question).filter_by(exam_id=exam.id).count() > 0:
-        return (True, '')
+        session.query(Question).filter_by(exam_id=exam.id).delete()
+    session.commit() # Libera o lock do DB para as outras threads!
     exam.status = 'Aprovada'
     session.commit()
     set_exam_progress(exam.id, 'Iniciando...', 0)
@@ -263,11 +272,7 @@ def _real_scrape_exam(session, exam):
         t = threading.Thread(target=qc_bg_task, args=(exam.id, exam.source_url), daemon=True)
         t.start()
         return (True, 'Scraper do QConcursos iniciado.')
-    from routes.config_routes import get_glm_key
-    api_key_val = get_glm_key()
-    if not api_key_val:
-        print('GLM_API_KEY não configurada!')
-        return (False, 'Chave GLM_API_KEY não configurada.')
+    # (Legacy check removido: O orquestrador cuidará de aguardar as chaves se estiverem em cooldown)
     if not exam.source_url:
         print('URL da prova não definida!')
         return (False, 'URL da prova vazia.')
@@ -348,11 +353,18 @@ def _real_scrape_exam(session, exam):
                             loc = page.locator("a.prova-pdf-link[data-acao='baixar']")
                             pdf_url = None
                             links_to_try = []
+                            # Se a url original tinha um nome de arquivo especifico, tenta achar ele
+                            target_filename = exam.source_url.split('/')[-1] if '.pdf' in exam.source_url.lower() else None
+                            
                             for i in range(loc.count()):
                                 arq = loc.nth(i).get_attribute('data-arquivo')
                                 tok = loc.nth(i).get_attribute('data-code')
                                 if arq and tok and ('gabarito' not in arq.lower()):
-                                    links_to_try.append(f'https://www.pciconcursos.com.br/download/{arq}?token={tok}')
+                                    link = f'https://www.pciconcursos.com.br/download/{arq}?token={tok}'
+                                    if target_filename and arq == target_filename:
+                                        links_to_try.insert(0, link) # Prioridade maxima
+                                    else:
+                                        links_to_try.append(link)
                             print(f'Encontrados {len(links_to_try)} links de prova no PCI para testar.')
                             for (i, test_url) in enumerate(links_to_try):
                                 print(f'Tentando link {i + 1}/{len(links_to_try)}: {test_url}')
@@ -396,38 +408,52 @@ def _real_scrape_exam(session, exam):
         if pdf_bytes and pdf_bytes[:4] == b'%PDF':
             set_exam_progress(exam.id, 'Extraindo texto do PDF...', 30)
             try:
-                import PyPDF2
+                import fitz
                 import io
                 import tempfile
-                pdf_file = io.BytesIO(pdf_bytes)
-                reader = PyPDF2.PdfReader(pdf_file)
-                total_pages = len(reader.pages)
-                pdf_chunks = []
-                pages_per_chunk = 5
-                step_size = 4
+                import re
+
                 temp_dir = tempfile.mkdtemp(prefix=f'exam_{exam.id}_')
-                for i in range(0, total_pages, step_size):
-                    writer = PyPDF2.PdfWriter()
-                    for j in range(i, min(i + pages_per_chunk, total_pages)):
-                        writer.add_page(reader.pages[j])
-                    chunk_path = os.path.join(temp_dir, f'chunk_{i}.pdf')
-                    with open(chunk_path, 'wb') as f_out:
-                        writer.write(f_out)
-                    pdf_chunks.append(chunk_path)
-                if pdf_chunks:
-                    pdf_downloaded = True
-                    print(f'PDF dividido em {len(pdf_chunks)} chunks para OCR.')
+                full_pdf_path = os.path.join(temp_dir, 'full.pdf')
+                with open(full_pdf_path, 'wb') as f:
+                    f.write(pdf_bytes)
+
+                doc = fitz.open(full_pdf_path)
+                pages_text = []
+                for page in doc:
+                    pages_text.append(page.get_text() or '')
+                doc.close()
+
+                chunk_texts = []
+                chunk_size = 3
+                overlap = 1
+                idx = 0
+                while idx < len(pages_text):
+                    chunk = '\n'.join(pages_text[idx : idx + chunk_size])
+                    if chunk.strip():
+                        chunk_texts.append(chunk)
+                    if idx + chunk_size >= len(pages_text):
+                        break
+                    idx += (chunk_size - overlap)
+                    
+                pdf_downloaded = True
+                print(f'PDF dividido em {len(chunk_texts)} blocos de páginas.')
             except Exception as e:
-                print(f'Erro ao processar PDF com PyPDF2: {e}')
+                print(f'Erro ao processar PDF com fitz: {e}')
                 pdf_downloaded = False
         else:
             print(f'Nenhuma estrategia conseguiu baixar o PDF de: {exam.source_url}')
             pdf_downloaded = False
         task_ids = []
         if pdf_downloaded:
-            set_exam_progress(exam.id, f'Enviando {len(pdf_chunks)} blocos para IA...', 35, total_chunks=len(pdf_chunks), done_chunks=0)
-            for (idx, chunk_path) in enumerate(pdf_chunks):
-                t_id = orchestrator.push_task(exam.id, 'extract_questions', {'file_path': chunk_path, 'attempts': 0, 'chunk_info': f'{idx + 1}/{len(pdf_chunks)}'})
+            set_exam_progress(exam.id, f'Enviando {len(chunk_texts)} blocos para IA...', 35, total_chunks=len(chunk_texts), done_chunks=0)
+            for (idx, text_block) in enumerate(chunk_texts):
+                t_id = orchestrator.push_task(exam.id, 'extract_questions', {
+                    'file_path': full_pdf_path, 
+                    'text': text_block,
+                    'attempts': 0, 
+                    'chunk_info': f'{idx + 1}/{len(chunk_texts)}'
+                })
                 task_ids.append(t_id)
         else:
             set_exam_progress(exam.id, 'Site bloqueou o robô ou PDF saiu do ar.', -1, error_type='download_blocked')
@@ -440,6 +466,7 @@ def _real_scrape_exam(session, exam):
                 if not bg_exam:
                     bg_session.close()
                     return
+                bg_session.commit() # IMPORTANTÍSSIMO: Libera o lock de leitura antes de ficar ocioso!
                 if 'qconcursos.com' in bg_exam.source_url and '.pdf' not in bg_exam.source_url.lower():
                     set_exam_progress(bg_exam.id, 'Extraindo questões via QConcursos (Login)...', 10)
                     import subprocess, sys
@@ -479,10 +506,9 @@ def _real_scrape_exam(session, exam):
                     if t.status == 'erro':
                         has_error = True
                         error_str = t.error or 'Erro desconhecido'
-                        break
-                    if isinstance(t.result, list):
+                    elif isinstance(t.result, list):
                         questoes.extend(t.result)
-                if has_error:
+                if not questoes and has_error:
                     if '429' in error_str or 'Quota' in error_str or 'exhausted' in error_str.lower():
                         db_q = Question(exam_id=bg_exam.id, statement=f'⚠️ Limite gratuito da Inteligência Artificial excedido.\n\nAs questões não puderam ser extraídas automaticamente.\n\nLink original: {source_url}', options=None, correct_answer='Certo')
                         bg_session.add(db_q)
@@ -499,29 +525,139 @@ def _real_scrape_exam(session, exam):
                     bg_session.delete(bg_exam)
                     bg_session.commit()
                 else:
+                    full_pdf_path = os.path.join(temp_cleanup_dir, 'full.pdf') if temp_cleanup_dir else None
+                    
+                    # 100% DETERMINISMO: Validador Numérico (Gap Finder) e Auto-Healing
+                    import re
+                    def extrai_int(num_str):
+                        try: return int(re.sub(r'\D', '', str(num_str)))
+                        except: return 0
+                        
+                    numeros_vistos = set()
+                    for q in questoes:
+                        if isinstance(q, dict) and q.get('numero_questao'):
+                            n = extrai_int(q['numero_questao'])
+                            if n > 0: numeros_vistos.add(n)
+                            
+                    if numeros_vistos and full_pdf_path and os.path.exists(full_pdf_path):
+                        max_num = max(numeros_vistos)
+                        gaps = [i for i in range(1, max_num + 1) if i not in numeros_vistos]
+                        
+                        retries = 0
+                        while gaps and retries < 2:
+                            set_exam_progress(bg_exam.id, f'Corrigindo {len(gaps)} falhas da IA (Tentativa {retries+1})...', 80)
+                            
+                            healing_task_ids = []
+                            gap_batches = [gaps[i:i+5] for i in range(0, len(gaps), 5)]
+                            for gb in gap_batches:
+                                tid = orchestrator.push_task(bg_exam.id, 'extract_questions_focused', {'file_path': full_pdf_path, 'gaps': gb}, model_name=None)
+                                healing_task_ids.append(tid)
+                                
+                            start_wait = time.time()
+                            finished_healing = {}
+                            while len(finished_healing) < len(healing_task_ids):
+                                if time.time() - start_wait > 300: break
+                                for t in list(orchestrator.history):
+                                    if t.id in healing_task_ids and t.id not in finished_healing:
+                                        finished_healing[t.id] = t
+                                time.sleep(1)
+                                
+                            for tid in healing_task_ids:
+                                t = finished_healing.get(tid)
+                                if t and isinstance(t.result, list):
+                                    questoes.extend(t.result)
+                                    for q in t.result:
+                                        if isinstance(q, dict) and q.get('numero_questao'):
+                                            n = extrai_int(q.get('numero_questao'))
+                                            if n > 0: numeros_vistos.add(n)
+                            
+                            gaps = [i for i in range(1, max_num + 1) if i not in numeros_vistos]
+                            retries += 1
+                            
+                        if gaps:
+                            # FAIL-FAST: Deterministico estrito
+                            set_exam_progress(bg_exam.id, f'Falha Crítica de Exatidão: A IA pulou as questões {gaps[:5]}.', -1, error_type='validation_failed')
+                            bg_session.delete(bg_exam)
+                            bg_session.commit()
+                            return
+
+                    set_exam_progress(bg_exam.id, 'Atrelando imagens às questões...', 85)
+                    if full_pdf_path and os.path.exists(full_pdf_path):
+                        orchestrator._post_process_images(full_pdf_path, questoes, bg_exam.id)
                     set_exam_progress(bg_exam.id, 'Salvando questões...', 90)
                     import re
                     import difflib
                     import json
-                    saved_count = 0
-                    seen_questions = []
+                    final_db_questions = []
+
                     for q in questoes:
-                        enunciado = q.get('enunciado', '').strip()
-                        if not enunciado:
+                        if not isinstance(q, dict):
                             continue
-                        # Remove null bytes that break SQLite
+                        
+                        raw_num = str(q.get('numero_questao', '')).strip()
+                        if raw_num.lower() == 'none' or not raw_num:
+                            continue
+                        
+                        enunciado = str(q.get('enunciado', '')).strip()
+                        if not enunciado or enunciado.lower() == 'none':
+                            continue
                         enunciado = enunciado.replace('\x00', '')
-                        normalized = re.sub('\\W+', '', enunciado.lower())
-                        is_duplicate = False
-                        for seen in seen_questions:
-                            if difflib.SequenceMatcher(None, normalized, seen).ratio() > 0.95:
-                                is_duplicate = True
+                        
+                        opts = q.get('opcoes')
+                        if not opts or (isinstance(opts, dict) and not opts):
+                            opts_str = 'None'
+                        else:
+                            opts_str = str(opts)
+                            
+                        opts_len = len(opts) if isinstance(opts, dict) else 0
+
+                        is_dup = False
+                        to_remove_idx = -1
+                        matched_idx = -1
+                        for idx, seen in enumerate(final_db_questions):
+                            seen_num = seen['num']
+                            seen_en = seen['raw_en']
+                            seen_opts_len = seen['opts_len']
+                            
+                            if raw_num and seen_num == raw_num:
+                                if opts_len > seen_opts_len:
+                                    to_remove_idx = idx
+                                elif seen_opts_len > opts_len:
+                                    is_dup = True
+                                    matched_idx = idx
+                                else:
+                                    if len(enunciado) > len(seen_en):
+                                        to_remove_idx = idx
+                                    else:
+                                        is_dup = True
+                                        matched_idx = idx
                                 break
-                        if is_duplicate:
+                            elif not raw_num and not seen_num:
+                                if len(enunciado) > 20 and len(seen_en) > 20 and (enunciado in seen_en or seen_en in enunciado):
+                                    is_dup = True
+                                    matched_idx = idx
+                                    break
+                                        
+                        if to_remove_idx >= 0:
+                            old_q = final_db_questions.pop(to_remove_idx)
+                            if old_q['db_q'].images:
+                                old_imgs = json.loads(old_q['db_q'].images)
+                                if 'images' not in q or not q['images']:
+                                    q['images'] = old_imgs
+                                else:
+                                    q['images'] = list(set(q['images'] + old_imgs))
+                            
+                        if is_dup:
+                            if q.get('images'):
+                                seen_db_q = final_db_questions[matched_idx]['db_q']
+                                curr_imgs = json.loads(seen_db_q.images) if seen_db_q.images else []
+                                new_imgs = [img for img in q['images'] if img not in curr_imgs]
+                                if new_imgs:
+                                    seen_db_q.images = json.dumps(curr_imgs + new_imgs, ensure_ascii=False)
                             continue
-                        seen_questions.append(normalized)
-                        enunciado = re.sub('\\(?\\s*(?:Correta|Gabarito|Resposta)\\s*:\\s*[A-E]\\s*\\)?', '', enunciado, flags=re.IGNORECASE).strip()
-                        opts = q.get('opcoes', {})
+                        
+                        enunciado = re.sub(r'\(?\s*(?:Correta|Gabarito|Resposta)\s*:\s*[A-E]\s*\)?', '', enunciado, flags=re.IGNORECASE).strip()
+                        
                         if isinstance(opts, dict):
                             clean_opts = {k: str(v).replace('\x00', '') for k, v in opts.items() if v}
                         else:
@@ -533,19 +669,36 @@ def _real_scrape_exam(session, exam):
                             options=json.dumps(clean_opts, ensure_ascii=False) if clean_opts else None, 
                             correct_answer=str(q.get('resposta', 'A')).strip().replace('\x00', '')[:10], 
                             subject=str(q.get('disciplina', 'Geral')).strip().replace('\x00', '')[:100], 
-                            images=json.dumps(q.get('images'), ensure_ascii=False) if q.get('images') else None
+                            images=json.dumps(q.get('images'), ensure_ascii=False) if q.get('images') else None,
+                            numero_questao=raw_num if raw_num else None
                         )
-                        bg_session.add(db_q)
-                        saved_count += 1
+                        final_db_questions.append({
+                            'num': raw_num,
+                            'opts_len': opts_len,
+                            'db_q': db_q,
+                            'raw_en': enunciado
+                        })
                     
+                    saved_count = len(final_db_questions)
                     if saved_count == 0:
                         bg_session.delete(bg_exam)
                         bg_session.commit()
-                        set_exam_progress(bg_exam.id, 'Nenhuma questão legível encontrada no PDF.', -1, error_type='no_questions')
+                        set_exam_progress(e_id, 'Nenhuma questão legível encontrada no PDF.', -1, error_type='no_questions')
                     else:
+                        def sort_key(q_dict):
+                            try:
+                                n = int(re.sub(r'\D', '', str(q_dict['num'])))
+                                return n if n > 0 else 999999
+                            except:
+                                return 999999
+                        final_db_questions.sort(key=sort_key)
+                        
                         bg_exam.status = 'Aprovada'
+                        for fq in final_db_questions:
+                            fq['db_q'].exam_id = e_id
+                            bg_session.add(fq['db_q'])
                         bg_session.commit()
-                        set_exam_progress(bg_exam.id, f'Concluído! {saved_count} questões extraídas.', 100)
+                        set_exam_progress(e_id, f'Concluído! {saved_count} questões extraídas.', 100)
                         
                 bg_session.close()
             except Exception as e:

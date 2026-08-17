@@ -9,9 +9,23 @@ import requests
 import functools
 import openai
 
-MODEL_CASCADE = [
-    "z-ai/glm-5.2",
+GEMINI_CASCADE = [
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
 ]
+
+NVIDIA_CASCADE = [
+    "z-ai/glm-5.2",
+    "meta/llama-3.1-70b-instruct",
+    "meta/llama-3.1-8b-instruct",
+]
+
+MODEL_CASCADE = GEMINI_CASCADE + NVIDIA_CASCADE
 
 class Task:
     def __init__(self, exam_id, task_type, payload, model_name=None):
@@ -19,194 +33,31 @@ class Task:
         self.exam_id = exam_id
         self.task_type = task_type
         self.payload = payload
-        self.model_name = model_name or MODEL_CASCADE[0]
+        self.model_name = model_name or "gemini-3.7-flash"
         self.cascade_index = 0
         self.status = "pendente"
         self.result = None
         self.error = None
         self.created_at = time.time()
 
-class RateLimitManager:
-    def __init__(self):
-        self.lock = threading.Lock()
-        self.key_limits = {}
+from app_core.key_manager import AdvancedKeyManager
 
-    def update_limits(self, api_key, limit, remaining, reset_secs):
-        with self.lock:
-            if api_key not in self.key_limits:
-                self.key_limits[api_key] = {"limit": 0, "remaining": 0, "reset_time": 0, "blocked_until": 0}
-            self.key_limits[api_key]["limit"] = limit
-            self.key_limits[api_key]["remaining"] = remaining
-            self.key_limits[api_key]["reset_time"] = time.time() + reset_secs
-            print(f"[RateLimit] Chave {api_key[:6]}... - Limite: {limit}, Restantes: {remaining}, Reset em: {reset_secs}s")
-
-    def block_key(self, api_key, cooldown_secs=60):
-        with self.lock:
-            if api_key not in self.key_limits:
-                self.key_limits[api_key] = {"limit": 0, "remaining": 0, "reset_time": 0, "blocked_until": 0}
-            
-            reset_time = self.key_limits[api_key].get("reset_time", 0)
-            now = time.time()
-            if reset_time > now:
-                cooldown = max(cooldown_secs, reset_time - now)
-            else:
-                cooldown = cooldown_secs
-                
-            self.key_limits[api_key]["blocked_until"] = now + cooldown
-            print(f"[RateLimit] Chave {api_key[:6]}... BLOQUEADA por {cooldown}s (Erro 429).")
-            
-    def is_key_available(self, api_key):
-        with self.lock:
-            if api_key not in self.key_limits:
-                return True
-                
-            info = self.key_limits[api_key]
-            
-            # Se a chave foi bloqueada hard por um 429
-            if time.time() < info["blocked_until"]:
-                return False
-                
-            # Se o reset time local (baseado no ultimo header) já passou
-            if time.time() > info["reset_time"] and info["reset_time"] > 0:
-                info["remaining"] = max(info["limit"], 1) # Restaura a capacidade
-                info["reset_time"] = 0 # Zera o timer pra não ficar triggando
-                return True
-                
-            # Se a chave não tem reset_time e está sem saldo (nunca teve headers ou esgotou e travou), liberamos 1 requisição para ela poder buscar os headers frescos
-            if info["reset_time"] == 0 and info["remaining"] <= 0:
-                info["remaining"] = 1
-                return True
-                
-            # Se ainda tem requisições restantes, está disponível
-            if info["remaining"] > 0:
-                return True
-                
-            return False
-            
-    def get_wait_time(self, api_key):
-        with self.lock:
-            if api_key not in self.key_limits:
-                return 0
-            info = self.key_limits[api_key]
-            now = time.time()
-            if info["blocked_until"] > now:
-                return info["blocked_until"] - now
-            if info["remaining"] <= 0 and info["reset_time"] > now:
-                return info["reset_time"] - now
-            return 0
-
-rate_limit_manager = RateLimitManager()
-
-# Monkey-patch no httpx.Client.send removido (API OpenAI lida com os limites internamente/diferente)
-
-class ApiKeyManager:
-    def __init__(self, db_keys=None):
-        import os
-        from dotenv import load_dotenv
-        load_dotenv()
+def get_client_for_key(key_data):
+    key = key_data['key_value']
+    is_gemini = True
+    if key_data['provider'].lower() == 'nvidia' or key.startswith('nvapi-'):
+        is_gemini = False
         
-        self.keys = []
-        self.current_index = 0
-        self.lock = threading.Lock()
-        self.clients = {}
-        
-        # Load from DB or environment
-        keys_str = os.environ.get("GLM_API_KEY", "")
-        self.keys = [k.strip() for k in keys_str.split(",") if k.strip()]
-        if not self.keys:
-            self._load_keys_from_db()
-            
-        if self.keys:
-            self.clients[self.keys[0]] = self.create_client_for_key(self.keys[0])
-            print(f"[ApiKeyManager] Inicializado com {len(self.keys)} chave(s). Usando Chave 1.")
+    if is_gemini:
+        return openai.OpenAI(api_key=key, base_url='https://generativelanguage.googleapis.com/v1beta/openai/')
+    return openai.OpenAI(api_key=key, base_url='https://integrate.api.nvidia.com/v1')
 
-    def create_client_for_key(self, key):
-        if key.startswith("AIza"):
-            return openai.OpenAI(api_key=key, base_url='https://generativelanguage.googleapis.com/v1beta/openai/')
-        return openai.OpenAI(api_key=key, base_url='https://integrate.api.nvidia.com/v1')
+def get_cascade_for_key(key_data):
+    key = key_data['key_value']
+    if key_data['provider'].lower() == 'nvidia' or key.startswith('nvapi-'):
+        return NVIDIA_CASCADE
+    return GEMINI_CASCADE
 
-    def get_current_model_name(self):
-        key = self.get_current_key()
-        if key and key.startswith("AIza"):
-            return "gemini-1.5-flash"
-        return MODEL_CASCADE[0]
-
-    def _load_keys_from_db(self):
-        try:
-            from models import Session, AppConfig
-            db_session = Session()
-            config = db_session.query(AppConfig).filter_by(key='GLM_API_KEY').first()
-            if config and config.value:
-                self.keys = [k.strip() for k in config.value.split(",") if k.strip()]
-            db_session.close()
-        except Exception as e:
-            print(f"[ApiKeyManager] Falha ao carregar chaves do DB: {e}")
-        if not getattr(self, 'keys', None):
-            env_key = os.environ.get('GLM_API_KEY')
-            if env_key:
-                self.keys = [k.strip() for k in env_key.split(",") if k.strip()]
-            else:
-                self.keys = []
-    def rotate_key(self, model_manager=None):
-        with self.lock:
-            if not self.keys:
-                self._load_keys_from_db()
-            if len(self.keys) <= 1:
-                return False # Não há chaves suficientes para rodízio
-                
-            original_index = self.current_index
-            for _ in range(len(self.keys)):
-                self.current_index = (self.current_index + 1) % len(self.keys)
-                new_key = self.keys[self.current_index]
-                if rate_limit_manager.is_key_available(new_key):
-                    if new_key not in self.clients:
-                        self.clients[new_key] = self.create_client_for_key(new_key)
-                    print(f"[ApiKeyManager] ROTATIVO ATIVADO: Alternando para a Chave {self.current_index + 1}/{len(self.keys)}")
-                    return True
-            
-            # Se todas bloqueadas, gira de qualquer forma para não travar num índice só, mas vai exigir wait no loop
-            self.current_index = (original_index + 1) % len(self.keys)
-            fallback_key = self.keys[self.current_index]
-            if fallback_key not in self.clients:
-                self.clients[fallback_key] = self.create_client_for_key(fallback_key)
-            print(f"[ApiKeyManager] Aviso: Todas as chaves esgotadas/bloqueadas. Retornando falso (aguardar cota).")
-            return False
-
-    def get_current_key(self):
-        with self.lock:
-            if not self.keys:
-                self._load_keys_from_db()
-            if not self.keys:
-                return None
-            return self.keys[self.current_index]
-            
-    def get_current_client(self):
-        with self.lock:
-            if not self.keys:
-                self._load_keys_from_db()
-            if not self.keys: return None
-            key = self.keys[self.current_index]
-            if key not in self.clients:
-                self.clients[key] = self.create_client_for_key(key)
-            return self.clients[key]
-
-    def get_keys_status(self):
-        with self.lock:
-            statuses = []
-            for i, k in enumerate(self.keys):
-                masked = f"...{k[-4:]}" if len(k) >= 4 else "***"
-                is_avail = rate_limit_manager.is_key_available(k)
-                wait = rate_limit_manager.get_wait_time(k)
-                status = "active" if is_avail else "exhausted"
-                label = f"Disponível (Chave {i+1})" if is_avail else f"Aguardando Reset ({int(wait)}s)"
-                statuses.append({
-                    "index": i + 1,
-                    "suffix": masked,
-                    "status": status,
-                    "label": label,
-                    "raw": k
-                })
-            return statuses
 
 class ModelManager:
     def __init__(self):
@@ -214,19 +65,18 @@ class ModelManager:
         self._init_models()
 
     def _init_models(self):
-        self.models["z-ai/glm-5.2"] = 'z-ai/glm-5.2'
+        for m in MODEL_CASCADE:
+            self.models[m] = m
 
     def get_model(self, name):
-        if name in self.models:
-            return self.models[name]
-        return self.models.get("z-ai/glm-5.2", "z-ai/glm-5.2")
+        return self.models.get(name, name)
 
 class TaskStack:
     def __init__(self):
         self.queue = []
         self.queue_lock = threading.Lock()
         self.history = []
-        self.api_key_manager = ApiKeyManager()
+        self.key_manager = AdvancedKeyManager()
         self.model_manager = ModelManager()
         self.is_running = False
         self.workers = []
@@ -238,13 +88,15 @@ class TaskStack:
     def start(self):
         if not self.is_running:
             self.is_running = True
-            for i in range(4): # 4 workers para paralelismo
+            for i in range(15): # Escalado para 15 workers usando a Pool de Chaves
                 t = threading.Thread(target=self._loop, daemon=True, name=f"Worker-{i}")
                 t.start()
                 self.workers.append(t)
             print(f"[Orchestrator] {len(self.workers)} worker threads iniciadas com sucesso.")
 
     def push_task(self, exam_id, task_type, payload, model_name=None):
+        if not model_name:
+            model_name = GEMINI_CASCADE[0]
         task = Task(exam_id, task_type, payload, model_name)
         with self.queue_lock:
             self.queue.append(task)
@@ -277,27 +129,35 @@ class TaskStack:
                 time.sleep(1)
                 continue
                 
-            # PRIORIDADE 2: Fila Local (Token Bucket Preventivo)
-            current_key = self.api_key_manager.get_current_key()
-            if current_key and not rate_limit_manager.is_key_available(current_key):
-                print(f"[Orchestrator] Chave atual sem capacidade. Tentando rotação preventiva...")
-                if self.api_key_manager.rotate_key(self.model_manager):
-                    current_key = self.api_key_manager.get_current_key()
-                else:
-                    wait_time = rate_limit_manager.get_wait_time(current_key)
-                    if wait_time > 0:
-                        print(f"[Orchestrator] Fila de Controle: Todas as chaves ocupadas. Aguardando {wait_time:.1f}s antes de enviar chunk...")
-                        time.sleep(min(wait_time, 10)) # dorme no máximo 10s por ciclo para não travar a thread indefinidamente
-                        task.status = "pendente"
-                        continue
+            # PRIORIDADE 2: Fila Local (Árvore Binária / Heap)
+            try:
+                key_data = self.key_manager.get_best_key()
+            except Exception as e:
+                print(f"[Orchestrator] Fila de Controle: {e}. Aguardando 10s...")
+                time.sleep(10)
+                task.status = "pendente"
+                continue
                 
+            client = get_client_for_key(key_data)
+            
+            # Alinha a cascata de modelos com o provedor da chave sorteada
+            cascade = get_cascade_for_key(key_data)
+            if hasattr(task, 'cascade_index') and task.cascade_index == 0:
+                task.model_name = cascade[0]
+                
+            task_success = False
+            error_msg = ""
+            
             try:
                 if task.task_type == "extract_questions":
-                    self._process_extraction(task)
+                    self._process_extraction(task, client)
+                elif task.task_type == "extract_questions_focused":
+                    self._process_extraction_focused(task, client)
                 elif task.task_type == "fallback_create":
-                    self._process_fallback_create(task)
+                    self._process_fallback_create(task, client)
                 
                 task.status = "concluida"
+                task_success = True
                 if self.on_task_complete:
                     self.on_task_complete(task)
                     
@@ -305,65 +165,36 @@ class TaskStack:
                 error_msg = str(e)
                 print(f"[Orchestrator] Erro na tarefa {task.id} (Exame {task.exam_id}): {error_msg}")
                 
-                # Handling limits and deprecated models
-                if "429" in error_msg or "Quota" in error_msg or "exhausted" in error_msg.lower() or "404" in error_msg or "not found" in error_msg.lower() or "503" in error_msg or "unavailable" in error_msg.lower():
-                    # PRIORIDADE 3: Circuit Breaker
-                    curr_key = self.api_key_manager.get_current_key()
-                    if curr_key:
-                        rate_limit_manager.block_key(curr_key, cooldown_secs=60)
-                        
-                    # 1. Tentar rotacionar chaves no MESMO modelo
-                    rotate_attempts = task.payload.get('rotate_attempts', 0)
-                    if rotate_attempts < len(self.api_key_manager.keys):
-                        try:
-                            if self.api_key_manager.rotate_key(self.model_manager):
-                                print(f"[Orchestrator] Cota atingida no {task.model_name}. Retentando imediatamente com nova chave (Rotação {rotate_attempts+1})...")
-                                if self.on_exam_progress:
-                                    self.on_exam_progress(task.exam_id, f"Trocando Chave ({task.model_name})...", 50)
-                                task.payload['rotate_attempts'] = rotate_attempts + 1
-                                task.status = "pendente"
-                                continue # Retenta imediatamente!
-                        except Exception as rot_e:
-                            print(f"[Orchestrator] Erro fatal na rotação: {rot_e}")
-                            
-                    # 2. Todas as chaves esgotadas. Tentar descer na cascata de modelos
-                    task.payload['rotate_attempts'] = 0 # Reset keys rotation for next model
+                # Handling limits and invalid keys
+                if "429" in error_msg or "Quota" in error_msg or "exhausted" in error_msg.lower():
+                    self.key_manager.report_error(key_data, "429")
+                    task.status = "pendente"
+                    continue # Retenta imediatamente com a próxima chave da árvore!
                     
-                    if hasattr(task, 'cascade_index'):
-                        next_idx = task.cascade_index + 1
-                        if next_idx < len(MODEL_CASCADE):
-                            task.cascade_index = next_idx
-                            task.model_name = MODEL_CASCADE[next_idx]
-                            print(f"[Orchestrator] Descendo na cascata de modelos: usando {task.model_name} agora.")
-                            if self.on_exam_progress:
-                                self.on_exam_progress(task.exam_id, f"Mudando para modelo reserva: {task.model_name}...", 50)
-                            task.status = "pendente"
-                            continue
-                            
-                    # 3. Todos os modelos falharam. Tentar sleep longo e reset completo
-                    print("[Orchestrator] Limite de todos os modelos atingido. Pausando tarefa por 60s...")
-                    if self.on_exam_progress:
-                        self.on_exam_progress(task.exam_id, f"Cota esgotada na API. Pausando (60s)...", 60)
-                    
-                    # Track total complete cycle attempts
-                    attempts = task.payload.get('attempts', 0)
-                    if attempts < 50:
-                        task.payload['attempts'] = attempts + 1
-                        if hasattr(task, 'cascade_index'):
-                            task.cascade_index = 0 # reset back to top model
-                            task.model_name = MODEL_CASCADE[0]
-                        time.sleep(60)
-                        task.status = "pendente"
-                        continue
-                    else:
-                        task.status = "erro"
-                        task.error = error_msg
-                else:
-                    task.status = "erro"
-                    task.error = error_msg
+                elif "401" in error_msg or "PermissionDenied" in error_msg:
+                    self.key_manager.report_error(key_data, "401")
+                    task.status = "pendente"
+                    continue
                 
-                if task.status == "erro" and self.on_task_complete:
+                # Se não for erro de rede/cota, tentamos descer na cascata de modelos
+                next_idx = task.cascade_index + 1
+                if next_idx < len(cascade):
+                    task.cascade_index = next_idx
+                    task.model_name = cascade[next_idx]
+                    print(f"[Orchestrator] Descendo na cascata: usando {task.model_name} agora.")
+                    task.status = "pendente"
+                    self.key_manager.release_key(key_data, success=False)
+                    continue
+                    
+                # 3. Todos os modelos falharam. Erro final.
+                task.status = "erro"
+                task.error = error_msg
+                if self.on_task_complete:
                     self.on_task_complete(task)
+            
+            # Liberar chave de volta para a árvore se não tomou ban
+            if task_success or task.status == "erro":
+                self.key_manager.release_key(key_data, success=task_success)
 
             # Ao terminar a tarefa (sucesso ou erro final), remove da fila
             if task.status in ["concluida", "erro"]:
@@ -374,7 +205,7 @@ class TaskStack:
                     if len(self.history) > 100:
                         self.history.pop(0)
 
-    def _process_extraction(self, task):
+    def _process_extraction(self, task, client):
         text = task.payload.get("text", "")
         file_path = task.payload.get("file_path", None)
         chunk_info = task.payload.get("chunk_info", "")
@@ -383,7 +214,6 @@ class TaskStack:
             self.on_exam_progress(task.exam_id, f"Extraindo bloco {chunk_info} com {task.model_name}...", 50)
             
         model_name = self.model_manager.get_model(task.model_name)
-        client = self.api_key_manager.get_current_client()
         
         # Método Híbrido: extrai texto do PDF com PyMuPDF (fitz) primeiro (grátis, sem quota de upload)
         # Só usa Vision se o texto for insuficiente (PDF escaneado) ou se possuir imagens
@@ -417,32 +247,32 @@ class TaskStack:
                 print(f"PyMuPDF falhou ({e}), usando Vision OCR como fallback")
                 use_vision = True
         
-        prompt = """Você é um especialista em concursos públicos brasileiros. Analise o texto/arquivo de uma prova e extraia TODAS as questões.
+        prompt = """Você é um especialista em extração de dados estruturados de concursos públicos brasileiros. Analise o texto do bloco fornecido e extraia TODAS as questões que encontrar.
 
-Retorne APENAS um JSON válido — uma lista de objetos — sem texto adicional.
+Retorne APENAS um array JSON válido, sem NENHUM texto Markdown adicional (sem crases).
 
-Formato obrigatório:
+Formato:
 [
   {
-    "enunciado": "Texto completo da questão, incluindo textos de apoio",
+    "numero_questao": "Número original da questão (ex: '1', '02', '34')",
+    "enunciado": "Texto completo da questão, incluindo Textos de Referência caso a questão dependa deles.",
     "opcoes": {"A": "texto", "B": "texto", "C": "texto", "D": "texto", "E": "texto"},
-    "resposta": "A letra correta (A, B, C, D ou E)",
-    "disciplina": "Matéria da questão (ex: Língua Portuguesa, Matemática)"
+    "resposta": "Letra correta caso haja gabarito, senão null",
+    "disciplina": "Matéria presumida"
   }
 ]
 
-REGRAS:
-- Extraia APENAS questões legítimas de prova (numeradas e estruturadas).
-- IGNORE COMPLETAMENTE instruções de capa, tabelas de rascunho, textos motivadores avulsos da Redação e folhas de gabarito. Não invente questões a partir de textos institucionais.
-- NUNCA invente ou crie questões adicionais que não estejam explicitamente presentes no texto original.
-- Certifique-se de não duplicar questões. Cada questão real deve aparecer apenas uma vez.
-- Respeite rigorosamente a numeração e a quantidade de questões do documento.
-- Se Certo/Errado: use "opcoes": null e "resposta": "Certo" ou "Errado"
-- Inclua o enunciado COMPLETO de cada questão, juntando os textos de apoio e imagens descritas no mesmo.
-- Extraia TODAS as questões do bloco, sem excluir nenhuma
-- NUNCA inclua o gabarito no enunciado (remova qualquer "(Correta: A)" etc.)
-- Remova espaços excessivos ou quebras de linha quebradas no meio das frases.
-- Se não houver NENHUMA questão real no texto (por ser apenas capa ou rascunho), retorne uma lista vazia: []
+REGRAS CRÍTICAS DE EXTRAÇÃO:
+1. NÃO PULE AS PRIMEIRAS QUESTÕES! Extraia rigorosamente as perguntas 1, 2, 3, etc.
+2. Extraia TODAS as questões de forma contígua.
+3. Ignore estritamente CAPA e GABARITOS finais em formato de tabela. 
+4. Textos base (ex: "Texto I", "O texto seguinte servirá de base...") devem ser incluídos como prefixo no "enunciado" da PRIMEIRA questão que depende dele, ou de todas. NUNCA crie uma questão isolada SÓ com o texto base!
+5. Se uma questão for MÚLTIPLA ESCOLHA (tiver A, B, C, D), VOCÊ É OBRIGADO a preencher o objeto "opcoes". NUNCA use "opcoes": null para questões que possuem alternativas na imagem/texto!
+6. Se uma questão for estritamente Certo/Errado (sem alternativas), defina "opcoes": null e "resposta": "Certo" ou "Errado".
+7. Ignore as marcações "(Correta: X)" ou "(Gabarito: Y)" e não as coloque no enunciado.
+8. Não crie questões que não existam. Apenas transcreva fielmente.
+9. EXTRAIA RIGOROSAMENTE O NÚMERO ORIGINAL DA QUESTÃO NO CAMPO 'numero_questao' (ex: "25", "03").
+10. O chunk de texto pode conter questões complexas. Não resuma nem abrevie, extraia rigorosamente TUDO, incluindo todas as alternativas.
 """
         
         content_text = prompt
@@ -456,6 +286,8 @@ REGRAS:
             response = client.chat.completions.create(
                 model=model_name,
                 messages=[{"role": "user", "content": content_text}],
+                max_tokens=8192,
+                temperature=0.1
             )
         except Exception as e:
             raise e
@@ -480,34 +312,122 @@ REGRAS:
                 print(f"[REPAIR] JSON corrompido do chunk {chunk_info} resgatado com sucesso via json-repair!")
             except ImportError:
                 print(f"JSON inválido (json-repair não instalado). (chunk {chunk_info}): {je}")
-                task.result = []
+                raise Exception("Falha na geração do JSON pelo modelo.")
             except Exception as repair_e:
                 print(f"JSON inválido irrecuperável do Gemini (chunk {chunk_info}): {je} | Erro Repair: {repair_e}")
-                print(f"[AVISO] Ignorando bloco de questões ininteligível. Retornando vazio para não abortar a prova.")
-                task.result = []
+                raise Exception("JSON irrecuperável gerado pelo modelo. Tentativa abortada para não perder questões.")
 
-        # Pós processamento: Atrelar imagens às questões usando PyMuPDF
-        if file_path and task.result and isinstance(task.result, list):
-            self._post_process_images(file_path, task.result, task.exam_id)
+        # (O processamento de imagens agora é chamado em exam_service.py de uma só vez)
+
+    def _process_extraction_focused(self, task, client):
+        file_path = task.payload.get("file_path", None)
+        gaps = task.payload.get("gaps", [])
+        
+        if self.on_exam_progress:
+            self.on_exam_progress(task.exam_id, f"Resgatando questões {gaps} com {task.model_name}...", 80)
             
-        # Cleanup arquivo temporário
+        model_name = self.model_manager.get_model(task.model_name)
+        text = ""
+        
         if file_path:
             try:
-                import os
-                os.remove(file_path)
-            except Exception:
-                pass
+                import fitz
+                import re
+                doc = fitz.open(file_path)
+                pages_text = []
+                for page in doc:
+                    t = page.get_text() or ""
+                    t = re.sub(r' {2,}', ' ', t)
+                    pages_text.append(t)
+                text = "\n".join(pages_text)
+                doc.close()
+            except Exception as e:
+                print(f"PyMuPDF falhou no auto-healing: {e}")
+                
+        prompt = f"""Você é um auditor de extração de dados. Ocorreu uma FALHA CRÍTICA anteriormente e as seguintes questões não foram extraídas deste documento: {gaps}.
+Sua ÚNICA missão é vasculhar o texto fornecido, encontrar EXATAMENTE as questões numeradas como {gaps} e extraí-las.
+
+Retorne APENAS um array JSON válido, sem NENHUM texto Markdown adicional (sem crases).
+
+Formato:
+[
+  {{
+    "numero_questao": "Número da questão encontrada",
+    "enunciado": "Texto da questão.",
+    "opcoes": {{"A": "texto"}},
+    "resposta": null,
+    "disciplina": "Matéria presumida"
+  }}
+]
+
+REGRAS CRÍTICAS:
+1. Encontre e extraia SOMENTE as questões que pertencem à lista: {gaps}.
+2. Não extraia nenhuma outra questão. Se achar a questão 1 e ela não está na lista, ignore-a.
+3. EXTRAIA RIGOROSAMENTE O NÚMERO ORIGINAL DA QUESTÃO NO CAMPO 'numero_questao' COMO UMA STRING.
+"""
+        
+        content_text = prompt
+        if text:
+            content_text += f"\n\nTexto Integral do Documento:\n{text}\n"
+            
+        try:
+            if not client:
+                raise Exception("API Key não configurada.")
+                
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=[{"role": "user", "content": content_text}],
+                max_tokens=4096,
+                temperature=0.1,
+                response_format={"type": "json_object"} if "openai" in str(type(client)).lower() else None
+            )
+            raw = response.choices[0].message.content
+        except Exception as e:
+            raise Exception(f"Falha de API: {e}")
+            
+        import json
+        if raw.startswith("```json"):
+            raw = raw[7:]
+        if raw.startswith("```"):
+            raw = raw[3:]
+        if raw.endswith("```"):
+            raw = raw[:-3]
+        raw = raw.strip()
+        
+        try:
+            task.result = json.loads(raw)
+        except json.JSONDecodeError as je:
+            try:
+                import json_repair
+                task.result = json_repair.loads(raw)
+            except Exception as repair_e:
+                raise Exception("JSON irrecuperável no Auto-Healing.")
 
     def _post_process_images(self, file_path, questions, exam_id):
         import fitz
         import os
-        
+        doc = None
         try:
             doc = fitz.open(file_path)
             
             # Garante que a pasta static/pdfs/images exista
             img_dir = os.path.join("static", "pdfs", "images")
             os.makedirs(img_dir, exist_ok=True)
+            
+            # --- PRE-PASS: Detecção de Marca d'água / Logos de Cabeçalho ---
+            import collections
+            bbox_freq = collections.defaultdict(int)
+            for page_num in range(len(doc)):
+                blocks = doc[page_num].get_text('dict')['blocks']
+                for b in blocks:
+                    if b.get('type') == 1:
+                        bbox = b['bbox']
+                        rounded = (round(bbox[0]/10), round(bbox[1]/10), round(bbox[2]/10), round(bbox[3]/10))
+                        bbox_freq[rounded] += 1
+            
+            watermark_bboxes = {k for k, v in bbox_freq.items() if v > 2}
+            print(f"[Orchestrator] Watermarks ignorados: {watermark_bboxes}")
+            # -----------------------------------------------------------------
             
             # Pre-calcular a posição Y (aproximada) de cada questão no PDF usando interseção de palavras
             import re
@@ -526,8 +446,10 @@ REGRAS:
 
             question_positions = []
             for i, q in enumerate(questions):
-                enunciado = q.get("enunciado", "").lower()
+                # Extrair palavras chaves significativas
+                enunciado = q.get("enunciado", q.get("statement", "")).lower()
                 q_words = set(re.findall(r'\w+', enunciado))
+                
                 if not q_words:
                     question_positions.append({"index": i, "page": -1, "y": -1})
                     continue
@@ -535,105 +457,238 @@ REGRAS:
                 best_page = -1
                 best_y = -1
                 best_x = -1
-                max_overlap = 0
-                
                 best_block_idx = -1
+                best_overlap = 0
                 
+                stopwords = {"o", "a", "os", "as", "um", "uma", "uns", "umas", "de", "do", "da", "dos", "das", "em", "no", "na", "nos", "nas", "para", "por", "com", "sem", "que", "e", "ou", "mas", "se", "como", "é", "são", "foi", "nao", "não"}
+                q_words_clean = {w for w in q_words if len(w) > 2 and w not in stopwords}
+                if not q_words_clean:
+                    q_words_clean = q_words # fallback
+                    
                 for page_num, blocks in enumerate(page_blocks):
                     for idx, b in enumerate(blocks):
-                        overlap = len(q_words.intersection(b["words"]))
-                        if overlap > max_overlap and overlap > 5:
-                            max_overlap = overlap
-                            best_page = page_num
-                            best_y = b["bbox"][1] # y0
-                            best_x = b["bbox"][0] # x0
-                            best_block_idx = idx
+                        b_words_clean = {w for w in b["words"] if len(w) > 2 and w not in stopwords}
+                        if not b_words_clean:
+                            continue
                             
+                        overlap = len(q_words_clean.intersection(b_words_clean))
+                        if overlap > best_overlap:
+                            # Filtro mínimo de decência para evitar falsos positivos de blocos com 1 palavra
+                            if overlap >= 4 or (overlap >= 2 and overlap / len(b_words_clean) > 0.6):
+                                best_overlap = overlap
+                                best_page = page_num
+                                best_y = b["bbox"][1] # y0
+                                best_x = b["bbox"][0] # x0
+                                best_block_idx = idx
+                                
                 question_positions.append({"index": i, "page": best_page, "y": best_y, "x": best_x, "block_idx": best_block_idx})
             
-            # Pré-analisar imagens repetidas (Logotipos, Brasões, Marcas d'água)
-            # Imagens de questões legítimas costumam aparecer em apenas 1 página.
-            # Se uma imagem (xref) aparece em mais de 2 páginas, é lixo visual de cabeçalho/fundo.
-            xref_counts = {}
-            for page_num in range(len(doc)):
-                for img in doc[page_num].get_images(full=True):
-                    xref = img[0]
-                    xref_counts[xref] = xref_counts.get(xref, 0) + 1
-            
-            # Varrer as páginas buscando imagens válidas
+            # Estratégia de Captura Visual (Renderização de Lacunas)
+            # PDFs frequentemente fatiam imagens grandes ou usam layouts complexos.
+            # Em vez de extrair XObjects crus, vamos renderizar o espaço visual entre as questões
+            # SE houver algum bloco de imagem detectado nesse espaço.
             for page_num in range(len(doc)):
                 page = doc[page_num]
                 blocks = page.get_text('dict')['blocks']
                 
-                images = page.get_images(full=True)
-                if not images: continue
+                # Blocos que contêm imagens
+                page_height = page.rect.height
+                dead_zone_top = page_height * 0.10
+                dead_zone_bottom = page_height * 0.90
                 
-                # Pega as questões desta página, ordenadas por block_idx
+                img_blocks = []
+                for b in blocks:
+                    if b.get('type') == 1:
+                        bbox = b['bbox']
+                        rounded = (round(bbox[0]/10), round(bbox[1]/10), round(bbox[2]/10), round(bbox[3]/10))
+                        
+                        with open('c:/Users/Santana/Documents/GitHub/concurse.io/orchestrator_debug.log', 'a') as df:
+                            df.write(f"Checking {rounded} against {watermark_bboxes}\n")
+                            
+                        if rounded in watermark_bboxes:
+                            continue
+                            
+                        center_y = (bbox[1] + bbox[3]) / 2.0
+                        if center_y < dead_zone_top or center_y > dead_zone_bottom:
+                            continue
+                        img_blocks.append(bbox)
+                        
+                if not img_blocks: continue
+                
+                extracted_img_blocks = set()
+                
+                # Pega as questões desta página, ordenadas pelo Y (de cima para baixo)
                 page_qs = [q for q in question_positions if q["page"] == page_num]
-                page_qs.sort(key=lambda x: x["block_idx"])
+                page_qs.sort(key=lambda x: (x["y"], x["x"]))
                 
-                for img_idx, img in enumerate(images):
-                    xref = img[0]
-                    
-                    # Filtro de Marcas d'água / Logos: Ignora se aparece em mais de 2 páginas
-                    if xref_counts.get(xref, 0) > 2:
+                prev_y = dead_zone_top # Começar após o cabeçalho
+                
+                for idx_in_page, q in enumerate(page_qs):
+                    q_y = q["y"]
+                    if q_y <= prev_y + 20: 
+                        # Estão quase na mesma linha, não há espaço para imagem
+                        prev_y = max(prev_y, q_y + 20)
                         continue
                         
-                    # PyMuPDF extrai as coordenadas da imagem
-                    try:
-                        rects = page.get_image_rects(xref)
-                    except Exception:
-                        continue
-                    if not rects: continue
-                    
-                    # Ignorar imagens muito pequenas ou logos (menos de 70x70) ou linhas de espaçamento (height < 30)
-                    rect = rects[0]
-                    if rect.width < 70 and rect.height < 70: continue
-                    if rect.height < 30: continue
-                    
-                    img_y = rect.y0
-                    img_x = rect.x0
-                    
-                    if not page_qs:
-                        assigned_q_idx = question_positions[-1]["index"] if question_positions else 0
-                    else:
-                        img_block_idx = -1
-                        for idx, b in enumerate(blocks):
-                            if b.get('type') == 1 and abs(b['bbox'][1] - img_y) < 5:
-                                img_block_idx = idx
-                                break
+                    # Verifica se há alguma imagem visual nesse gap
+                    img_blocks_in_between = []
+                    for bbox in img_blocks:
+                        bbox_tuple = tuple(bbox)
+                        if bbox_tuple in extracted_img_blocks:
+                            continue
+                        if bbox[1] < q_y - 10 and bbox[3] > prev_y + 10:
+                            img_blocks_in_between.append(bbox)
+                            extracted_img_blocks.add(bbox_tuple)
+                            
+                    if img_blocks_in_between:
+                        img_x0 = min(b[0] for b in img_blocks_in_between)
+                        img_y0 = min(b[1] for b in img_blocks_in_between)
+                        img_x1 = max(b[2] for b in img_blocks_in_between)
+                        img_y1 = max(b[3] for b in img_blocks_in_between)
                         
-                        if img_block_idx != -1:
-                            before_qs = [q for q in page_qs if q["block_idx"] <= img_block_idx]
-                            best_q = before_qs[-1] if before_qs else page_qs[0]
-                        else:
-                            before_qs_same_col = [q for q in page_qs if q["y"] <= img_y and abs(q.get("x", 0) - img_x) < 200]
-                            if before_qs_same_col:
-                                best_q = before_qs_same_col[-1]
-                            else:
-                                before_qs_any_col = [q for q in page_qs if q["y"] <= img_y]
-                                best_q = before_qs_any_col[-1] if before_qs_any_col else page_qs[0]
+                        rect = fitz.Rect(img_x0, img_y0, img_x1, img_y1)
+                        
+                        area = rect.width * rect.height
+                        aspect_ratio = rect.width / rect.height if rect.height > 0 else 999
+                        
+                        # Filtro Geométrico: Área >= 400 e Proporção razoável
+                        if area >= 400 and 0.1 <= aspect_ratio <= 10:
+                            pad = 5
+                            padded_rect = fitz.Rect(max(0, rect.x0 - pad), max(0, rect.y0 - pad),
+                                                    min(page.rect.width, rect.x1 + pad), min(page.rect.height, rect.y1 + pad))
+                            pix = page.get_pixmap(clip=padded_rect, dpi=150)
+                            image_bytes = pix.tobytes("png")
+                            
+                            gap_y = (rect.y0 + rect.y1) / 2
+                            gap_x = rect.x0
+                            
+                            if page_qs:
+                                # Filtra apenas as questoes que estao na mesma coluna (distancia X < 200)
+                                same_col_qs = [pq for pq in page_qs if abs(pq["x"] - gap_x) < 200]
+                                candidate_qs = same_col_qs if same_col_qs else page_qs
                                 
-                        assigned_q_idx = best_q["index"]
+                                # Pegar as questoes que estao ACIMA da imagem na pagina
+                                qs_above = [pq for pq in candidate_qs if pq["y"] < gap_y]
+                                
+                                if qs_above:
+                                    # A questao imediatamente acima da imagem
+                                    best_q = max(qs_above, key=lambda p: p["y"])
+                                    assigned_q_idx = best_q["index"]
+                                else:
+                                    # Se nao tem questao acima na mesma coluna, a imagem esta no topo.
+                                    # Vamos tentar pegar a ultima questao da coluna anterior (X menor)
+                                    prev_col_qs = [pq for pq in page_qs if pq["x"] < gap_x - 100]
+                                    if prev_col_qs:
+                                        best_q = max(prev_col_qs, key=lambda p: p["y"])
+                                        assigned_q_idx = best_q["index"]
+                                    else:
+                                        # Apelar para a pagina anterior
+                                        prev_qs = [pqq for pqq in question_positions if pqq["page"] < page_num]
+                                        if prev_qs:
+                                            # Aqui pegamos pelo index mais alto já que estão ordenadas temporalmente
+                                            assigned_q_idx = prev_qs[-1]["index"]
+                                        else:
+                                            # Nenhuma questao anterior, pega a primeira disponivel
+                                            best_q = min(candidate_qs, key=lambda p: p["y"])
+                                            assigned_q_idx = best_q["index"]
+                            else:
+                                assigned_q_idx = questions[0]["index"] if questions else 0
+                                
+                            img_filename = f"exam_{exam_id}_q_{assigned_q_idx}_img_render_p{page_num}_{int(prev_y)}.png"
+                            img_path = os.path.join(img_dir, img_filename)
+                            
+                            with open(img_path, "wb") as f:
+                                f.write(image_bytes)
+                                
+                            q_obj = questions[assigned_q_idx]
+                            if "images" not in q_obj:
+                                q_obj["images"] = []
+                            
+                            img_url = f"/static/pdfs/images/{img_filename}"
+                            if img_url not in q_obj["images"]:
+                                q_obj["images"].append(img_url)
+                            
+                            print(f"[Orchestrator] Imagem extraída (render restrito) e atrelada à questão index {assigned_q_idx}")
+                            
+                            with open('c:/Users/Santana/Documents/GitHub/concurse.io/orchestrator_debug.log', 'a') as df:
+                                df.write(f"RENDERED {img_filename} for page {page_num} idx {idx_in_page} prev_y {prev_y} q_y {q_y}\n")
+                        else:
+                            with open('c:/Users/Santana/Documents/GitHub/concurse.io/orchestrator_debug.log', 'a') as df:
+                                df.write(f"FILTERED page {page_num} gap {prev_y} to {q_y} area {area} ratio {aspect_ratio}\n")
+                    else:
+                        with open('c:/Users/Santana/Documents/GitHub/concurse.io/orchestrator_debug.log', 'a') as df:
+                            df.write(f"NO IMAGES page {page_num} gap {prev_y} to {q_y}\n")
+
                     
-                    # Extrai a imagem
-                    base_image = doc.extract_image(xref)
-                    image_bytes = base_image["image"]
-                    image_ext = base_image["ext"]
-                    img_filename = f"exam_{exam_id}_q_{assigned_q_idx}_img_{img_idx}.{image_ext}"
-                    img_path = os.path.join(img_dir, img_filename)
+                    prev_y = q_y + 20
+                
+                # Checar se tem imagem após a última questão da página
+                
+                # Se a página não tem nenhuma questão E não há questões nas páginas anteriores, é capa/instrução! Ignorar imagens.
+                prev_qs_exist = any(pq["page"] < page_num for pq in question_positions)
+                if not page_qs and not prev_qs_exist:
+                    continue
                     
-                    with open(img_path, "wb") as f:
-                        f.write(image_bytes)
+                q_y = dead_zone_bottom # antes do rodapé
+                img_blocks_in_between = []
+                for bbox in img_blocks:
+                    bbox_tuple = tuple(bbox)
+                    if bbox_tuple in extracted_img_blocks:
+                        continue
+                    if bbox[1] < q_y - 10 and bbox[3] > prev_y + 10:
+                        img_blocks_in_between.append(bbox)
+                        extracted_img_blocks.add(bbox_tuple)
                         
-                    # Anexa a imagem à questão
-                    q_obj = questions[assigned_q_idx]
-                    if "images" not in q_obj:
-                        q_obj["images"] = []
-                    q_obj["images"].append(f"/static/pdfs/images/{img_filename}")
-                    print(f"[Orchestrator] Imagem extraída e atrelada à questão index {assigned_q_idx}")
+                if img_blocks_in_between:
+                    img_x0 = min(b[0] for b in img_blocks_in_between)
+                    img_y0 = min(b[1] for b in img_blocks_in_between)
+                    img_x1 = max(b[2] for b in img_blocks_in_between)
+                    img_y1 = max(b[3] for b in img_blocks_in_between)
+                    
+                    rect = fitz.Rect(img_x0, img_y0, img_x1, img_y1)
+                    
+                    area = rect.width * rect.height
+                    aspect_ratio = rect.width / rect.height if rect.height > 0 else 999
+                    
+                    if area >= 400 and 0.1 <= aspect_ratio <= 10:
+                        pad = 5
+                        padded_rect = fitz.Rect(max(0, rect.x0 - pad), max(0, rect.y0 - pad),
+                                                min(page.rect.width, rect.x1 + pad), min(page.rect.height, rect.y1 + pad))
+                        pix = page.get_pixmap(clip=padded_rect, dpi=150)
+                        
+                        gap_x = rect.x0
+                        if page_qs:
+                            same_col_qs = [pq for pq in page_qs if abs(pq["x"] - gap_x) < 200]
+                            candidate_qs = same_col_qs if same_col_qs else page_qs
+                            assigned_q_idx = candidate_qs[-1]["index"]
+                        else:
+                            prev_qs = [pq for pq in question_positions if pq["page"] < page_num]
+                            if prev_qs:
+                                assigned_q_idx = prev_qs[-1]["index"]
+                            else:
+                                assigned_q_idx = question_positions[0]["index"] if question_positions else 0
+                        
+                        image_bytes = pix.tobytes("png")
+                        img_filename = f"exam_{exam_id}_q_{assigned_q_idx}_img_render_end_p{page_num}_{int(q_y)}.png"
+                        img_path = os.path.join(img_dir, img_filename)
+                        
+                        with open(img_path, "wb") as f:
+                            f.write(image_bytes)
+                            
+                        q_obj = questions[assigned_q_idx]
+                        if "images" not in q_obj:
+                            q_obj["images"] = []
+                        
+                        img_url = f"/static/pdfs/images/{img_filename}"
+                        if img_url not in q_obj["images"]:
+                            q_obj["images"].append(img_url)
+                        
+                        print(f"[Orchestrator] Imagem extraída (render final restrito) e atrelada à questão index {assigned_q_idx}")
         except Exception as e:
             print(f"[Orchestrator] Erro no pós-processamento de imagens: {e}")
+            import traceback
+            with open('c:/Users/Santana/Documents/GitHub/concurse.io/orchestrator_debug.log', 'a') as df:
+                df.write(f"ERROR: {e}\n{traceback.format_exc()}\n")
         finally:
             if doc:
                 try:
@@ -641,13 +696,12 @@ REGRAS:
                 except Exception:
                     pass
         
-    def _process_fallback_create(self, task):
+    def _process_fallback_create(self, task, client):
         title = task.payload.get("title", "")
         if self.on_exam_progress:
             self.on_exam_progress(task.exam_id, f"Gerando prova simulada via {task.model_name}...", 50)
             
         model_name = self.model_manager.get_model(task.model_name)
-        client = self.api_key_manager.get_current_client()
         prompt = f"""Você é um especialista em concursos públicos brasileiros. O download do PDF original falhou, mas precisamos entregar a prova para o usuário.
 Crie 10 questões realistas e de alta qualidade no exato estilo e nível da seguinte prova: "{title}".
 

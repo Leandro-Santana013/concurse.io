@@ -8,103 +8,70 @@ import datetime
 
 config_bp = Blueprint('config', __name__)
 
-def get_glm_key():
-    session = Session()
-    config = session.query(AppConfig).filter_by(key='GLM_API_KEY').first()
-    db_key = config.value if config else None
-    session.close()
-    return db_key or os.environ.get('GLM_API_KEY')
+from models import Session, User, Folder, Exam, Question, AppConfig, ExamAttempt, ApiKey
 
-@config_bp.route('/api/config/glm_key', methods=['GET', 'POST'])
-@config_bp.route('/api/config/gemini_key', methods=['GET', 'POST'])
-def manage_glm_key():
-    session = Session()
-    if request.method == 'GET':
-        config = session.query(AppConfig).filter_by(key='GLM_API_KEY').first()
-        val = config.value if config and config.value else ''
-        session.close()
-        return jsonify({'api_key': val, 'has_key': bool(val), 'success': True})
+def get_glm_key():
+    # Legacy helper, some old code might call this. We just return a placeholder or the first key.
+    with Session() as session:
+        key = session.query(ApiKey).filter_by(status='ACTIVE').first()
+        return key.key_value if key else os.environ.get('GLM_API_KEY')
+
+@config_bp.route('/api/config/keys/bulk', methods=['POST'])
+@login_required
+def manage_keys_bulk():
+    """Inserts or updates an array of API keys into the Advanced Key Manager pool, linked to the user."""
     data = request.json or {}
-    api_key = data.get('api_key', '')
-    action = data.get('action', 'set')
-    if action == 'set':
-        config = session.query(AppConfig).filter_by(key='GLM_API_KEY').first()
-        if config:
-            config.value = api_key
-        else:
-            config = AppConfig(key='GLM_API_KEY', value=api_key)
-            session.add(config)
-    elif action == 'append':
-        config = session.query(AppConfig).filter_by(key='GLM_API_KEY').first()
-        if config:
-            current_keys = [k.strip() for k in config.value.split(',') if k.strip()]
-            new_keys = [k.strip() for k in api_key.split(',') if k.strip()]
-            for k in new_keys:
-                if k not in current_keys:
-                    current_keys.append(k)
-            config.value = ','.join(current_keys)
-        else:
-            config = AppConfig(key='GLM_API_KEY', value=api_key)
-            session.add(config)
-    elif action == 'remove':
-        config = session.query(AppConfig).filter_by(key='GLM_API_KEY').first()
-        if config:
-            current_keys = [k.strip() for k in config.value.split(',') if k.strip()]
-            if api_key in current_keys:
-                current_keys.remove(api_key)
-                config.value = ','.join(current_keys)
-    session.commit()
-    config = session.query(AppConfig).filter_by(key='GLM_API_KEY').first()
-    if config:
-        final_keys_list = [k.strip() for k in config.value.split(',') if k.strip()]
-        if final_keys_list:
-            orchestrator.api_key_manager.keys = final_keys_list
-            orchestrator.api_key_manager.current_index = 0
-            print(f'Orchestrator atualizado com {len(final_keys_list)} chaves do GLM.')
-    session.close()
-    return jsonify({'success': True})
+    keys_input = data.get('keys', [])
+    if isinstance(keys_input, str):
+        keys_input = [k.strip() for k in keys_input.split(',') if k.strip()]
+        
+    added = 0
+    with Session() as session:
+        for k in keys_input:
+            if not k:
+                continue
+            provider = 'nvidia' if k.startswith('nvapi-') else 'gemini'
+            existing = session.query(ApiKey).filter_by(key_value=k).first()
+            if not existing:
+                new_key = ApiKey(key_value=k, provider=provider, status='ACTIVE', weight=10, user_id=current_user.id)
+                session.add(new_key)
+                added += 1
+            else:
+                existing.status = 'ACTIVE' # Reactivate if it was invalid
+                existing.cooldown_until = None
+        session.commit()
+    
+    # Force sync on the manager
+    orchestrator.key_manager.sync(force=True)
+    return jsonify({'success': True, 'added': added, 'message': f'{added} chaves processadas.'})
 
 @config_bp.route('/api/config/keys_status', methods=['GET'])
+@config_bp.route('/api/config/keys/status', methods=['GET'])
+@login_required
 def get_keys_status_route():
+    """Returns the health status of keys contributed by the current user."""
     try:
-        session = Session()
-        config = session.query(AppConfig).filter_by(key='GLM_API_KEY').first()
-        if config and config.value:
-            keys_list = [k.strip() for k in config.value.split(',') if k.strip()]
-            if keys_list:
-                orchestrator.api_key_manager.keys = keys_list
-        session.close()
-        statuses = orchestrator.api_key_manager.get_keys_status()
+        with Session() as session:
+            keys = session.query(ApiKey).filter_by(user_id=current_user.id).all()
+            statuses = []
+            for i, k in enumerate(keys):
+                masked = f"...{k.key_value[-4:]}" if len(k.key_value) >= 4 else "***"
+                label = 'Ativa'
+                if k.status == 'RATE_LIMITED':
+                    label = f'Castigo até {k.cooldown_until}'
+                elif k.status == 'INVALID':
+                    label = 'Revogada (Inválida)'
+                    
+                statuses.append({
+                    "id": k.id,
+                    "index": i + 1,
+                    "provider": k.provider,
+                    "suffix": masked,
+                    "status": k.status,
+                    "label": label,
+                    "weight": k.weight
+                })
         return jsonify({'keys': statuses, 'total': len(statuses), 'success': True})
     except Exception as e:
         return jsonify({'keys': [], 'total': 0, 'error': str(e), 'success': False})
-
-@config_bp.route('/api/config/keys_status', methods=['GET'])
-def get_keys_status():
-    """Testa cada chave da API e retorna o status."""
-    session = Session()
-    config = session.query(AppConfig).filter_by(key='GLM_API_KEY').first()
-    session.close()
-    if not config or not config.value:
-        return jsonify({'keys': [], 'message': 'Nenhuma chave configurada.'})
-    keys = [k.strip() for k in config.value.split(',') if k.strip()]
-    results = []
-    for (i, key) in enumerate(keys):
-        key_suffix = '...' + key[-4:] if len(key) > 4 else key
-        try:
-            import openai
-            import app_core.orchestrator as orch_module
-            client = orch_module.api_key_manager.create_client_for_key(key)
-            model_name = orchestrator.api_key_manager.get_current_model_name()
-            client.chat.completions.create(model=model_name, messages=[{'role': 'user', 'content': 'Olá'}])
-            results.append({'index': i + 1, 'suffix': key_suffix, 'status': 'active', 'label': 'Ativa'})
-        except Exception as e:
-            print(f'DEBUG EXCEPTION: {repr(e)}')
-            err = str(e).lower()
-            if '429' in str(e) or 'quota' in err or 'exhausted' in err or ('rate' in err):
-                results.append({'index': i + 1, 'suffix': key_suffix, 'status': 'exhausted', 'label': 'Esgotada'})
-            else:
-                results.append({'index': i + 1, 'suffix': key_suffix, 'status': 'invalid', 'label': 'Inválida'})
-    pass
-    return jsonify({'keys': results})
 

@@ -313,18 +313,28 @@ def explain_question(question_id):
     user_answer = data.get('user_answer', 'Nenhuma')
     prompt = f'\n    Atue como um professor de cursinho focado em concursos públicos.\n    Foi apresentada a seguinte questão de concurso:\n    \n    Enunciado: {q.statement}\n    \n    Alternativas disponíveis (se houver):\n    {q.options}\n    \n    O gabarito oficial é: {q.correct_answer}\n    O aluno marcou: {user_answer}\n    \n    Por favor, explique de forma didática e direta (em até 3 parágrafos curtos):\n    1. Por que a alternativa {q.correct_answer} está correta (qual a base legal/teórica)?\n    2. Por que a alternativa que o aluno marcou ({user_answer}) está errada (se ele tiver marcado uma diferente da correta).\n    '
     session.close()
+
+    import openai
+    import app_core.orchestrator as orch_module
+    from app_core.orchestrator import orchestrator, get_client_for_key
     try:
-        import openai
-        import app_core.orchestrator as orch_module
-        from app_core.orchestrator import orchestrator
-        client = orchestrator.api_key_manager.get_current_client()
-        if not client:
-            return jsonify({'error': 'API Key não configurada.'}), 500
-        model_name = orchestrator.api_key_manager.get_current_model_name()
+        key_data = orchestrator.key_manager.get_best_key()
+        client = get_client_for_key(key_data)
+        model_name = "gemini-1.5-flash" if key_data['provider'] != 'nvidia' else "z-ai/glm-5.2"
+    except Exception as e:
+        return jsonify({'error': f'API Key não configurada ou esgotada: {str(e)}'}), 500
+        
+    try:
         response = client.chat.completions.create(model=model_name, messages=[{'role': 'user', 'content': prompt}])
         explanation = response.choices[0].message.content
+        orchestrator.key_manager.release_key(key_data)
         return jsonify({'explanation': explanation})
     except Exception as e:
+        error_type = "429" if '429' in str(e) or 'quota' in str(e).lower() else "401" if '401' in str(e) else "other"
+        if error_type in ["429", "401"]:
+            orchestrator.key_manager.report_error(key_data, error_type=error_type)
+        else:
+            orchestrator.key_manager.release_key(key_data, success=False)
         return (jsonify({'error': f'Erro ao gerar explicação: {str(e)}'}), 500)
 
 from services.exam_service import search_exams

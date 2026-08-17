@@ -88,8 +88,22 @@ class Question(Base):
     correct_answer = Column(String(10), nullable=False)
     subject = Column(String(100), nullable=True, default='Geral', index=True)
     images = Column(Text, nullable=True)
+    numero_questao = Column(String(50), nullable=True)
     
     exam = relationship("Exam", back_populates="questions")
+
+class ApiKey(Base):
+    __tablename__ = 'api_keys'
+    id = Column(Integer, primary_key=True)
+    key_value = Column(String(200), unique=True, nullable=False, index=True)
+    provider = Column(String(50), nullable=False, default='gemini')
+    status = Column(String(20), default='ACTIVE', index=True) # ACTIVE, RATE_LIMITED, EXHAUSTED, INVALID
+    weight = Column(Integer, default=10) # Higher weight = higher priority
+    cooldown_until = Column(String(30), nullable=True) # Store ISO formatted datetime string
+    created_at = Column(String(30), nullable=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=True, index=True)
+    
+    user = relationship("User")
 
 class AppConfig(Base):
     __tablename__ = 'app_config'
@@ -119,12 +133,15 @@ def init_db():
             "ALTER TABLE exams ADD COLUMN match_score INTEGER DEFAULT 0",
             "ALTER TABLE folders ADD COLUMN user_id INTEGER REFERENCES users(id)",
             "ALTER TABLE exams ADD COLUMN user_id INTEGER REFERENCES users(id)",
-            "ALTER TABLE exam_attempts ADD COLUMN user_id INTEGER REFERENCES users(id)"
+            "ALTER TABLE exam_attempts ADD COLUMN user_id INTEGER REFERENCES users(id)",
+            "ALTER TABLE api_keys ADD COLUMN user_id INTEGER REFERENCES users(id)"
         ]:
             try:
                 with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
                     conn.execute(text(alter_query))
             except Exception:
                 pass
+                
+        # Optional manual schema updates can go here
     except Exception:
         pass
