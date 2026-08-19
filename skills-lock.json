@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "tech-stack-evaluator": {
+      "source": "alirezarezvani/claude-skills",
+      "sourceType": "github",
+      "skillPath": "engineering-team/skills/tech-stack-evaluator/SKILL.md",
+      "computedHash": "7471f5aa3441983351ba394de6028ed2a6ffaace23767a87e8c01dfa796aeaa6"
+    },
+    "technology-stack-blueprint-generator": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/technology-stack-blueprint-generator/SKILL.md",
+      "computedHash": "3819bfa893ce2aa75acb219991818e5daf75ce5d2b4cc6006f61c4e6dae085e4"
+    }
+  }
+}

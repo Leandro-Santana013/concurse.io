@@ -50,6 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadFolders();
     loadRecentSearches();
     initMobileSidebar();
+    initFloatingNav();
     initFilterChips();
     initThemeToggle();
     // ===== MOBILE SIDEBAR =====
@@ -69,13 +70,51 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // ===== FLOATING NAV LOGIC =====
+    function initFloatingNav() {
+        const sidebar = document.querySelector('.sidebar');
+        if (!sidebar) return;
+        
+        const mainContent = document.querySelector('.main-content');
+        if (!mainContent) return;
+
+        let lastScrollY = mainContent.scrollTop;
+        
+        mainContent.addEventListener('scroll', () => {
+            const currentScrollY = mainContent.scrollTop;
+            if (currentScrollY > lastScrollY && currentScrollY > 60) {
+                // Scrolling down
+                if (!sidebar.matches(':hover')) {
+                    sidebar.classList.add('nav-hidden');
+                }
+            } else {
+                // Scrolling up
+                sidebar.classList.remove('nav-hidden');
+            }
+            lastScrollY = currentScrollY;
+        });
+
+        sidebar.addEventListener('mouseleave', () => {
+            if (mainContent.scrollTop > 60) {
+                sidebar.classList.add('nav-hidden');
+            }
+        });
+        
+        sidebar.addEventListener('mouseenter', () => {
+            sidebar.classList.remove('nav-hidden');
+        });
+    }
+
     // ===== THEME TOGGLE =====
     function initThemeToggle() {
         const btn = document.getElementById('theme-toggle-btn');
         if (!btn) return;
-        const currentTheme = localStorage.getItem('theme') || 'dark';
+        const currentTheme = localStorage.getItem('theme') || 'light';
         if (currentTheme === 'light') {
             document.documentElement.setAttribute('data-theme', 'light');
+            btn.innerHTML = '<i class="ph ph-moon"></i> <span>Modo Escuro</span>';
+        } else {
+            document.documentElement.removeAttribute('data-theme');
             btn.innerHTML = '<i class="ph ph-sun"></i> <span>Modo Claro</span>';
         }
         btn.addEventListener('click', () => {
@@ -145,10 +184,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // ===== API KEY MODAL =====
     async function checkApiKey() {
         try {
-            const res = await fetch(`${API_BASE}/config/gemini_key`);
+            const res = await fetch(`${API_BASE}/config/keys_status`);
             if (res.ok) {
                 const data = await res.json();
-                if (!data.has_key) {
+                if (data.total === 0) {
                     document.getElementById('api-key-modal').style.display = 'flex';
                 }
             }
@@ -168,13 +207,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const keys = [key1, key2, key3].filter(k => k);
-        const combinedKeys = keys.join(',');
 
         try {
-            const res = await fetch(`${API_BASE}/config/gemini_key`, {
+            const res = await fetch(`${API_BASE}/config/keys/bulk`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ api_key: combinedKeys })
+                body: JSON.stringify({ keys: keys })
             });
             const data = await res.json();
             if (data.success) {
@@ -197,21 +235,68 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('api-key-modal').style.display = 'flex';
         document.getElementById('btn-close-api-key').style.display = 'block';
     };
-
-    window.addApiKey = async function () {
-        const key = prompt("Cole a nova chave do Gemini API (AIzaSy...) para adicionar à cascata:");
-        if (!key) return;
-
+    
+    async function fetchKeysStatus() {
+        const listEl = document.getElementById('apiKeysList');
+        if (!listEl) return;
         try {
-            const res = await fetch(`${API_BASE}/config/gemini_key`, {
+            const res = await fetch(`${API_BASE}/config/glm_key`);
+            if (res.ok) {
+                const data = await res.json();
+                const rawKey = data.api_key || '';
+                const keys = rawKey.split(',').map(k => k.trim()).filter(k => k);
+                
+                if (keys.length > 0) {
+                    listEl.innerHTML = keys.map((k, i) => `
+                        <div class="api-key-item" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: rgba(255,255,255,0.03); border-radius: 8px; margin-bottom: 6px;">
+                            <span>Chave ${i+1}: <code>${k.substring(0, 10)}...</code></span>
+                            <button class="btn btn-secondary btn-sm" onclick="removeApiKey('${k}')"><i class="ph ph-trash"></i> Remover</button>
+                        </div>
+                    `).join('');
+                } else {
+                    listEl.innerHTML = `<p class="text-muted" style="color: var(--text-secondary); font-size: 0.9rem;">Nenhuma chave configurada.</p>`;
+                }
+            }
+        } catch (e) {
+            console.error('Erro ao buscar status de chaves:', e);
+        }
+    }
+    
+    window.removeApiKey = async (keyToRemove) => {
+        if (!keyToRemove) return;
+        if (!confirm('Deseja remover esta chave de API?')) return;
+        try {
+            const res = await fetch(`${API_BASE}/config/glm_key`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ api_key: key, action: 'append' })
+                body: JSON.stringify({ api_key: keyToRemove, action: 'remove' })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast('Chave removida com sucesso!', 'info');
+                fetchKeysStatus();
+            } else {
+                showToast('Erro ao remover chave: ' + (data.error || 'Erro desconhecido'), 'error');
+            }
+        } catch (e) {
+            showToast('Erro de conexão ao remover chave.', 'error');
+        }
+    };
+    
+    window.addApiKey = async () => {
+        const key = prompt("Cole a nova chave da API (NVIDIA/GLM) para adicionar:");
+        if (!key || !key.trim()) return;
+        
+        try {
+            const res = await fetch(`${API_BASE}/config/glm_key`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ api_key: key.trim(), action: 'append' })
             });
             const data = await res.json();
             if (data.success) {
                 showToast(`Chave adicionada com sucesso!`, 'success');
-                if (typeof fetchKeysStatus === 'function') fetchKeysStatus();
+                fetchKeysStatus();
             } else {
                 showToast('Erro ao salvar chave: ' + data.error, 'error');
             }
@@ -244,7 +329,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (viewId !== 'view-exam') stopExamTimer();
         if (viewId === 'view-stats') loadGlobalStats();
         if (viewId === 'view-errors') loadErrorStats();
-
+        if (viewId === 'view-ranking') loadRanking();
     }
 
     async function loadGlobalStats() {
@@ -255,6 +340,13 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('stat-total-questions').textContent = data.total_questions || 0;
             document.getElementById('stat-accuracy').textContent = (data.global_accuracy || 0) + '%';
             document.getElementById('stat-streak').textContent = data.streak || 0;
+            
+            const timeEl = document.getElementById('stat-time');
+            if (timeEl) timeEl.textContent = data.study_time || '0m';
+            
+            const rankEl = document.getElementById('stat-rank');
+            if (rankEl) rankEl.textContent = data.rank || '-';
+            
         } catch (e) { console.error('Erro ao carregar stats:', e); }
     }
 
@@ -263,14 +355,55 @@ document.addEventListener('DOMContentLoaded', () => {
         switchView('view-dashboard');
     });
 
-    const navManager = document.getElementById('nav-manager');
-    if (navManager) {
-        navManager.addEventListener('click', (e) => {
+    const userProfileBtn = document.getElementById('user-profile-btn');
+    if (userProfileBtn) {
+        userProfileBtn.addEventListener('click', (e) => {
             e.preventDefault();
             document.querySelectorAll('.sidebar .nav-item').forEach(el => el.classList.remove('active'));
-            navManager.classList.add('active');
-            switchView('view-manager');
+            switchView('view-profile');
+            document.querySelector('.sidebar')?.classList.remove('open');
+            document.getElementById('sidebar-overlay')?.classList.remove('active');
         });
+    }
+
+    window.openManagerView = function() {
+        document.querySelectorAll('.sidebar .nav-item').forEach(el => el.classList.remove('active'));
+        switchView('view-manager');
+    };
+
+    async function loadRanking() {
+        try {
+            const res = await fetch(`${API_BASE}/ranking`);
+            const data = await res.json();
+            const list = document.getElementById('ranking-list');
+            if (!list) return;
+            if (data.length === 0) {
+                list.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 20px; color: var(--text-muted);">Nenhum dado de ranking disponível.</td></tr>`;
+                return;
+            }
+            list.innerHTML = data.map((user, index) => {
+                let badge = `${index + 1}º`;
+                if (index === 0) badge = `<span style="color: #fbbf24; font-weight: bold; font-size: 1.2rem;"><i class="ph ph-medal"></i> 1º</span>`;
+                else if (index === 1) badge = `<span style="color: #94a3b8; font-weight: bold; font-size: 1.1rem;"><i class="ph ph-medal"></i> 2º</span>`;
+                else if (index === 2) badge = `<span style="color: #b45309; font-weight: bold; font-size: 1.1rem;"><i class="ph ph-medal"></i> 3º</span>`;
+                
+                return `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;">
+                        <td style="padding: 16px 12px; font-weight: 600;">${badge}</td>
+                        <td style="padding: 16px 12px; display: flex; align-items: center; gap: 12px;">
+                            <img src="${user.picture}" alt="Profile" style="width: 32px; height: 32px; border-radius: 50%;">
+                            <span style="font-weight: 500;">${user.name}</span>
+                        </td>
+                        <td style="padding: 16px 12px; font-weight: bold;">${user.total_questions}</td>
+                        <td style="padding: 16px 12px; color: ${user.accuracy > 70 ? 'var(--success-color)' : (user.accuracy > 50 ? 'var(--warning-color)' : 'var(--danger-color)')}; font-weight: bold;">${user.accuracy}%</td>
+                    </tr>
+                `;
+            }).join('');
+        } catch (e) {
+            console.error('Erro ao carregar ranking:', e);
+            const list = document.getElementById('ranking-list');
+            if(list) list.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--danger-color);">Erro ao carregar ranking.</td></tr>`;
+        }
     }
 
     // ===== ORCHESTRATOR POLLING =====
@@ -334,13 +467,19 @@ document.addEventListener('DOMContentLoaded', () => {
             container.innerHTML = data.keys.map(k => {
                 const colors = { active: '#10b981', exhausted: '#ef4444', invalid: '#f59e0b' };
                 const icons = { active: 'ph-check-circle', exhausted: 'ph-x-circle', invalid: 'ph-warning' };
+                const rawParam = (k.raw || '').replace(/'/g, "\\'");
                 return `
-                    <div style="display: flex; align-items: center; gap: 10px; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px; border-left: 3px solid ${colors[k.status]};">
-                        <i class="ph ${icons[k.status]}" style="color: ${colors[k.status]}; font-size: 20px;"></i>
-                        <div>
-                            <span style="font-family: monospace; font-size: 0.9rem;">Chave ${k.index} (${k.suffix})</span><br>
-                            <span style="font-size: 0.8rem; color: ${colors[k.status]}; font-weight: 600;">${k.label}</span>
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px; border-left: 3px solid ${colors[k.status] || '#10b981'};">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <i class="ph ${icons[k.status] || 'ph-check-circle'}" style="color: ${colors[k.status] || '#10b981'}; font-size: 20px;"></i>
+                            <div>
+                                <span style="font-family: monospace; font-size: 0.9rem;">Chave ${k.index} (${k.suffix})</span><br>
+                                <span style="font-size: 0.8rem; color: ${colors[k.status] || '#10b981'}; font-weight: 600;">${k.label}</span>
+                            </div>
                         </div>
+                        <button class="btn btn-secondary btn-sm" onclick="window.removeApiKey('${rawParam}')" style="padding: 4px 10px; font-size: 0.8rem; color: var(--danger-color);">
+                            <i class="ph ph-trash"></i> Remover
+                        </button>
                     </div>
                 `;
             }).join('');
@@ -397,7 +536,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function showSearchSkeleton() {
         let skeletonHtml = `<div class="search-status-text"><i class="ph ph-spinner ph-spin"></i>Consultando fontes de provas...</div>`;
-        for (let i = 0; i < 4; i++) {
+        for (let i = 0; i < 6; i++) {
             skeletonHtml += `
                 <div class="skeleton-card">
                     <div class="skeleton-line w40"></div>
@@ -427,7 +566,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function getSourceLabel(source) {
         const labels = {
             idcap: 'IDCAP', pci: 'PCI Concursos',
-            web: 'Web', qconcursos: 'QConcursos', gemini: 'Gemini IA', banco: 'Banco Interno'
+            web: 'Web', qconcursos: 'QConcursos', glm: 'GLM IA', banco: 'Banco Interno'
         };
         return labels[source] || 'Web';
     }
@@ -460,25 +599,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Source badge + full URL
             const sourceEl = clone.querySelector('.exam-source');
-
             try {
                 sourceEl.innerHTML = `<span class="source-badge source-${source}">${getSourceLabel(source)}</span><div style="font-size: 0.8em; word-break: break-all; margin-top: 5px; color: var(--text-secondary);">${exam.url}</div>`;
             } catch {
                 sourceEl.innerHTML = `<span class="source-badge source-${source}">${getSourceLabel(source)}</span>`;
             }
 
+            // Gabarito badge
+            const gabBadge = clone.querySelector('.exam-gabarito-badge');
+            if (gabBadge) {
+                if (exam.has_gabarito_link || exam.gabarito_url) {
+                    gabBadge.innerHTML = `<i class="ph ph-check-circle"></i> Gabarito Vinculado`;
+                    gabBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+                    gabBadge.style.color = '#34d399';
+                    gabBadge.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+                } else {
+                    gabBadge.innerHTML = `<i class="ph ph-file-text"></i> Caderno de Questões`;
+                    gabBadge.style.background = 'rgba(59, 130, 246, 0.15)';
+                    gabBadge.style.color = '#60a5fa';
+                    gabBadge.style.border = '1px solid rgba(59, 130, 246, 0.3)';
+                }
+            }
+
             const btnApprove = clone.querySelector('.btn-approve');
             const btnDeny = clone.querySelector('.btn-deny');
 
             btnApprove.addEventListener('click', () => {
-                if (exam.url && exam.url.includes('pciconcursos.com.br')) {
-                    openPciManualModal(exam.id, exam.url, card, btnApprove, btnDeny);
-                } else {
-                    btnApprove.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Baixando...';
-                    btnApprove.disabled = true;
-                    btnDeny.disabled = true;
-                    handleTriage(exam.id, 'Aprovada', card);
-                }
+                btnApprove.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Baixando...';
+                btnApprove.disabled = true;
+                btnDeny.disabled = true;
+                handleTriage(exam.id, 'Aprovada', card);
             });
             btnDeny.addEventListener('click', () => handleTriage(exam.id, 'Negada', card));
 
@@ -536,19 +686,21 @@ document.addEventListener('DOMContentLoaded', () => {
                             barEl.style.backgroundColor = 'var(--primary-color)';
                         }
                         if (progData.progress === 100 || progData.progress === -1) {
-                            clearInterval(progressInterval);
-                            if (progData.progress === 100) {
-                                barEl.style.backgroundColor = '#10b981';
-                                barEl.classList.remove('progress-bar-processing');
-                                const ba = cardElement.querySelector('.btn-approve');
-                                if (ba) ba.innerHTML = '<i class="ph ph-check"></i> Processado';
-                                showToast('Prova processada com sucesso!', 'success');
-                                setTimeout(() => { removeCard(); loadFolders(); }, 1500);
-                            } else {
-                                barEl.style.backgroundColor = '#ef4444';
-                                barEl.classList.remove('progress-bar-processing');
-                                const ba = cardElement.querySelector('.btn-approve');
-                                if (ba) { ba.innerHTML = '<i class="ph ph-warning"></i> Erro'; ba.classList.add('btn-danger'); ba.classList.remove('btn-success'); }
+                            if (progressInterval) {
+                                clearInterval(progressInterval);
+                                progressInterval = null; // Prevent multiple executions
+                                if (progData.progress === 100) {
+                                    barEl.style.backgroundColor = '#10b981';
+                                    barEl.classList.remove('progress-bar-processing');
+                                    const ba = cardElement.querySelector('.btn-approve');
+                                    if (ba) ba.innerHTML = '<i class="ph ph-check"></i> Processado';
+                                    showToast('Prova processada com sucesso!', 'success');
+                                    setTimeout(() => { removeCard(); loadFolders(); }, 1500);
+                                } else {
+                                    barEl.style.backgroundColor = '#ef4444';
+                                    barEl.classList.remove('progress-bar-processing');
+                                    const ba = cardElement.querySelector('.btn-approve');
+                                    if (ba) { ba.innerHTML = '<i class="ph ph-warning"></i> Erro'; ba.classList.add('btn-danger'); ba.classList.remove('btn-success'); }
                                 // Contextual error message
                                 const errType = progData.error_type || 'unknown';
                                 let errAction = '';
@@ -560,6 +712,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     errAction = ' A prova é muito grande. Tente novamente.';
                                 }
                                 showToast(progData.status + errAction, 'error', 8000);
+                            }
                             }
                         } else {
                             // Pulse animation during AI processing
@@ -614,21 +767,36 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderFoldersMenu(folders) {
+        const foldersList = document.getElementById('folders-list');
+        if (!foldersList) return;
         foldersList.innerHTML = '';
+        if (folders.length === 0) {
+            foldersList.innerHTML = `
+                <div class="empty-state" style="grid-column: 1 / -1;">
+                    <i class="ph ph-folder-open"></i>
+                    <p style="margin-bottom: 16px;">Você ainda não possui provas baixadas.</p>
+                    <button class="btn btn-primary" onclick="document.querySelector('.nav-item[data-view=\\'dashboard\\']').click();"><i class="ph ph-magnifying-glass"></i> Buscar Novas Provas</button>
+                </div>
+            `;
+            return;
+        }
         folders.forEach(folder => {
-            const a = document.createElement('a');
-            a.href = "#";
-            a.className = "nav-item";
-            a.innerHTML = `<i class="ph ph-folder"></i><span>${folder.name} (${folder.exams.length})</span>`;
-            a.addEventListener('click', (e) => {
+            const card = document.createElement('div');
+            card.className = "card fade-in";
+            card.style.cssText = "background: var(--bg-card); padding: 24px; border-radius: 12px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 12px;";
+            card.innerHTML = `
+                <h3 style="font-size: 1.1rem; color: var(--text-primary);"><i class="ph ph-folder" style="color: var(--primary-color);"></i> ${folder.name}</h3>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">${folder.exams.length} prova(s) disponíveis</p>
+                <div style="margin-top: auto; padding-top: 16px;">
+                    <button class="btn btn-primary" style="width: 100%; justify-content: center;"><i class="ph ph-folder-open"></i> Abrir Pasta</button>
+                </div>
+            `;
+            const btn = card.querySelector('.btn-primary');
+            btn.addEventListener('click', (e) => {
                 e.preventDefault();
-                document.querySelectorAll('.sidebar .nav-item').forEach(el => el.classList.remove('active'));
-                a.classList.add('active');
                 openFolder(folder);
-                document.querySelector('.sidebar')?.classList.remove('open');
-                document.getElementById('sidebar-overlay')?.classList.remove('active');
             });
-            foldersList.appendChild(a);
+            foldersList.appendChild(card);
         });
     }
 
@@ -650,11 +818,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 const card = document.createElement('div');
                 card.className = 'exam-card fade-in';
 
+                // Badge de Gabarito
+                let gabBadgeHtml = '';
+                if (exam.has_official_answers) {
+                    const cov = exam.gabarito_coverage ? Math.round(exam.gabarito_coverage) : 100;
+                    gabBadgeHtml = `<span style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); font-size: 0.75rem; padding: 2px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;"><i class="ph ph-check-circle"></i> Gabarito Oficial (${cov}%)</span>`;
+                } else {
+                    gabBadgeHtml = `<span style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); font-size: 0.75rem; padding: 2px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;"><i class="ph ph-warning-circle"></i> Sem Gabarito Oficial</span>`;
+                }
+
+                const qCountHtml = exam.question_count ? `<span style="color: var(--text-muted); font-size: 0.8rem; display: inline-flex; align-items: center; gap: 4px;"><i class="ph ph-list-numbers"></i> ${exam.question_count} questões</span>` : '';
+
                 // Stats de tentativas
                 let statsHtml = '';
                 if (exam.attempt_count > 0) {
                     statsHtml = `
-                        <div style="display: flex; gap: 12px; margin-top: 8px; margin-bottom: 12px; font-size: 0.8rem;">
+                        <div style="display: flex; gap: 12px; margin-top: 8px; margin-bottom: 8px; font-size: 0.8rem;">
                             <span style="color: var(--success-color);"><i class="ph ph-trophy"></i> Melhor: ${exam.best_score}%</span>
                             <span style="color: var(--text-secondary);"><i class="ph ph-clock-counter-clockwise"></i> Última: ${exam.last_score}%</span>
                             <span style="color: var(--text-secondary);"><i class="ph ph-repeat"></i> ${exam.attempt_count}x</span>
@@ -662,12 +841,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     `;
                 }
 
+                const safeTitle = (exam.title || '').replace(/'/g, "\\'");
+
                 card.innerHTML = `
                     <h3 class="exam-card-title">${exam.title}</h3>
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; margin-bottom: 8px;">
+                        ${gabBadgeHtml}
+                        ${qCountHtml}
+                    </div>
                     ${statsHtml}
-                    <div style="margin-top: ${exam.attempt_count > 0 ? '8' : '16'}px; display: flex; align-items: center; gap: 8px;">
+                    <div style="margin-top: 14px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px;">
                         <button class="btn btn-primary" onclick="window.startExam(${exam.id})"><i class="ph ph-play-circle"></i> Resolver Prova</button>
-                        <button class="btn btn-danger" onclick="window.deleteExam(${exam.id}, this)"><i class="ph ph-trash"></i> Remover</button>
+                        <button class="btn btn-secondary btn-sm" onclick="window.openAttachGabaritoModal(${exam.id}, '${safeTitle}')"><i class="ph ph-clipboard-text"></i> ${exam.has_official_answers ? 'Editar Gabarito' : 'Anexar Gabarito'}</button>
+                        <button class="btn btn-danger btn-sm" onclick="window.deleteExam(${exam.id}, this)"><i class="ph ph-trash"></i></button>
                     </div>
                 `;
                 examsList.appendChild(card);
@@ -712,6 +898,237 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
     };
+
+    // ===== DUAL UPLOAD MODAL LOGIC =====
+    function initDualUploadModal() {
+        const modal = document.getElementById('dual-upload-modal');
+        const openBtn = document.getElementById('btn-open-dual-upload');
+        const closeBtn = document.getElementById('dual-upload-close');
+        const submitBtn = document.getElementById('btn-submit-dual-upload');
+
+        if (!modal) return;
+
+        if (openBtn) openBtn.addEventListener('click', () => {
+            modal.style.display = 'flex';
+        });
+
+        if (closeBtn) closeBtn.addEventListener('click', () => {
+            modal.style.display = 'none';
+        });
+
+        // Exam Tab switching (File vs URL)
+        const tabExamFile = document.getElementById('tab-exam-file');
+        const tabExamUrl = document.getElementById('tab-exam-url');
+        const boxExamFile = document.getElementById('box-exam-file');
+        const boxExamUrl = document.getElementById('box-exam-url');
+
+        if (tabExamFile && tabExamUrl) {
+            tabExamFile.addEventListener('click', () => {
+                tabExamFile.classList.add('btn-primary'); tabExamFile.classList.remove('btn-secondary');
+                tabExamUrl.classList.add('btn-secondary'); tabExamUrl.classList.remove('btn-primary');
+                boxExamFile.style.display = 'block';
+                boxExamUrl.style.display = 'none';
+            });
+            tabExamUrl.addEventListener('click', () => {
+                tabExamUrl.classList.add('btn-primary'); tabExamUrl.classList.remove('btn-secondary');
+                tabExamFile.classList.add('btn-secondary'); tabExamFile.classList.remove('btn-primary');
+                boxExamFile.style.display = 'none';
+                boxExamUrl.style.display = 'block';
+            });
+        }
+
+        // Gabarito Tab switching (File vs Text vs URL)
+        const tabGabFile = document.getElementById('tab-gab-file');
+        const tabGabText = document.getElementById('tab-gab-text');
+        const tabGabUrl = document.getElementById('tab-gab-url');
+        const boxGabFile = document.getElementById('box-gab-file');
+        const boxGabText = document.getElementById('box-gab-text');
+        const boxGabUrl = document.getElementById('box-gab-url');
+
+        if (tabGabFile && tabGabText && tabGabUrl) {
+            tabGabFile.addEventListener('click', () => {
+                [tabGabFile, tabGabText, tabGabUrl].forEach(t => { t.classList.remove('btn-primary'); t.classList.add('btn-secondary'); });
+                tabGabFile.classList.add('btn-primary');
+                boxGabFile.style.display = 'block';
+                boxGabText.style.display = 'none';
+                boxGabUrl.style.display = 'none';
+            });
+            tabGabText.addEventListener('click', () => {
+                [tabGabFile, tabGabText, tabGabUrl].forEach(t => { t.classList.remove('btn-primary'); t.classList.add('btn-secondary'); });
+                tabGabText.classList.add('btn-primary');
+                boxGabFile.style.display = 'none';
+                boxGabText.style.display = 'block';
+                boxGabUrl.style.display = 'none';
+            });
+            tabGabUrl.addEventListener('click', () => {
+                [tabGabFile, tabGabText, tabGabUrl].forEach(t => { t.classList.remove('btn-primary'); t.classList.add('btn-secondary'); });
+                tabGabUrl.classList.add('btn-primary');
+                boxGabFile.style.display = 'none';
+                boxGabText.style.display = 'none';
+                boxGabUrl.style.display = 'block';
+            });
+        }
+
+        if (submitBtn) {
+            submitBtn.addEventListener('click', async () => {
+                const title = document.getElementById('dual-exam-title').value.trim();
+                const examFile = document.getElementById('dual-exam-file').files[0];
+                const examUrl = document.getElementById('dual-exam-url').value.trim();
+                const gabFile = document.getElementById('dual-gab-file').files[0];
+                const gabText = document.getElementById('dual-gab-text').value.trim();
+                const gabUrl = document.getElementById('dual-gab-url').value.trim();
+
+                const isExamFileMode = boxExamFile.style.display !== 'none';
+                if (isExamFileMode && !examFile) {
+                    showToast('Selecione o arquivo PDF da prova para continuar.', 'warning');
+                    return;
+                }
+                if (!isExamFileMode && !examUrl) {
+                    showToast('Informe a URL direta do PDF da prova.', 'warning');
+                    return;
+                }
+
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Enviando e Processando...';
+
+                const formData = new FormData();
+                if (title) formData.append('title', title);
+
+                if (isExamFileMode) {
+                    formData.append('pdf_file', examFile);
+                } else {
+                    formData.append('pdf_url', examUrl);
+                }
+
+                if (boxGabFile.style.display !== 'none' && gabFile) {
+                    formData.append('gabarito_file', gabFile);
+                } else if (boxGabText.style.display !== 'none' && gabText) {
+                    formData.append('gabarito_text', gabText);
+                } else if (boxGabUrl.style.display !== 'none' && gabUrl) {
+                    formData.append('gabarito_url', gabUrl);
+                }
+
+                try {
+                    const res = await fetch(`${API_BASE}/exams/create_manual`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    let data = {};
+                    try {
+                        data = await res.json();
+                    } catch (e) {
+                        data = { error: 'O servidor retornou status ' + res.status };
+                    }
+                    if (res.ok && data.success) {
+                        modal.style.display = 'none';
+                        showToast(data.message || 'Prova enviada com sucesso!', 'success');
+                        switchView('view-downloads');
+                        loadFolders();
+                    } else {
+                        showToast('Erro ao processar prova: ' + (data.error || 'Erro desconhecido'), 'error', 6000);
+                    }
+                } catch (err) {
+                    showToast('Erro ao enviar prova: ' + err.message, 'error', 6000);
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="ph ph-cloud-arrow-up"></i> Processar Prova e Sincronizar';
+                }
+            });
+        }
+    }
+
+    // ===== ATTACH GABARITO MODAL LOGIC =====
+    window.openAttachGabaritoModal = function(examId, examTitle) {
+        const modal = document.getElementById('attach-gabarito-modal');
+        if (!modal) return;
+        document.getElementById('attach-gabarito-exam-id').value = examId;
+        document.getElementById('attach-gabarito-exam-name').textContent = examTitle || `Prova #${examId}`;
+        document.getElementById('attach-gabarito-text-input').value = '';
+        modal.style.display = 'flex';
+    };
+
+    function initAttachGabaritoModal() {
+        const modal = document.getElementById('attach-gabarito-modal');
+        const closeBtn = document.getElementById('attach-gabarito-close');
+        const submitBtn = document.getElementById('btn-submit-attach-gabarito');
+        const tabText = document.getElementById('tab-att-text');
+        const tabFile = document.getElementById('tab-att-file');
+        const boxText = document.getElementById('box-att-text');
+        const boxFile = document.getElementById('box-att-file');
+
+        if (!modal) return;
+
+        if (closeBtn) closeBtn.addEventListener('click', () => { modal.style.display = 'none'; });
+
+        if (tabText && tabFile) {
+            tabText.addEventListener('click', () => {
+                tabText.classList.add('btn-primary'); tabText.classList.remove('btn-secondary');
+                tabFile.classList.add('btn-secondary'); tabFile.classList.remove('btn-primary');
+                boxText.style.display = 'block'; boxFile.style.display = 'none';
+            });
+            tabFile.addEventListener('click', () => {
+                tabFile.classList.add('btn-primary'); tabFile.classList.remove('btn-secondary');
+                tabText.classList.add('btn-secondary'); tabText.classList.remove('btn-primary');
+                boxText.style.display = 'none'; boxFile.style.display = 'block';
+            });
+        }
+
+        if (submitBtn) {
+            submitBtn.addEventListener('click', async () => {
+                const examId = document.getElementById('attach-gabarito-exam-id').value;
+                const isTextMode = boxText.style.display !== 'none';
+                const textVal = document.getElementById('attach-gabarito-text-input').value.trim();
+                const fileVal = document.getElementById('attach-gabarito-file-input').files[0];
+
+                if (isTextMode && !textVal) {
+                    showToast('Digite ou cole as respostas do gabarito.', 'warning');
+                    return;
+                }
+                if (!isTextMode && !fileVal) {
+                    showToast('Selecione o arquivo PDF do gabarito.', 'warning');
+                    return;
+                }
+
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Sincronizando...';
+
+                const formData = new FormData();
+                if (isTextMode) {
+                    formData.append('gabarito_text', textVal);
+                } else {
+                    formData.append('gabarito_file', fileVal);
+                }
+
+                try {
+                    const res = await fetch(`${API_BASE}/exams/${examId}/attach_gabarito`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    let data = {};
+                    try {
+                        data = await res.json();
+                    } catch (e) {
+                        data = { error: 'O servidor retornou status ' + res.status };
+                    }
+                    if (res.ok && data.success) {
+                        modal.style.display = 'none';
+                        showToast(data.message, 'success');
+                        loadFolders();
+                    } else {
+                        showToast('Erro ao sincronizar gabarito: ' + (data.error || 'Erro desconhecido'), 'error', 6000);
+                    }
+                } catch (e) {
+                    showToast('Erro ao sincronizar gabarito: ' + e.message, 'error', 6000);
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="ph ph-check-circle"></i> Sincronizar Gabarito';
+                }
+            });
+        }
+    }
+
+    initDualUploadModal();
+    initAttachGabaritoModal();
 
     // ===== EXAM TAKING =====
     async function loadExam(examId) {
@@ -894,8 +1311,57 @@ document.addEventListener('DOMContentLoaded', () => {
                     </button>
                 </div>
                 ${recurrenceBadge}
-                <p style="margin-bottom: 24px; font-size: 1.1rem; line-height: 1.6; white-space: pre-wrap;">${q.statement}</p>
-                ${imagesHtml}
+                <div style="margin-bottom: 24px; font-size: 1.1rem; line-height: 1.6;">
+                    ${(() => {
+                        const txt = q.statement || '';
+                        let paragraphs = [];
+                        if (txt.includes('\\n') || txt.includes('\n')) {
+                            paragraphs = txt.split(/\\n|\n/).filter(p => p.trim() !== '');
+                        } else {
+                            // Separação artificial por regex: Ponto final seguido de espaço e letra Maiúscula.
+                            let marked = txt.replace(/([a-z\)]\.)\s+([A-Z])/g, "$1|SPLIT|$2");
+                            let sentences = marked.split('|SPLIT|');
+                            let temp = [];
+                            for (let i = 0; i < sentences.length; i++) {
+                                temp.push(sentences[i]);
+                                if (temp.length >= 2 || i === sentences.length - 1) {
+                                    paragraphs.push(temp.join(' '));
+                                    temp = [];
+                                }
+                            }
+                        }
+                        
+                        let html = '';
+                        let imageInserted = false;
+                        const hasImages = q.images && q.images.length > 0;
+                        
+                        for (let i = 0; i < paragraphs.length; i++) {
+                            html += `<p style="margin-bottom: 16px;">${paragraphs[i]}</p>`;
+                            
+                            if (hasImages && !imageInserted) {
+                                let pLower = paragraphs[i].toLowerCase();
+                                if (pLower.includes("texto seguinte") || 
+                                    pLower.includes("texto abaixo") || 
+                                    pLower.includes("leia o texto") ||
+                                    pLower.includes("figura") ||
+                                    pLower.includes("quadro") ||
+                                    pLower.includes("charge") ||
+                                    pLower.includes("tira") ||
+                                    pLower.includes("analise")) {
+                                    html += imagesHtml;
+                                    imageInserted = true;
+                                }
+                            }
+                        }
+                        
+                        if (hasImages && !imageInserted) {
+                            // Default to top if no trigger words matched
+                            html = imagesHtml + html;
+                        }
+                        
+                        return html;
+                    })()}
+                </div>
                 ${optionsHtml}
             </div>
         `;
@@ -1373,17 +1839,26 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (btnSubmitPciManual) {
-        btnSubmitPciManual.addEventListener('click', async () => {
-            const pdfUrl = pciManualInput.value.trim();
-            if (!pdfUrl) { showToast('Por favor, insira o link do PDF.', 'warning'); return; }
+        btnSubmitPciManual.onclick = async () => {
+            const pdfUrl = document.getElementById('pci-manual-input').value.trim();
+            
+            if (!pdfUrl) {
+                showToast('Cole o link do PDF.', 'warning');
+                return;
+            }
+            
             btnSubmitPciManual.disabled = true;
-            btnSubmitPciManual.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Baixando e Processando...';
+            btnSubmitPciManual.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Processando...';
+            
             try {
-                const res = await fetch(`/api/exams/${currentPciExamId}/manual_pdf`, {
+                const formData = new FormData();
+                if (pdfUrl) formData.append('pdf_url', pdfUrl);
+
+                const res = await fetch(`${API_BASE}/exams/${currentPciExamId}/manual_pdf`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pdf_url: pdfUrl })
+                    body: formData
                 });
+                
                 const data = await res.json();
                 if (!res.ok) {
                     showToast('Erro: ' + (data.error || 'Falha ao baixar o PDF.'), 'error', 6000);
@@ -1411,7 +1886,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 btnSubmitPciManual.disabled = false;
                 btnSubmitPciManual.innerHTML = 'Baixar e Processar Prova';
             }
-        });
+        };
     }
 
     // ===== ZEN MODE =====
@@ -1512,7 +1987,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const data = await res.json();
                 const downloads = data;
 
-                globalActiveDownloads = downloads.filter(d => d.progress >= 0 && d.progress < 100).length;
+                globalActiveDownloads = downloads.filter(d => d.progress > 0 && d.progress < 100).length;
 
                 const btn = document.getElementById('global-download-btn');
                 const badge = document.getElementById('global-download-badge');

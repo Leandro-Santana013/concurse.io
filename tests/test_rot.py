@@ -1,9 +1,0 @@
-import time; from orchestrator import TaskStack; from google.generativeai.types import generation_types; class MockModel:
-    def generate_content(self, text):
-        raise Exception("429 Quota exhausted")
-t = TaskStack(); t.model_manager.get_model = lambda x: MockModel();
-t.on_exam_progress = lambda eid, msg, pct: print("PROGRESS:", msg);
-t.start();
-t.push_task(1, "extract_questions", {"text": "teste", "chunk_info": "1/5"});
-time.sleep(3);
-print("Test finished.")
