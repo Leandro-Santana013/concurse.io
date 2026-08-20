@@ -4,7 +4,27 @@ import time
 import re
 import concurrent.futures
 
+def get_ddgs_class():
+    """Retorna a classe DuckDuckGo Search disponível no ambiente."""
+    try:
+        from ddgs import DDGS
+        return DDGS
+    except ImportError:
+        try:
+            from duckduckgo_search import DDGS
+            return DDGS
+        except ImportError:
+            return None
+
+from services.exam_search_filter import (
+    interpret_search_query_deterministic,
+    standardize_card_title,
+    calculate_card_match_score,
+    filter_and_rank_exam_cards,
+)
+
 KNOWN_EXAMS_DB = []
+
 
 # Termos que identificam inequivocamente documentos administrativos que NÃO devem aparecer na busca
 DISCARD_TERMS = [
@@ -52,7 +72,6 @@ def _search_known_exams(query):
 def _search_qc_provas(query):
     results = []
     try:
-        from services.exam_service import get_ddgs_class
         ddgs_cls = get_ddgs_class()
         if ddgs_cls:
             q = f"site:qconcursos.com/questoes-de-concursos/provas {query}"
@@ -64,6 +83,7 @@ def _search_qc_provas(query):
                     break
                 except Exception:
                     time.sleep(0.5)
+
                     
             for r in ddgs_results:
                 if "qconcursos.com" in r['href']:
@@ -82,7 +102,6 @@ def _scrape_pci_pdfs(query, nlp_data=None):
     """Busca rápida e filtrada de provas no PCI Concursos."""
     results = []
     try:
-        from services.exam_service import get_ddgs_class
         ddgs_cls = get_ddgs_class()
         if not ddgs_cls:
             return results
@@ -287,7 +306,6 @@ def _search_pdfs_web(query, api_key_val=None):
     # 2. DuckDuckGo Search com operadores booleanos de exclusão
     if len(results) < 10:
         try:
-            from services.exam_service import get_ddgs_class
             ddgs_cls = get_ddgs_class()
             if ddgs_cls:
                 ddg_query = f'{query} (prova OR "caderno de questoes") filetype:pdf -edital -retificacao -resultado -homologacao -convocacao -cronograma -recurso'

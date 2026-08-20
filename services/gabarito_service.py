@@ -1,8 +1,45 @@
 import re
 import fitz
-from services.pdf_parser import _extract_gabarito_from_doc, _get_rapidocr_engine
+from services.pdf_pipeline.diagram_cropper import get_rapidocr_engine, ocr_page_fallback, _get_rapidocr_engine
+
+GABARITO_HEADER_REGEX = re.compile(r'\b(gabarito|folha\s+de\s+respostas?|quadro\s+de\s+respostas?|respostas?\s+das?\s+quest[õo]es|gabarito\s+oficial|gabarito\s+preliminar|gabarito\s+definitivo)\b', re.IGNORECASE)
+
+def extract_gabarito_from_doc(doc):
+    """
+    Varre o documento em busca de tabelas, seções ou linhas de gabarito (incluindo páginas escaneadas).
+    Retorna um dicionário {numero_questao_int: 'A'|'B'|'C'|'D'|'E'|'X'|'C'|'E'}.
+    """
+    gabarito_map = {}
+    total_pages = len(doc)
+    if total_pages == 0:
+        return gabarito_map
+
+    pages_to_scan = list(range(total_pages - 1, -1, -1))
+
+    for p_idx in pages_to_scan:
+        page = doc[p_idx]
+        text = page.get_text()
+        if len(text.strip()) < 30:
+            ocr_b = ocr_page_fallback(page)
+            if ocr_b:
+                text = '\n'.join(b[4] for b in ocr_b)
+
+        has_gabarito_header = bool(GABARITO_HEADER_REGEX.search(text))
+        
+        if has_gabarito_header or p_idx == total_pages - 1:
+            found_gab = parse_gabarito_from_text(text)
+            if len(found_gab) >= 1:
+                gabarito_map.update(found_gab)
+                if len(gabarito_map) >= 10:
+                    break
+
+    return gabarito_map
+
+# Alias
+_extract_gabarito_from_doc = extract_gabarito_from_doc
 
 def parse_gabarito_from_text(raw_text):
+
     """
     Interpreta gabaritos inseridos como texto ou extraídos de PDF em múltiplos formatos:
       - "1-A, 2-B, 3-C, 4-D, 5-E"
@@ -12,7 +49,7 @@ def parse_gabarito_from_text(raw_text):
       - "1 C 21 A 41 X\n2 D 22 C 42 E" (Tabelas multi-coluna)
       - "1 C 2 E 3 C 4 E" (CEBRASPE)
       - "1 CERTO 2 ERRADO"
-      - Marcações de anulação: X, N, *, ANULADA
+      - Marcações de anulação: X, N, *, ANULADA, CANCELADA, NULA
       
     Retorna um dicionário: {1: 'A', 2: 'B', 3: 'C', ..., 40: 'X'} com números inteiros e respostas padronizadas.
     """
@@ -80,12 +117,35 @@ def parse_gabarito_from_text(raw_text):
             if ans_cand in ['A', 'B', 'C', 'D', 'E', 'X', 'N', '*']:
                 gabarito[int(parts[0])] = 'X' if ans_cand in ['*', 'N'] else ans_cand
 
+    if len(gabarito) >= 1:
+        return gabarito
+
+    # 5. Padrão sequencial de letras em coluna (banca IBAM / Vunesp / FCC)
+    # Detecta blocos contínuos de letras únicas (ex: 40 respostas A..E de um cargo)
+    current_chunk = []
+    best_chunk = []
+    for line in lines:
+        t = line.strip().upper()
+        if len(t) == 1 and t in ['A', 'B', 'C', 'D', 'E', 'X', 'N', '*']:
+            current_chunk.append('X' if t in ['*', 'N'] else t)
+        else:
+            if len(current_chunk) > len(best_chunk):
+                best_chunk = current_chunk
+            current_chunk = []
+    if len(current_chunk) > len(best_chunk):
+        best_chunk = current_chunk
+
+    if len(best_chunk) >= 10:
+        for idx_seq, l_ans in enumerate(best_chunk, start=1):
+            gabarito[idx_seq] = l_ans
+
     return gabarito
 
 def parse_gabarito_from_pdf(pdf_input):
     """
     Extrai gabarito oficial de um arquivo PDF avulso ou folha de respostas.
-    Suporta tabelas estruturadas, layout em colunas e OCR caso o PDF seja escaneado.
+    Utiliza primeiramente extração estruturada de tabelas nativa (find_tables),
+    seguida por layout parser e OCR caso seja escaneado.
     """
     doc = None
     should_close = False
@@ -102,12 +162,62 @@ def parse_gabarito_from_pdf(pdf_input):
         return {}
 
     try:
-        # 1. Tenta extrair com o extrator determinístico integrado
-        gabarito = _extract_gabarito_from_doc(doc)
+        gabarito = {}
+
+        # 1. Extração Estruturada via PyMuPDF Table Extractor (find_tables)
+        for page in doc:
+            if hasattr(page, 'find_tables'):
+                try:
+                    tabs = page.find_tables()
+                    for table in tabs.tables:
+                        extracted = table.extract()
+                        if not extracted or len(extracted) < 2:
+                            continue
+
+                        # A) Extração Matricial Horizontal (Padrão IBAM: cabeçalho '01 02 ... 40', linhas com cargos e respostas)
+                        header_row = extracted[0]
+                        q_cols = []
+                        for col_i, cell in enumerate(header_row):
+                            if cell and str(cell).strip().isdigit():
+                                q_cols.append((col_i, int(str(cell).strip())))
+
+                        if len(q_cols) >= 5:
+                            for row in extracted[1:]:
+                                row_answers = {}
+                                for col_i, q_num in q_cols:
+                                    if col_i < len(row) and row[col_i]:
+                                        ans_val = str(row[col_i]).strip().upper()
+                                        if ans_val in ['A', 'B', 'C', 'D', 'E', 'X', 'N', '*', 'CERTO', 'ERRADO', 'C', 'E']:
+                                            norm_ans = 'C' if ans_val == 'CERTO' else ('E' if ans_val == 'ERRADO' else ('X' if ans_val in ['*', 'N'] else ans_val))
+                                            row_answers[q_num] = norm_ans
+                                if len(row_answers) >= len(gabarito):
+                                    gabarito = row_answers
+
+                        # B) Extração Vertical Multi-Coluna (Padrão [Q1, R1, Q21, R21])
+                        for row in extracted:
+                            if not row or len(row) < 2:
+                                continue
+                            for c_idx in range(0, len(row) - 1, 2):
+                                col_q = str(row[c_idx] or '').strip()
+                                col_a = str(row[c_idx + 1] or '').strip().upper()
+                                
+                                if col_q.isdigit():
+                                    q_num = int(col_q)
+                                    if col_a in ['A', 'B', 'C', 'D', 'E', 'X', 'N', '*', 'CERTO', 'ERRADO', 'C', 'E']:
+                                        norm_ans = 'C' if col_a == 'CERTO' else ('E' if col_a == 'ERRADO' else ('X' if col_a in ['*', 'N'] else col_a))
+                                        gabarito[q_num] = norm_ans
+                except Exception as e:
+                    print(f"[Gabarito Table Warning] {e}")
+
         if gabarito and len(gabarito) >= 5:
             return gabarito
 
-        # 2. Se não encontrou, faz varredura textual direta em todas as páginas
+        # 2. Tenta extrair com o extrator determinístico integrado
+        gabarito_fallback = _extract_gabarito_from_doc(doc)
+        if gabarito_fallback and len(gabarito_fallback) >= 5:
+            return gabarito_fallback
+
+        # 3. Se não encontrou, faz varredura textual direta em todas as páginas
         full_text = ""
         for page in doc:
             full_text += "\n" + page.get_text()
@@ -116,7 +226,7 @@ def parse_gabarito_from_pdf(pdf_input):
         if text_gabarito and len(text_gabarito) >= 5:
             return text_gabarito
 
-        # 3. Se for PDF escaneado (sem texto), aplica RapidOCR
+        # 4. Se for PDF escaneado (sem texto), aplica RapidOCR
         engine = _get_rapidocr_engine()
         if engine and len(doc) <= 5:
             ocr_text = ""
@@ -142,19 +252,6 @@ def parse_gabarito_from_pdf(pdf_input):
 def merge_exam_with_gabarito(questions, gabarito_dict):
     """
     Cruza a lista de questões extraídas do caderno com o gabarito oficial.
-    
-    Parâmetros:
-      - questions: lista de dicts de questões [{'numero_questao': 1, 'enunciado': '...', 'opcoes': {...}, 'resposta': 'A'}, ...]
-      - gabarito_dict: dict {1: 'A', 2: 'C', 3: 'B', ...}
-      
-    Retorna:
-      - updated_questions: lista de questões atualizadas com o gabarito real e flags de cobertura.
-      - stats: dict {
-            "total_questions": int,
-            "matched_answers": int,
-            "coverage_pct": float,
-            "has_official_answers": bool
-        }
     """
     if not questions:
         return [], {"total_questions": 0, "matched_answers": 0, "coverage_pct": 0.0, "has_official_answers": False}
@@ -166,9 +263,12 @@ def merge_exam_with_gabarito(questions, gabarito_dict):
     for idx, q in enumerate(questions, start=1):
         q_copy = dict(q)
         q_num = q_copy.get('numero_questao') or idx
-        
-        # Tenta casar pelo número da questão ou pelo índice sequencial
-        official_ans = gabarito_dict.get(q_num) or gabarito_dict.get(idx)
+        try:
+            q_num_int = int(q_num)
+        except Exception:
+            q_num_int = idx
+            
+        official_ans = gabarito_dict.get(q_num_int) or gabarito_dict.get(idx) or gabarito_dict.get(str(q_num))
         
         if official_ans:
             q_copy['resposta'] = str(official_ans).upper()
@@ -176,7 +276,6 @@ def merge_exam_with_gabarito(questions, gabarito_dict):
             matched_count += 1
         else:
             q_copy['has_official_answer'] = False
-            # Mantém resposta original se já existia, ou 'A' se não definida
             if not q_copy.get('resposta'):
                 q_copy['resposta'] = 'A'
 
@@ -199,5 +298,5 @@ def format_gabarito_summary(gabarito_dict):
     """Gera uma representação textual concisa do gabarito (ex: 1-A | 2-B | 3-C)."""
     if not gabarito_dict:
         return ""
-    sorted_items = sorted(gabarito_dict.items(), key=lambda x: x[0])
+    sorted_items = sorted(gabarito_dict.items(), key=lambda x: int(x[0]) if str(x[0]).isdigit() else 999)
     return " | ".join([f"{num}-{ans}" for num, ans in sorted_items])

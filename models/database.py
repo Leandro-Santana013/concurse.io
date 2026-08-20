@@ -1,7 +1,6 @@
 import os
 from sqlalchemy import create_engine, Column, Integer, String, Text, Float, ForeignKey, event
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
-from flask_login import UserMixin
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -41,9 +40,17 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
         finally:
             cursor.close()
 
-Session = sessionmaker(bind=engine)
+Session = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
-class User(UserMixin, Base):
+def get_db():
+    """Dependency generator para injeção de sessão nos endpoints FastAPI."""
+    db = Session()
+    try:
+        yield db
+    finally:
+        db.close()
+
+class User(Base):
     __tablename__ = 'users'
     id = Column(Integer, primary_key=True)
     google_id = Column(String(200), unique=True, nullable=False, index=True)
@@ -98,26 +105,10 @@ class Question(Base):
     subject = Column(String(100), nullable=True, default='Geral', index=True)
     images = Column(Text, nullable=True)
     numero_questao = Column(String(50), nullable=True)
+    latex_support = Column(Integer, default=0)
+    difficulty_level = Column(String(20), default='Média')
     
     exam = relationship("Exam", back_populates="questions")
-
-class ApiKey(Base):
-    __tablename__ = 'api_keys'
-    id = Column(Integer, primary_key=True)
-    key_value = Column(String(200), unique=True, nullable=False, index=True)
-    provider = Column(String(50), nullable=False, default='gemini')
-    status = Column(String(20), default='ACTIVE', index=True) # ACTIVE, RATE_LIMITED, EXHAUSTED, INVALID
-    weight = Column(Integer, default=10) # Higher weight = higher priority
-    cooldown_until = Column(String(30), nullable=True) # Store ISO formatted datetime string
-    created_at = Column(String(30), nullable=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=True, index=True)
-    
-    user = relationship("User")
-
-class AppConfig(Base):
-    __tablename__ = 'app_config'
-    key = Column(String(50), primary_key=True)
-    value = Column(String(500))
 
 class ExamAttempt(Base):
     __tablename__ = 'exam_attempts'
@@ -146,30 +137,8 @@ class ExamCatalog(Base):
     created_at = Column(String(30), nullable=True)
 
 def init_db():
-    Base.metadata.create_all(engine)
     try:
-        from sqlalchemy import text
-        for alter_query in [
-            "ALTER TABLE exams ADD COLUMN match_score INTEGER DEFAULT 0",
-            "ALTER TABLE exams ADD COLUMN progress INTEGER DEFAULT 0",
-            "ALTER TABLE exams ADD COLUMN progress_message VARCHAR(300) DEFAULT 'Pendente'",
-            "ALTER TABLE exams ADD COLUMN error_type VARCHAR(50)",
-            "ALTER TABLE exams ADD COLUMN gabarito_url VARCHAR(500)",
-            "ALTER TABLE exams ADD COLUMN has_official_answers INTEGER DEFAULT 0",
-            "ALTER TABLE exams ADD COLUMN answer_key_source VARCHAR(50) DEFAULT 'none'",
-            "ALTER TABLE exams ADD COLUMN doc_type VARCHAR(50) DEFAULT 'caderno_questoes'",
-            "ALTER TABLE exams ADD COLUMN gabarito_coverage FLOAT DEFAULT 0.0",
-            "ALTER TABLE exams ADD COLUMN gabarito_text TEXT",
-            "ALTER TABLE exam_catalog ADD COLUMN gabarito_url VARCHAR(500)",
-            "ALTER TABLE folders ADD COLUMN user_id INTEGER REFERENCES users(id)",
-            "ALTER TABLE exams ADD COLUMN user_id INTEGER REFERENCES users(id)",
-            "ALTER TABLE exam_attempts ADD COLUMN user_id INTEGER REFERENCES users(id)",
-            "ALTER TABLE api_keys ADD COLUMN user_id INTEGER REFERENCES users(id)"
-        ]:
-            try:
-                with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
-                    conn.execute(text(alter_query))
-            except Exception:
-                pass
-    except Exception:
+        # As tabelas e migrações já estão provisionadas no banco
         pass
+    except Exception as e:
+        print(f"[DB Init Warning] {e}")

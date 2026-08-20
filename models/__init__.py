@@ -6,9 +6,8 @@ from .database import (
     Folder,
     Exam,
     Question,
-    ApiKey,
-    AppConfig,
     ExamAttempt,
     ExamCatalog,
-    init_db
+    init_db,
+    get_db
 )
