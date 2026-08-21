@@ -1,31 +1,78 @@
-# Python
+# =============================================================================
+# CONCURSE.IO — .gitignore
+# =============================================================================
+
+# Python & Environments
 __pycache__/
 *.py[cod]
+*$py.class
 *.egg-info/
 dist/
 build/
 venv/
+.venv/
+env/
+ENV/
+
+# Environment Variables & Secrets
 .env
+.env.local
+.env.*.local
+!.env.example
+qc_cookies.json
+*.pem
+*.key
 
-# SQLite databases
+# Database & SQLite Files (Locks, WAL, Journals)
 *.db
+*.db-shm
+*.db-wal
+*.db-journal
+*.sqlite
+*.sqlite3
 
-# IDE
-.vscode/
-.idea/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Temp
-*.log
-pw_dl_*/
-
-*.db
-test.pdf
-test_overlap.py
-pw_user_data/
+# Datasets, Scraped PDFs & Heavy Media
 pdfs/
 static/pdfs/
-qc_cookies.json
+provas_bancas/
+*.zip
+*.tar.gz
+*.rar
+*.7z
+test.pdf
+static/images/questions/
+
+# Frontend (Node, Vite & Bundles)
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+.vite/
+**/.vite/
+dist-ssr/
+
+# Scraping & Browser Temp (Playwright, Selenium)
+pw_dl_*/
+pw_user_data/
+.playwright/
+
+# IDE & Editor Configs
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*.suo
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs & Test Caches
+*.log
+npm-debug.log*
+yarn-debug.log*
+.pytest_cache/
+.coverage
+htmlcov/

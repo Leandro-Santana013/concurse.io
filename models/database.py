@@ -138,7 +138,8 @@ class ExamCatalog(Base):
 
 def init_db():
     try:
-        # As tabelas e migrações já estão provisionadas no banco
-        pass
+        Base.metadata.create_all(bind=engine)
     except Exception as e:
         print(f"[DB Init Warning] {e}")
+
+init_db()

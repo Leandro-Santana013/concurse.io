@@ -1,22 +1,26 @@
 """
 concurse.io — Motor Autônomo e Determinístico de Extração e Vinculação de Imagens em PDFs de Concursos
 ====================================================================================================
-Este módulo é 100% autônomo, exportável e reutilizável. Ele implementa toda a lógica avançada
-de captura visual (desenhos vetoriais + imagens raster), agrupamento geométrico espacial,
-inclusão de legendas, filtro de marcas d'água estatísticas e anexamento em 2 fases às questões.
+Este módulo implementa a captura visual de alta precisão (imagens raster + diagramas vetoriais),
+validação de proporção/área, eliminação de marcas d'água/cabeçalhos estatísticos e anexamento
+espacial rigoroso às questões (baseado na arquitetura validada e robusta da branch main).
 
 Funcionalidades:
 ----------------
-1. Filtro Estatístico de Marcas d'Água e Logos Repetidos (ocorrências em N >= 3 páginas).
-2. Clusterização Geométrica Híbrida:
-   - Captura de Desenhos Vetoriais (fitz.Page.get_drawings: circuitos, geometrias, polígonos).
-   - Captura de Imagens Raster (fitz.Page.get_images: fotos, gráficos rasterizados).
-3. Inclusão Inteligente de Legendas Textuais Adjacentes ("Figura 1 - Circuito...", "Gráfico 2...").
-4. Deduplicação Visual por Hash MD5 de Conteúdo de Imagem.
-5. Anexamento Espacial em 2 Fases:
-   - Fase 1 (Trigger Word): Alta precisão quando o enunciado menciona figuras/tabelas/gráficos.
-   - Fase 2 (Gap Visual Scan): Alta cobertura para diagramas órfãos sem termos disparadores.
-6. Exportação Flexível: Arquivos PNG em disco, manifesto JSON estruturado e modo CLI standalone.
+1. Filtro Estatístico de Marcas d'Água e Logos Fixos (ocorrências em N >= 3 páginas).
+2. Extração Precisa de Blocos Visuais:
+   - Imagens raster nativas (fitz.Page.get_images + b['type'] == 1).
+   - Desenhos vetoriais filtrados (geometrias, circuitos, esquemas), descartando linhas divisórias.
+3. Validação Geométrica Rigorosa:
+   - Proporção de aspecto válida: 0.15 <= width / height <= 8.0.
+   - Área mínima significativa (área >= 500 px²).
+   - Eliminação de zonas mortas de cabeçalho (topo < 40px) e rodapé (fundo > page_h - 40px).
+4. Proteção contra Inclusão Indevida de Enunciados:
+   - Legendas restritas apenas a rótulos curtos ("Figura 1", "Gráfico 2").
+5. Vinculação Espacial em 2 Fases:
+   - Fase 1: Trigger Word (figura, gráfico, quadro, etc.).
+   - Fase 2: Gap Visual Scan (posição entre questões na mesma coluna).
+6. Deduplicação Visual Automática por Hash MD5.
 """
 
 import os
@@ -25,6 +29,7 @@ import re
 import fitz  # PyMuPDF
 import hashlib
 import json
+import collections
 import argparse
 from typing import List, Dict, Any, Optional, Tuple, Set
 
@@ -46,7 +51,7 @@ IMAGE_TRIGGER_REGEX = re.compile(IMAGE_TRIGGER_PATTERN, re.IGNORECASE)
 
 CAPTION_PATTERN = (
     r'^\s*(?:'
-    r'figura|gr[áa]fico|quadro|tabela|diagrama|circuito|mapa|esquema|'
+    r'figura|gr[áa]fico|tabela|quadro|diagrama|circuito|mapa|esquema|'
     r'imagem|ilustra[çc][ãa]o|foto|tira|charge|cartum'
     r')\b(?:\s*(?:\d+|[A-Za-z]|I|II|III|IV|V|VI|VII|VIII|IX|X))?\s*[-–—:]?'
 )
@@ -72,9 +77,9 @@ class ExamImageExtractor:
         self,
         output_dir: str = "static/images/questions",
         dpi: int = 160,
-        padding: int = 8,
-        min_cluster_size: int = 25,
-        min_cluster_area: int = 400,
+        padding: int = 6,
+        min_cluster_size: int = 20,
+        min_cluster_area: int = 450,
         watermark_page_threshold: int = 3
     ):
         self.output_dir = output_dir
@@ -85,97 +90,185 @@ class ExamImageExtractor:
         self.watermark_page_threshold = watermark_page_threshold
         self.saved_image_hashes: Dict[str, str] = {}  # {md5_hash: relative_path}
 
-    def detect_watermarks_and_headers(self, doc: fitz.Document) -> Set[Tuple[float, float, float, float]]:
+    def detect_watermarks_and_headers(self, doc: fitz.Document) -> Set[Tuple[int, int, int, int]]:
         """
-        Analisa todas as páginas do PDF e identifica retângulos de vetores ou imagens
-        que se repetem em N ou mais páginas (marcas d'água, rodapés e cabeçalhos fixos).
+        Analisa todas as páginas do PDF e identifica retângulos de imagens ou cabeçalhos
+        que se repetem em 3 ou mais páginas (marcas d'água, rodapés e cabeçalhos institucionais).
         """
-        rect_counts: Dict[Tuple[float, float, float, float], int] = {}
+        bbox_freq = collections.defaultdict(int)
         for page in doc:
-            for d in page.get_drawings():
-                r = d['rect']
-                if r.width < 5 or r.height < 5:
-                    continue
-                key = (round(r.x0, -1), round(r.y0, -1), round(r.x1, -1), round(r.y1, -1))
-                rect_counts[key] = rect_counts.get(key, 0) + 1
+            # Blocos de imagem do dicionário da página
+            try:
+                dict_page = page.get_text('dict')
+                for b in dict_page.get('blocks', []):
+                    if b.get('type') == 1:
+                        bbox = b['bbox']
+                        rounded = (round(bbox[0]/10), round(bbox[1]/10), round(bbox[2]/10), round(bbox[3]/10))
+                        bbox_freq[rounded] += 1
+            except Exception:
+                pass
 
+            # Imagens diretas
             for img_info in page.get_images():
                 for r in page.get_image_rects(img_info[0]):
-                    key = (round(r.x0, -1), round(r.y0, -1), round(r.x1, -1), round(r.y1, -1))
-                    rect_counts[key] = rect_counts.get(key, 0) + 1
+                    rounded = (round(r.x0/10), round(r.y0/10), round(r.x1/10), round(r.y1/10))
+                    bbox_freq[rounded] += 1
 
-        return {k for k, v in rect_counts.items() if v >= self.watermark_page_threshold}
+            # Desenhos e molduras repetidas
+            for d in page.get_drawings():
+                r = d['rect']
+                if r.width >= 5 and r.height >= 5:
+                    rounded = (round(r.x0/10), round(r.y0/10), round(r.x1/10), round(r.y1/10))
+                    bbox_freq[rounded] += 1
+
+        return {k for k, v in bbox_freq.items() if v >= self.watermark_page_threshold}
 
     def find_diagram_clusters(
         self,
         page: fitz.Page,
-        watermarks: Set[Tuple[float, float, float, float]],
+        watermarks: Set[Tuple[int, int, int, int]],
         text_blocks: Optional[List[Any]] = None
     ) -> List[fitz.Rect]:
         """
-        Agrupa elementos visuais (desenhos vetoriais + imagens raster) adjacentes
-        em clusters geométricos coerentes e engloba legendas textuais explicativas.
+        Coleta e agrupa com precisão elementos visuais válidos da página,
+        rejeitando divisórias de 1px, cabeçalhos de topo e rodapés de página.
         """
         useful_rects: List[fitz.Rect] = []
-        page_w, page_h = page.rect.width, page.rect.height
+        page_w = page.rect.width
+        page_h = page.rect.height
 
-        # 1. Desenhos vetoriais (geometrias, esquemas, circuitos)
-        for d in page.get_drawings():
-            r = d['rect']
-            if r.width < 10 or r.height < 10:
-                continue
-            if r.y0 < 30 or r.y1 > page_h - 30:
-                continue
-            if r.height > page_h * 0.75:
-                continue
-            key = (round(r.x0, -1), round(r.y0, -1), round(r.x1, -1), round(r.y1, -1))
-            if key in watermarks:
-                continue
-            useful_rects.append(r)
+        dead_zone_top = 40
+        dead_zone_bottom = page_h - 40
 
-        # 2. Imagens raster embutidas
+        # 1. Imagens Raster (Tipo 1 do PyMuPDF ou page.get_images)
+        try:
+            dict_page = page.get_text('dict')
+            for b in dict_page.get('blocks', []):
+                if b.get('type') == 1:
+                    bx0, by0, bx1, by1 = b['bbox']
+                    r = fitz.Rect(bx0, by0, bx1, by1)
+                    
+                    # Filtra zonas mortas
+                    if r.y1 <= dead_zone_top or r.y0 >= dead_zone_bottom:
+                        continue
+                    
+                    # Filtra marcas d'água
+                    rounded = (round(r.x0/10), round(r.y0/10), round(r.x1/10), round(r.y1/10))
+                    if rounded in watermarks:
+                        continue
+
+                    # Filtra scans de página inteira (capa)
+                    if r.width >= page_w * 0.85 and r.height >= page_h * 0.85:
+                        continue
+
+                    area = r.width * r.height
+                    aspect = r.width / r.height if r.height > 0 else 999
+                    if area >= self.min_cluster_area and 0.12 <= aspect <= 10.0:
+                        useful_rects.append(r)
+        except Exception:
+            pass
+
         for img_info in page.get_images():
             for r in page.get_image_rects(img_info[0]):
-                if r.width < 10 or r.height < 10:
+                if r.y1 <= dead_zone_top or r.y0 >= dead_zone_bottom:
                     continue
-                if r.y0 < 30 or r.y1 > page_h - 30:
+                rounded = (round(r.x0/10), round(r.y0/10), round(r.x1/10), round(r.y1/10))
+                if rounded in watermarks:
                     continue
-                # Descarta scan de página inteira
-                if r.height > page_h * 0.75 and r.width > page_w * 0.75:
+                if r.width >= page_w * 0.85 and r.height >= page_h * 0.85:
                     continue
-                key = (round(r.x0, -1), round(r.y0, -1), round(r.x1, -1), round(r.y1, -1))
-                if key in watermarks:
-                    continue
-                useful_rects.append(r)
+                area = r.width * r.height
+                aspect = r.width / r.height if r.height > 0 else 999
+                if area >= self.min_cluster_area and 0.12 <= aspect <= 10.0:
+                    # Evita duplicar se já capturado via get_text('dict')
+                    if not any(abs(r.x0 - u.x0) < 5 and abs(r.y0 - u.y0) < 5 for u in useful_rects):
+                        useful_rects.append(r)
+
+        # 2. Desenhos Vetoriais Ricos (circuitos, esquemas, geometrias complexas)
+        # Filtra estritamente para não capturar linhas divisórias ou molduras simples
+        drawings = page.get_drawings()
+        diag_drawings: List[fitz.Rect] = []
+        for d in drawings:
+            r = d['rect']
+            # Rejeita linhas horizontais/verticais finas
+            if r.width < 12 or r.height < 12:
+                continue
+            if r.y1 <= dead_zone_top or r.y0 >= dead_zone_bottom:
+                continue
+            # Rejeita réguas e divisórias de coluna
+            if (r.width > page_w * 0.70 and r.height < 15) or (r.height > page_h * 0.70 and r.width < 15):
+                continue
+            # Rejeita fundos de página
+            if r.width > page_w * 0.80 and r.height > page_h * 0.80:
+                continue
+
+            rounded = (round(r.x0/10), round(r.y0/10), round(r.x1/10), round(r.y1/10))
+            if rounded in watermarks:
+                continue
+            diag_drawings.append(r)
+
+        # Agrupa desenhos vetoriais adjacentes apenas se formarem um cluster denso
+        if diag_drawings:
+            v_clusters: List[fitz.Rect] = []
+            for r in diag_drawings:
+                merged = False
+                for vc in v_clusters:
+                    if abs(r.x0 - vc.x0) < 120 and (r.y0 <= vc.y1 + 15 and r.y1 >= vc.y0 - 15):
+                        vc.include_rect(r)
+                        merged = True
+                        break
+                if not merged:
+                    v_clusters.append(fitz.Rect(r))
+
+            for vc in v_clusters:
+                v_area = vc.width * vc.height
+                v_aspect = vc.width / vc.height if vc.height > 0 else 999
+                # Aceita vetor apenas se for um diagrama real (área suficiente e não uma linha)
+                if v_area >= 1200 and 0.20 <= v_aspect <= 6.0:
+                    if not any(u.contains(vc) for u in useful_rects):
+                        useful_rects.append(vc)
 
         if not useful_rects:
             return []
 
-        # 3. Agrupamento espacial por proximidade (mesma coluna / bloco visual)
+        # 3. Agrupamento Geométrico Estrito por Proximidade (sem misturar colunas)
         clusters: List[fitz.Rect] = []
         for r in useful_rects:
             merged = False
             for c in clusters:
-                if abs(r.x0 - c.x0) < page_w * 0.45 and (r.y0 <= c.y1 + 25 and r.y1 >= c.y0 - 25):
+                # Merge apenas se estiverem alinhados na mesma coluna e imediatamente adjacentes
+                if abs(r.x0 - c.x0) < 80 and (r.y0 <= c.y1 + 15 and r.y1 >= c.y0 - 15):
                     c.include_rect(r)
                     merged = True
                     break
             if not merged:
                 clusters.append(fitz.Rect(r))
 
-        # 4. Captura e Inclusão de Legendas Adjacentes (ex: 'Figura 1 - Mapa Político')
+        # 4. Captura Estrita de Legendas ("Figura 1 - Mapa", "Gráfico 2")
         if text_blocks:
             for c in clusters:
                 for b in text_blocks:
                     x0, y0, x1, y1, text = b[:5]
                     text_clean = text.strip()
-                    if CAPTION_REGEX.search(text_clean):
-                        is_below = (0 <= y0 - c.y1 <= 25) and (abs(x0 - c.x0) < page_w * 0.4)
-                        is_above = (0 <= c.y0 - y1 <= 25) and (abs(x0 - c.x0) < page_w * 0.4)
+                    # Apenas legendas curtas e explícitas (não questões completas!)
+                    if len(text_clean) <= 90 and CAPTION_REGEX.search(text_clean):
+                        # Rejeita se parecer início de questão ("QUESTÃO 1", "01.")
+                        if re.search(r'\b(quest[aã]o|item|\d+\s*[\.\-\)])\b', text_clean, re.IGNORECASE):
+                            continue
+                        is_below = (0 <= y0 - c.y1 <= 18) and (abs(x0 - c.x0) < 100)
+                        is_above = (0 <= c.y0 - y1 <= 18) and (abs(x0 - c.x0) < 100)
                         if is_below or is_above:
                             c.include_rect(fitz.Rect(x0, y0, x1, y1))
 
-        return [c for c in clusters if c.width > self.min_cluster_size and c.height > self.min_cluster_size]
+        # Validação final de tamanho e aspecto
+        valid_clusters = []
+        for c in clusters:
+            area = c.width * c.height
+            aspect = c.width / c.height if c.height > 0 else 999
+            if area >= self.min_cluster_area and 0.12 <= aspect <= 10.0:
+                valid_clusters.append(c)
+
+        return valid_clusters
 
     def render_and_save_crop(
         self,
@@ -186,8 +279,8 @@ class ExamImageExtractor:
         img_index: int
     ) -> Optional[str]:
         """
-        Recorta a região delimitada com padding de segurança, renderiza em DPI configurado,
-        calcula o hash MD5 e persiste a imagem no disco (com deduplicação automática).
+        Recorta a região com padding de segurança, renderiza em DPI configurado,
+        calcula o hash MD5 e persiste no disco (com deduplicação automática).
         """
         page_w = page_obj.rect.width
         page_h = page_obj.rect.height
@@ -219,7 +312,7 @@ class ExamImageExtractor:
             self.saved_image_hashes[img_hash] = rel_url
             return rel_url
         except Exception as e:
-            print(f"[Image Extractor] Erro ao renderizar cluster na página {page_obj.number}: {e}")
+            print(f"[Diagram Cropper] Erro ao renderizar crop: {e}")
             return None
 
     def attach_images_to_questions(
@@ -230,9 +323,9 @@ class ExamImageExtractor:
         exam_id: Any = 0
     ) -> List[Dict[str, Any]]:
         """
-        Executa o pipeline de vinculação de imagens em 2 Fases:
+        Executa o pipeline de vinculação de imagens em 2 Fases (arquitetura robusta de main):
         - Fase 1: Vinculação por Palavra-Gatilho (Trigger Word) + Proximidade Espacial
-        - Fase 2: Varredura de Lacunas Visuais (Gap Visual Scan) para capturar imagens órfãs
+        - Fase 2: Varredura de Lacunas Visuais (Gap Scan) na mesma coluna
         """
         used_diagrams: Set[Tuple[int, int]] = set()  # {(page_num, cluster_index)}
         total_pages = len(doc)
@@ -241,7 +334,7 @@ class ExamImageExtractor:
         # FASE 1: TRIGGER WORD (Alta Precisão)
         # -------------------------------------------------------------------------
         for q in questions:
-            enunciado = q.get('enunciado', '')
+            enunciado = q.get('enunciado', q.get('statement', ''))
             has_trigger = bool(IMAGE_TRIGGER_REGEX.search(enunciado))
             if not has_trigger:
                 continue
@@ -276,7 +369,6 @@ class ExamImageExtractor:
                         q_images.append(rel_url)
                         used_diagrams.add(diag_key)
 
-                    # Limite de imagens por questão (permite múltiplas se explícito no texto)
                     multi_fig = bool(MULTI_FIGURE_REGEX.search(enunciado))
                     max_imgs = 3 if multi_fig else 1
                     if len(q_images) >= max_imgs:
@@ -288,16 +380,20 @@ class ExamImageExtractor:
             q['images'] = q_images if q_images else None
 
         # -------------------------------------------------------------------------
-        # FASE 2: GAP VISUAL SCAN (Alta Cobertura)
+        # FASE 2: GAP VISUAL SCAN (Alta Cobertura para imagens sem gatilho explícito)
         # -------------------------------------------------------------------------
         for p_idx in sorted(page_diagrams.keys()):
             clusters = page_diagrams[p_idx]
             page_obj = doc[p_idx]
-            page_h = page_obj.rect.height
             page_w = page_obj.rect.width
 
             page_qs = [(i, q) for i, q in enumerate(questions) if q.get('_page') == p_idx]
             page_qs.sort(key=lambda x: x[1].get('_y', 0))
+
+            # Se a página não tem questões e não há questões anteriores, é capa/instruções! Ignora.
+            prev_qs = [(i, q) for i, q in enumerate(questions) if q.get('_page', -1) < p_idx]
+            if not page_qs and not prev_qs:
+                continue
 
             for c_idx, cluster in enumerate(clusters):
                 diag_key = (p_idx, c_idx)
@@ -312,31 +408,31 @@ class ExamImageExtractor:
                     continue
 
                 aspect = cluster.width / cluster.height if cluster.height > 0 else 999
-                if aspect < 0.08 or aspect > 15:
+                if aspect < 0.12 or aspect > 10.0:
                     continue
 
                 best_q_idx = -1
                 best_distance = float('inf')
 
-                # Prioriza questões na mesma coluna
-                same_col_qs = [pq for pq in page_qs if abs(pq[1].get('_x', 0) - cluster_center_x) < page_w * 0.45]
+                # Prioriza questões na mesma coluna (diferença X < 180px)
+                same_col_qs = [pq for pq in page_qs if abs(pq[1].get('_x', 0) - cluster_center_x) < 180]
                 candidate_qs = same_col_qs if same_col_qs else page_qs
 
+                # Pega a questão que está ACIMA da imagem
                 for q_idx, q in candidate_qs:
                     q_y = q.get('_y', 0)
-                    if q_y <= cluster_center_y + 30:
+                    if q_y <= cluster_center_y + 25:
                         dist = cluster_center_y - q_y
                         if dist < best_distance:
                             best_distance = dist
                             best_q_idx = q_idx
 
+                # Se não há questão acima na coluna, herda da coluna anterior ou da última da página anterior
                 if best_q_idx == -1:
-                    prev_qs = [(i, q) for i, q in enumerate(questions) if q.get('_page', -1) < p_idx]
                     if prev_qs:
                         best_q_idx = max(prev_qs, key=lambda x: (x[1].get('_page', 0), x[1].get('_y', 0)))[0]
-
-                if best_q_idx == -1 and candidate_qs:
-                    best_q_idx = candidate_qs[0][0]
+                    elif candidate_qs:
+                        best_q_idx = candidate_qs[0][0]
 
                 if best_q_idx == -1:
                     continue
@@ -413,7 +509,7 @@ def extract_images_from_pdf(
 
 def find_diagram_clusters(
     page: fitz.Page,
-    watermarks: Set[Tuple[float, float, float, float]],
+    watermarks: Set[Tuple[int, int, int, int]],
     text_blocks: Optional[List[Any]] = None
 ) -> List[fitz.Rect]:
     """Wrapper retrocompatível para encontrar clusters de diagramas na página."""
@@ -435,8 +531,7 @@ def extract_and_crop_diagrams(
     extractor = ExamImageExtractor(output_dir=img_dir)
     extractor.saved_image_hashes = saved_hashes
     page_obj = doc[page_num]
-    res = extractor.render_and_save_crop(page_obj, cluster, exam_id, q_num, img_idx)
-    return res
+    return extractor.render_and_save_crop(page_obj, cluster, exam_id, q_num, img_idx)
 
 
 # =============================================================================

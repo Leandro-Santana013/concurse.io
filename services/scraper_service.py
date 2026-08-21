@@ -32,7 +32,9 @@ DISCARD_TERMS = [
     'recurso', 'divulga', 'homologa', 'inscri', 'isen', 'anexo',
     'aditivo', 'comunicado', 'aviso', 'lista', 'decreto', 'lei', 'portaria',
     'informa', 'classifica', 'quantitativo', 'local', 'data', 'nota',
-    'judicial', 'decis', 'cumprimento', 'parecer', 'termo de posse', 'convocados'
+    'judicial', 'decis', 'cumprimento', 'parecer', 'termo de posse', 'convocados',
+    'audiometria', 'psicol', 'aptid', 'exame m', 'reintegra', 'curso de forma',
+    'entrevista', 'devolutiva', 'apresenta', 'termo de', 'comprovação de requisitos'
 ]
 
 def is_administrative_document(text_or_url):
@@ -106,16 +108,19 @@ def _scrape_pci_pdfs(query, nlp_data=None):
         if not ddgs_cls:
             return results
         
-        # Query com exclusão de editais
-        search_query = f'{query} site:pciconcursos.com.br/provas/download/ -edital -gabarito'
+        # Query direta e otimizada para o PCI Concursos
+        search_query = f"{query} site:pciconcursos.com.br/provas"
         ddgs_results = []
-        for attempt in range(2):
+        try:
+            with ddgs_cls() as ddgs:
+                ddgs_results = list(ddgs.text(search_query, max_results=10))
+        except Exception as ddg_err:
+            # Fallback com query simplificada
             try:
                 with ddgs_cls() as ddgs:
-                    ddgs_results = list(ddgs.text(search_query, max_results=15))
-                break
+                    ddgs_results = list(ddgs.text(f"{query} site:pciconcursos.com.br", max_results=8))
             except Exception:
-                time.sleep(0.5)
+                pass
         
         if not ddgs_results:
             return results
@@ -138,7 +143,7 @@ def _scrape_pci_pdfs(query, nlp_data=None):
             if is_administrative_document(title) or is_administrative_document(href):
                 continue
 
-            if '/download/' in href:
+            if '/download/' in href or '/provas/' in href:
                 title_lower = title.lower()
                 score = 0
                 if target_words:
@@ -163,21 +168,26 @@ def _scrape_pci_pdfs(query, nlp_data=None):
                 })
                 
         results.sort(key=lambda x: x.get('match_score', 0), reverse=True)
-        results = results[:8]
+        results = results[:10]
         
     except Exception as e:
-        print(f"Erro Busca PCI: {e}")
+        print(f"   │  [PCI Concursos] Aviso: {e}", flush=True)
     return results
 
-def _scrape_idcap_pdfs(query):
+def _scrape_idcap_pdfs(query, nlp_data=None):
     """
     Crawler HTTP concorrente para a banca IDCAP.
-    Filtra estritamente documentos administrativos e faz o pareamento automático de Prova + Gabarito.
+    Varre páginas de status, filtra documentos administrativos e pareia cadernos de prova e gabaritos.
     """
     results = []
     query_lower = query.lower()
-    ignore_words = {'prova', 'provas', 'concurso', 'concursos', 'filetype:pdf', 'pdf'}
-    query_words = [w for w in query_lower.split() if len(w) > 2 and w not in ignore_words]
+    
+    # Se uma banca explicitamente diferente foi identificada (ex: FGV, Cebraspe, FCC), pula o crawler do IDCAP
+    if nlp_data and nlp_data.get('banca') and nlp_data.get('banca') not in ['IDCAP', ''] and 'idcap' not in query_lower:
+        return results
+
+    ignore_words = {'prova', 'provas', 'concurso', 'concursos', 'filetype:pdf', 'pdf', 'processo', 'seletivo', 'privado', 'de', 'do', 'da', 'para', 'em', 'no', 'na'}
+    query_words = [w for w in re.findall(r'\b[\w\-/]+\b', query_lower) if len(w) > 1 and w not in ignore_words]
 
     session = requests.Session()
     session.headers.update({
@@ -194,7 +204,7 @@ def _scrape_idcap_pdfs(query):
                 url = f"https://idcap.selecao.net.br{status_page}"
                 page_concursos = []
                 try:
-                    resp = session.get(url, timeout=5)
+                    resp = session.get(url, timeout=2.0)
                     if resp.status_code == 200:
                         soup = BeautifulSoup(resp.text, 'html.parser')
                         for a in soup.find_all('a', href=lambda h: h and '/informacoes/' in h):
@@ -202,40 +212,50 @@ def _scrape_idcap_pdfs(query):
                             parent_div = a.find_parent('div')
                             card_text = parent_div.get_text(separator=' ', strip=True) if parent_div else a.get_text(strip=True)
                             card_lower = card_text.lower()
+                            
+                            # Pontuação precisa de correspondência
                             score = sum(1 for w in query_words if w in card_lower) if query_words else 1
+                            if nlp_data:
+                                if nlp_data.get('orgao') and nlp_data['orgao'].lower() in card_lower:
+                                    score += 6
+                                if nlp_data.get('cargo') and nlp_data['cargo'].lower() in card_lower:
+                                    score += 6
+                                if nlp_data.get('ano') and nlp_data['ano'] in card_lower:
+                                    score += 4
+                            
                             if score > 0 or not query_words:
                                 page_concursos.append((score, href, card_text))
                 except Exception:
                     pass
                 return page_concursos
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                futures = [executor.submit(fetch_status_page, sp) for sp in ['/index/1/', '/index/3/', '/index/4/', '/index/5/']]
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                futures = [executor.submit(fetch_status_page, sp) for sp in ['/index/1/', '/index/2/', '/index/3/', '/index/4/', '/index/5/']]
                 for fut in concurrent.futures.as_completed(futures):
                     concurso_links.extend(fut.result())
 
         concurso_links.sort(key=lambda x: x[0], reverse=True)
+        # Prioriza estritamente os concursos mais relevantes (top 3)
+        concurso_links = concurso_links[:3]
 
         def fetch_concurso_pdfs(item):
-            score, href, concurso_title = item
+            concurso_score, href, concurso_title = item
             c_results = []
             try:
                 url = f"https://idcap.selecao.net.br{href}" if href.startswith('/') else href
-                resp = session.get(url, timeout=5)
+                resp = session.get(url, timeout=2.0)
                 if resp.status_code == 200:
                     soup = BeautifulSoup(resp.text, 'html.parser')
                     
-                    # Identifica cadernos de prova e gabaritos
                     prova_links = []
                     gabarito_links = []
 
                     for a in soup.find_all('a', href=True):
                         pdf_href = a['href']
-                        if '.pdf' in pdf_href.lower() or '/download/' in pdf_href.lower() or 'anexos-r2.selecao.net.br' in pdf_href.lower():
-                            text = a.get_text(strip=True)
+                        if '.pdf' in pdf_href.lower() or '/download/' in pdf_href.lower() or 'anexos' in pdf_href.lower():
+                            text = a.get_text(separator=' ', strip=True)
                             text_lower = text.lower()
                             
-                            # Se for documento administrativo (edital, resultado, cronograma, etc.), descarta categoricamente
                             if is_administrative_document(text_lower):
                                 continue
 
@@ -243,12 +263,12 @@ def _scrape_idcap_pdfs(query):
                             
                             if 'gabarito' in text_lower:
                                 gabarito_links.append((text, full_url))
-                            elif any(k in text_lower for k in ['prova', 'caderno', 'quest']):
+                            else:
+                                # Todo PDF não-administrativo na página do concurso é tratado como caderno de prova
                                 prova_links.append((text, full_url))
 
-                    # Pareamento automático de Prova + Gabarito
+                    # Pareamento e pontuação
                     for p_text, p_url in prova_links:
-                        # Tenta achar o gabarito mais correspondente pelo cargo/título
                         matched_gab_url = None
                         p_words = set(re.findall(r'\w{3,}', p_text.lower()))
                         for g_text, g_url in gabarito_links:
@@ -257,37 +277,48 @@ def _scrape_idcap_pdfs(query):
                                 matched_gab_url = g_url
                                 break
 
-                        clean_title = concurso_title.replace('\n', ' ').strip()
-                        match_score = 90 if query_words and any(w in clean_title.lower() for w in query_words) else 65
+                        clean_title = re.sub(r'(inscri[çc][õo]es|pedidos de isen[çc][ãa]o|saiba mais|\d+\s*vagas).*', '', concurso_title, flags=re.IGNORECASE)
+                        clean_title = re.sub(r'\s+', ' ', clean_title).strip()
+                        
+                        # Cálculo refinado de match score
+                        match_score = 70
+                        if query_words:
+                            combined_text = f"{clean_title} {p_text}".lower()
+                            matches = sum(1 for w in query_words if w in combined_text)
+                            term_ratio = matches / len(query_words)
+                            match_score = int(50 + (term_ratio * 48))
+                        
+                        final_card_title = f"IDCAP - {clean_title} - {p_text}" if p_text.lower() not in clean_title.lower() else f"IDCAP - {clean_title}"
                         
                         c_results.append({
-                            "title": f"IDCAP - {clean_title[:80]} - {p_text[:60]}",
+                            "title": final_card_title,
                             "url": p_url,
                             "gabarito_url": matched_gab_url,
                             "source": "idcap",
-                            "match_score": match_score
+                            "match_score": min(98, max(60, match_score))
                         })
             except Exception:
                 pass
             return c_results
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
-            futures = [executor.submit(fetch_concurso_pdfs, item) for item in concurso_links[:8]]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            futures = [executor.submit(fetch_concurso_pdfs, item) for item in concurso_links]
             for fut in concurrent.futures.as_completed(futures):
                 results.extend(fut.result())
-                if len(results) >= 20:
+                if len(results) >= 15:
                     break
 
         if results:
-            return results[:15]
+            results.sort(key=lambda x: x.get('match_score', 0), reverse=True)
+            return results[:10]
     except Exception as e:
-        print(f"Aviso: Crawling HTTP IDCAP falhou: {e}")
+        print(f"   │  [IDCAP Crawler] Aviso: {e}", flush=True)
 
     return results
 
 def _search_pdfs_web(query, api_key_val=None):
     """
-    Busca web concorrente com operadores negativos estritos para eliminar editais e resultados.
+    Busca web concorrente rápida para identificar cadernos de questões em PDF.
     """
     results = []
     seen_urls = set()
@@ -303,31 +334,39 @@ def _search_pdfs_web(query, api_key_val=None):
     known = _search_known_exams(query)
     _add_results(known)
 
-    # 2. DuckDuckGo Search com operadores booleanos de exclusão
+    # 2. DuckDuckGo Search
     if len(results) < 10:
         try:
             ddgs_cls = get_ddgs_class()
             if ddgs_cls:
-                ddg_query = f'{query} (prova OR "caderno de questoes") filetype:pdf -edital -retificacao -resultado -homologacao -convocacao -cronograma -recurso'
-                with ddgs_cls() as ddgs:
-                    ddg_results = list(ddgs.text(ddg_query, max_results=12))
-                    for r in ddg_results:
-                        url = r.get('href', '')
-                        title = r.get('title', '')
-                        
-                        # Filtro rigoroso na saída da web
-                        if is_administrative_document(title) or is_administrative_document(url):
-                            continue
+                ddg_query = f"{query} prova concurso pdf"
+                ddg_results = []
+                try:
+                    with ddgs_cls() as ddgs:
+                        ddg_results = list(ddgs.text(ddg_query, max_results=10))
+                except Exception:
+                    try:
+                        with ddgs_cls() as ddgs:
+                            ddg_results = list(ddgs.text(f"{query} prova pdf", max_results=8))
+                    except Exception:
+                        pass
 
-                        if url and ('.pdf' in url.lower() or '/download/' in url.lower()):
-                            _add_results([{
-                                "title": f"Web - {title[:80]}",
-                                "url": url,
-                                "gabarito_url": None,
-                                "match_score": 60,
-                                "source": "web"
-                            }])
+                for r in ddg_results:
+                    url = r.get('href', '')
+                    title = r.get('title', '')
+                    
+                    if is_administrative_document(title) or is_administrative_document(url):
+                        continue
+
+                    if url and ('.pdf' in url.lower() or '/download/' in url.lower() or 'prova' in url.lower()):
+                        _add_results([{
+                            "title": f"Web - {title[:80]}",
+                            "url": url,
+                            "gabarito_url": None,
+                            "match_score": 60,
+                            "source": "web"
+                        }])
         except Exception as e:
-            print(f"Erro DDGS Web: {e}")
+            print(f"   │  [Web Search] Aviso: {e}", flush=True)
 
     return results

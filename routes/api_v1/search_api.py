@@ -23,10 +23,16 @@ def search_exams_api(
     Busca de provas com cache de catálogo instantâneo, NLP determinístico,
     padronização canônica de títulos e ranqueamento por Match Score.
     """
+    import time
+    t_start = time.time()
     query_clean = q.strip().lower()
     nlp_data = interpret_search_query_deterministic(q)
+
+    print(f"\n{'='*70}", flush=True)
+    print(f"🔍 [BUSCA CONCURSE.IO] Nova Consulta: '{q}'", flush=True)
+    print(f"   ├─ 🧠 Entidades NLP Extraídas: Órgão='{nlp_data.get('orgao') or '-'}' | Banca='{nlp_data.get('banca') or '-'}' | Cargo='{nlp_data.get('cargo') or '-'}' | Ano='{nlp_data.get('ano') or '-'}'", flush=True)
     
-    # 1. Checagem em Cache do Catálogo (Resposta em < 5ms)
+    # 1. Checagem em Cache do Catálogo (Resposta instantânea)
     if not refresh:
         catalog_query = db.query(ExamCatalog).filter(
             (ExamCatalog.query_key == query_clean) | 
@@ -50,6 +56,9 @@ def search_exams_api(
             
             ranked_cached = filter_and_rank_exam_cards(raw_cached_cards, q, min_score=25, limit=15)
             if len(ranked_cached) >= 2:
+                elapsed = round((time.time() - t_start) * 1000, 1)
+                print(f"   ├─ ⚡ [CACHE HIT] {len(ranked_cached)} provas recuperadas do catálogo local ({elapsed}ms)", flush=True)
+                print(f"{'='*70}\n", flush=True)
                 return [
                     SearchResultItem(
                         id=None,
@@ -68,27 +77,60 @@ def search_exams_api(
     from services.scraper_service import _scrape_idcap_pdfs, _scrape_pci_pdfs, _search_pdfs_web
     import concurrent.futures
 
+    print(f"   ├─ 🌐 [SCRAPERS/CRAWLERS] Disparando em paralelo: {active_sources}", flush=True)
     raw_results = []
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
         futures = {}
         if 'idcap' in active_sources:
-            futures[executor.submit(_scrape_idcap_pdfs, q)] = 'idcap'
+            futures[executor.submit(_scrape_idcap_pdfs, q, nlp_data)] = 'IDCAP (Crawler)'
         if 'pci' in active_sources:
-            futures[executor.submit(_scrape_pci_pdfs, q, nlp_data)] = 'pci'
+            futures[executor.submit(_scrape_pci_pdfs, q, nlp_data)] = 'PCI Concursos'
         if 'web' in active_sources:
-            futures[executor.submit(_search_pdfs_web, q)] = 'web'
+            futures[executor.submit(_search_pdfs_web, q)] = 'DuckDuckGo Web'
 
-        for fut in concurrent.futures.as_completed(futures):
-            try:
-                res = fut.result()
-                if res:
-                    raw_results.extend(res)
-            except Exception:
-                pass
+        try:
+            for fut in concurrent.futures.as_completed(futures, timeout=8.0):
+                src_name = futures[fut]
+                try:
+                    res = fut.result()
+                    count = len(res) if res else 0
+                    print(f"   │  ├─ [{src_name}]: {count} PDFs encontrados", flush=True)
+                    if res:
+                        raw_results.extend(res)
+                except Exception as ex:
+                    print(f"   │  ├─ [{src_name}] Erro: {ex}", flush=True)
+        except concurrent.futures.TimeoutError:
+            print("   │  ├─ [Aviso] Timeout parcial em scrapers mais lentos. Retornando resultados capturados até o momento.", flush=True)
 
     # 3. Filtragem, Padronização Canônica ([ANO] ÓRGÃO - CARGO) e Ranqueamento por Match Score
     ranked_cards = filter_and_rank_exam_cards(raw_results, q, min_score=20, limit=15)
+    
+    # 4. Salva no cache do catálogo para respostas instantâneas futuras
+    try:
+        for c in ranked_cards:
+            existing = db.query(ExamCatalog).filter_by(source_url=c['url']).first()
+            if not existing:
+                db.add(ExamCatalog(
+                    query_key=query_clean,
+                    title=c['title'],
+                    source_url=c['url'],
+                    gabarito_url=c.get('gabarito_url'),
+                    match_score=c.get('match_score', 50),
+                    source=c.get('source', 'web'),
+                    created_at=str(int(time.time()))
+                ))
+        db.commit()
+    except Exception as db_err:
+        db.rollback()
+
+    total_time = round(time.time() - t_start, 2)
+    print(f"   ├─ 🎯 [RANQUEAMENTO] Total Bruto: {len(raw_results)} | Filtrados e Qualificados: {len(ranked_cards)}", flush=True)
+    if ranked_cards:
+        top1 = ranked_cards[0]
+        print(f"   │  └─ Top #1: \"{top1['title']}\" (Score: {top1['match_score']}%)", flush=True)
+    print(f"   └─ ⏱️ Tempo total da busca: {total_time}s", flush=True)
+    print(f"{'='*70}\n", flush=True)
 
     return [
         SearchResultItem(

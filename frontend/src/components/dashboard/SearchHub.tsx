@@ -14,6 +14,8 @@ import {
   ExternalLink,
   ArrowRight,
   GraduationCap,
+  Copy,
+  Check,
 } from 'lucide-react';
 
 interface SearchHubProps {
@@ -26,6 +28,7 @@ export const SearchHub: React.FC<SearchHubProps> = ({ onExamReady }) => {
   const [selectedSource, setSelectedSource] = useState('all');
   const [results, setResults] = useState<SearchResultItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
   const [ingestingUrls, setIngestingUrls] = useState<
     Record<string, { examId?: number; progress: number; statusMsg: string }>
   >({});
@@ -263,6 +266,57 @@ export const SearchHub: React.FC<SearchHubProps> = ({ onExamReady }) => {
                     <h3 className="mt-3.5 font-heading text-sm font-bold text-white leading-snug line-clamp-2 group-hover:text-indigo-300 transition" title={item.title}>
                       {item.title}
                     </h3>
+
+                    {/* Direct PDF Source Link Display - Entire Link Visible */}
+                    <div className="mt-3 rounded-xl bg-slate-950/80 p-2.5 border border-white/10 text-[11px] space-y-2">
+                      <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-1.5 text-slate-400">
+                        <div className="flex items-center gap-1.5 font-semibold text-slate-300">
+                          <FileText className="h-3.5 w-3.5 text-indigo-400" />
+                          <span>Link do PDF:</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigator.clipboard.writeText(item.url);
+                              setCopiedUrl(item.url);
+                              showToast('success', 'Link copiado para a área de transferência!');
+                              setTimeout(() => setCopiedUrl(null), 2000);
+                            }}
+                            className="flex items-center gap-1 rounded-lg glass-pill px-2 py-0.5 text-[10px] font-bold text-slate-300 hover:text-white hover:bg-white/10 transition"
+                            title="Copiar URL completa do PDF"
+                          >
+                            {copiedUrl === item.url ? (
+                              <>
+                                <Check className="h-3 w-3 text-emerald-400" />
+                                <span className="text-emerald-400">Copiado</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="h-3 w-3 text-slate-400" />
+                                <span>Copiar</span>
+                              </>
+                            )}
+                          </button>
+                          <a
+                            href={item.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex items-center gap-1 rounded-lg glass-pill px-2 py-0.5 text-[10px] font-bold text-slate-300 hover:text-white hover:bg-white/10 transition"
+                            title="Abrir PDF original em nova aba"
+                          >
+                            <ExternalLink className="h-3 w-3 text-cyan-400" />
+                            <span>Abrir</span>
+                          </a>
+                        </div>
+                      </div>
+                      
+                      <div className="break-all font-mono text-[11px] text-indigo-200/90 select-all leading-relaxed bg-black/40 p-2 rounded-lg border border-white/5">
+                        {item.url}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Actions & Progress Area */}
