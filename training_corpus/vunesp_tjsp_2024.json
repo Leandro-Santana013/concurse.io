@@ -1,0 +1,20 @@
+{
+  "exam_id": "vunesp_tjsp_2024",
+  "banca": "VUNESP",
+  "full_text": "ESCREVENTE TÉCNICO JUDICIÁRIO\npcimarkpci: MDEyMzQ1Njc4OQ==\n1. O Código de Processo Civil estabelece que a petição inicial indicará:\nA) o juízo a que é dirigida.\nB) unicamente o valor da causa.\nC) prescrição sem fundamentação fática.\nD) dispensabilidade da qualificação das partes.\nE) prova exclusivamente pericial.\n\n2. Sobre a citação, é correto afirmar que:\nA) far-se-á por correio, em regra.\nB) é nula se realizada por meio eletrônico.\nC) pode ser realizada em pessoa absolutamente incapaz.\nD) dispensa a entrega de contrafé.\nE) não interrompe a prescrição.\n",
+  "expected_headers": [
+    "1.",
+    "2."
+  ],
+  "expected_options": [
+    "A)",
+    "B)",
+    "C)",
+    "D)",
+    "E)"
+  ],
+  "expected_contexts": [],
+  "expected_cleaners": [
+    "pcimarkpci: MDEyMzQ1Njc4OQ=="
+  ]
+}

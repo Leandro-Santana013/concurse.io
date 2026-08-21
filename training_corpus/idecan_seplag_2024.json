@@ -1,0 +1,18 @@
+{
+  "exam_id": "idecan_seplag_2024",
+  "banca": "IDECAN",
+  "full_text": "GOVERNO DO ESTADO - SEPLAG\n\n01. Em conformidade com o regime jurídico único dos servidores civis, a readaptação é:\nA - O retorno à atividade do servidor aposentado por invalidez.\nB - A investidura do servidor em cargo de atribuições compatíveis com limitação sofrida.\nC - A reinvestidura do servidor estável no cargo anteriormente ocupado.\nD - O deslocamento de servidor, a pedido ou de ofício, no âmbito do mesmo quadro.\nE - A vacância definitiva resultante de falecimento ou exoneração voluntária.\n\n02. A desconcentração administrativa se difere da descentralização porque:\nA - Implica a criação de nova pessoa jurídica de direito público ou privado.\nB - Envolve a distribuição interna de competências no âmbito de um mesmo órgão.\nC - É exclusiva da administração pública indireta e das autarquias.\nD - Dispensa relação hierárquica e subordinação técnica entre os agentes.\nE - Transfere a titularidade e a execução definitiva do serviço ao particular.\n",
+  "expected_headers": [
+    "01.",
+    "02."
+  ],
+  "expected_options": [
+    "A -",
+    "B -",
+    "C -",
+    "D -",
+    "E -"
+  ],
+  "expected_contexts": [],
+  "expected_cleaners": []
+}

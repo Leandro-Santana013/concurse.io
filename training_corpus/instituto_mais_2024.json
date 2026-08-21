@@ -1,0 +1,17 @@
+{
+  "exam_id": "instituto_mais_2024",
+  "banca": "INSTITUTO MAIS",
+  "full_text": "INSTITUTO MAIS DE GESTÃO E DESENVOLVIMENTO SOCIAL\nCONCURSO PÚBLICO MUNICIPAL - GUARDA CIVIL MUNICIPAL\n\n1 - O Estatuto Geral das Guardas Municipais (Lei Federal nº 13.022/2014) prevê como princípio mínimo de atuação:\n(A) proteção dos direitos humanos fundamentais e preservação da vida.\n(B) atuação ostensiva de polícia judiciária e investigação de crimes comuns.\n(C) dependência hierárquica e subordinação técnica ao comando da Polícia Militar.\n(D) uso prioritário e indiscriminado da força letal em vias públicas.\n\n2 - As guardas municipais utilizam uniforme e equipamentos padronizados, preferencialmente na cor:\n(A) azul-marinho.\n(B) cinza-bandeirante.\n(C) verde-oliva.\n(D) camuflada de selva.\n",
+  "expected_headers": [
+    "1 -",
+    "2 -"
+  ],
+  "expected_options": [
+    "(A)",
+    "(B)",
+    "(C)",
+    "(D)"
+  ],
+  "expected_contexts": [],
+  "expected_cleaners": []
+}

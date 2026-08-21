@@ -1,0 +1,18 @@
+{
+  "exam_id": "fundatec_brigada_2024",
+  "banca": "FUNDATEC",
+  "full_text": "ESTADO DO RIO GRANDE DO SUL - BRIGADA MILITAR\n\n01. (FUNDATEC) De acordo com a Constituição Estadual, a Brigada Militar é instituição permanente vinculada à Segurança Pública.\nAssinale a alternativa correta:\nA) É força auxiliar e reserva do Exército Brasileiro.\nB) Tem autonomia funcional e orçamentária plena em relação ao Governador.\nC) Exerce exclusivamente a polícia judiciária e investigação penal comum.\nD) É subordinada diretamente ao Ministério da Defesa da União.\nE) É vedada a participação de oficiais em missões humanitárias.\n\n02. (FUNDATEC) No âmbito do Direito Constitucional, os direitos fundamentais:\nA) Podem ser suprimidos integralmente por emenda constitucional.\nB) Possuem aplicação imediata, conforme o art. 5º, § 1º, da CF/88.\nC) Têm caráter absoluto sem qualquer limitação em estado de defesa.\nD) Não abrangem estrangeiros residentes temporariamente no País.\nE) São taxativos e não admitem tratados internacionais de direitos humanos.\n",
+  "expected_headers": [
+    "01.",
+    "02."
+  ],
+  "expected_options": [
+    "A)",
+    "B)",
+    "C)",
+    "D)",
+    "E)"
+  ],
+  "expected_contexts": [],
+  "expected_cleaners": []
+}

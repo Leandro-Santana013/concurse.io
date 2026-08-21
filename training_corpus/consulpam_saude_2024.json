@@ -1,0 +1,17 @@
+{
+  "exam_id": "consulpam_saude_2024",
+  "banca": "CONSULPAM",
+  "full_text": "CONCURSO PÚBLICO DA SAÚDE\n01.   A Lei nº 8.080/1990 dispõe sobre as condições para a promoção da saúde.\nA) Universalidade de acesso aos serviços de saúde em todos os níveis.\nB) Centralização político-administrativa com direção única na União.\nC) Cobrança de taxas complementares aos usuários do SUS.\nD) Vedação total à participação da iniciativa privada.\n\n02.   O controle social no SUS é exercido por meio:\nA) Dos Conselhos e Conferências de Saúde.\nB) Exclusivamente do Ministério da Fazenda.\nC) De auditorias privadas sem participação popular.\nD) De decretos soberanos do Poder Executivo.\n",
+  "expected_headers": [
+    "01.",
+    "02."
+  ],
+  "expected_options": [
+    "A)",
+    "B)",
+    "C)",
+    "D)"
+  ],
+  "expected_contexts": [],
+  "expected_cleaners": []
+}

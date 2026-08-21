@@ -1,0 +1,18 @@
+{
+  "exam_id": "aocp_pm_2024",
+  "banca": "AOCP",
+  "full_text": "POLÍCIA MILITAR - SOLDADO\n01\nAcerca do Direito Penal Militar, assinale a alternativa correta.\nA - O crime de motim pressupõe a reunião de militares armados ou não.\nB - A deserção é crime comum consumado após 24 horas de ausência.\nC - A legítima defesa putativa exclui a culpabilidade no CPM.\nD - Não há previsão de penas acessórias no Código Penal Militar.\nE - O estado de necessidade só se aplica a civis em tempo de paz.\n\n02\nConstitui crime contra o patrimônio:\nA - Roubo simples consumado.\nB - Desobediência a ordem legal de superior.\nC - Usurpação de função pública militar.\nD - Abandono de posto de sentinela.\nE - Desrespeito a símbolo nacional.\n",
+  "expected_headers": [
+    "01",
+    "02"
+  ],
+  "expected_options": [
+    "A -",
+    "B -",
+    "C -",
+    "D -",
+    "E -"
+  ],
+  "expected_contexts": [],
+  "expected_cleaners": []
+}

@@ -1,0 +1,18 @@
+{
+  "exam_id": "funcab_pm_2024",
+  "banca": "FUNCAB",
+  "full_text": "FUNDAÇÃO PROFESSOR CARLOS AUGUSTO BITTENCOURT\nPOLÍCIA MILITAR - CARGO: SOLDADO\n\n01. A respeito dos princípios fundamentais da República Federativa do Brasil:\n(A) A dignidade da pessoa humana é fundamento do Estado Democrático de Direito.\n(B) A soberania popular é exercida unicamente por representantes indiretos.\n(C) A separação dos poderes não admite o sistema de freios e contrapesos.\n(D) A solução pacífica de conflitos é princípio restrito ao plano interno.\n(E) O pluralismo político se restringe à existência de dois partidos hegemônicos.\n\n02. Nos termos do Código de Processo Penal, a prisão em flagrante delito:\n(A) Pode ser efetuada por qualquer do povo e deve ser pelas autoridades policiais.\n(B) Exige mandado judicial prévio mesmo em flagrante próprio.\n(C) É vedada em horário noturno mesmo com consentimento do morador.\n(D) Impõe incomunicabilidade compulsória do preso por até dez dias.\n(E) Dispensa comunicação imediata ao juiz competente.\n",
+  "expected_headers": [
+    "01.",
+    "02."
+  ],
+  "expected_options": [
+    "(A)",
+    "(B)",
+    "(C)",
+    "(D)",
+    "(E)"
+  ],
+  "expected_contexts": [],
+  "expected_cleaners": []
+}

@@ -1,0 +1,18 @@
+{
+  "exam_id": "fcc_trt_2024",
+  "banca": "FCC",
+  "full_text": "TRIBUNAL REGIONAL DO TRABALHO\n01 - De acordo com a CLT, a duração normal do trabalho poderá ser acrescida de horas suplementares:\n(A) em número não excedente de duas.\n(B) mediante acordo tácito individual.\n(C) independentemente de remuneração adicional.\n(D) somente aos domingos e feriados.\n(E) sem necessidade de registro em ponto.\n\n02 - O recurso ordinário no processo do trabalho cabe:\n(A) das decisões definitivas das Varas no prazo de 8 dias.\n(B) no prazo improrrogável de 15 dias úteis.\n(C) apenas em matéria estritamente constitucional.\n(D) sem efeito suspensivo automático em qualquer hipótese.\n(E) unicamente perante o Tribunal Superior do Trabalho.\n",
+  "expected_headers": [
+    "01 -",
+    "02 -"
+  ],
+  "expected_options": [
+    "(A)",
+    "(B)",
+    "(C)",
+    "(D)",
+    "(E)"
+  ],
+  "expected_contexts": [],
+  "expected_cleaners": []
+}

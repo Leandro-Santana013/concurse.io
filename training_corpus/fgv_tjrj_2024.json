@@ -1,0 +1,20 @@
+{
+  "exam_id": "fgv_tjrj_2024",
+  "banca": "FGV",
+  "full_text": "CONCURSO PÚBLICO - TJRJ\nLÍNGUA PORTUGUESA\nTexto para as questões 1 e 2\nO princípio da legalidade administrativa impõe subordinação estrita à lei.\n\nQUESTÃO 1\nAcerca da organização dos poderes, assinale a opção correta.\nA) O Poder Judiciário tem autonomia financeira.\nB) Os juízes são nomeados sem concurso.\nC) O STF não possui competência recursal.\nD) Apenas o CNJ pode julgar magistrados.\nE) Nenhuma das alternativas anteriores.\n\nQUESTÃO 2\nNo que tange ao direito administrativo:\nA) O ato nulo gera direitos adquiridos.\nB) A autoexecutoriedade prescinde de lei.\nC) O poder de polícia é indelegável a particulares.\nD) O silêncio administrativo é sempre ato tácito.\nE) A revogação opera efeitos retroativos ex tunc.\n",
+  "expected_headers": [
+    "QUESTÃO 1",
+    "QUESTÃO 2"
+  ],
+  "expected_options": [
+    "A)",
+    "B)",
+    "C)",
+    "D)",
+    "E)"
+  ],
+  "expected_contexts": [
+    "Texto para as questões 1 e 2"
+  ],
+  "expected_cleaners": []
+}

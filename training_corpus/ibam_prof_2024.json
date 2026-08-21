@@ -1,0 +1,17 @@
+{
+  "exam_id": "ibam_prof_2024",
+  "banca": "IBAM",
+  "full_text": "INSTITUTO BRASILEIRO DE ADMINISTRAÇÃO MUNICIPAL\nCONCURSO PÚBLICO MUNICIPAL - PROFESSOR II\n\n1 - O Plano Nacional de Educação (PNE), aprovado pela Lei nº 13.005/2014, estabelece diretrizes e metas para a educação brasileira.\nConstitui uma de suas diretrizes centrais:\nA) erradicação do analfabetismo em todo o território nacional.\nB) exclusão da educação em tempo integral nas zonas periféricas.\nC) centralização da gestão escolar no Ministério da Educação.\nD) extinção dos conselhos municipais de acompanhamento e controle.\n\n2 - A Lei de Diretrizes e Bases da Educação Nacional (LDB nº 9.394/96) determina que a educação infantil é:\nA) a primeira etapa da educação básica oferecida em creches e pré-escolas.\nB) etapa facultativa sem obrigatoriedade de matrícula aos quatro anos.\nC) de responsabilidade exclusiva dos governos estaduais e distrital.\nD) voltada unicamente para o ensino profissionalizante prévio.\n",
+  "expected_headers": [
+    "1 -",
+    "2 -"
+  ],
+  "expected_options": [
+    "A)",
+    "B)",
+    "C)",
+    "D)"
+  ],
+  "expected_contexts": [],
+  "expected_cleaners": []
+}

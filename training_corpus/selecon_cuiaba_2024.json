@@ -1,0 +1,20 @@
+{
+  "exam_id": "selecon_cuiaba_2024",
+  "banca": "SELECON",
+  "full_text": "PREFEITURA MUNICIPAL DE CUIABÁ\nCARGO: AUDITOR FISCAL\n\nTexto para as questões de 1 a 2\nO lançamento tributário é o procedimento privativo da autoridade administrativa que constitui o crédito tributário.\n\nQuestão 01.\nAcerca da suspensão da exigibilidade do crédito tributário, nos termos do CTN, assinale a opção correta:\n(A) A moratória somente pode ser concedida por lei em caráter geral ou individual.\n(B) O depósito do montante integral é facultativo e não impede a fluência de juros.\n(C) As reclamações e os recursos administrativos não suspendem a exigibilidade do crédito.\n(D) A concessão de medida liminar em mandado de segurança é exclusiva da União.\n(E) O parcelamento concedido em caráter geral extingue definitivamente o crédito tributário.\n\nQuestão 02.\nConstitui modalidade de extinção do crédito tributário:\n(A) A remissão total ou parcial da dívida regularmente formalizada.\n(B) A moratória com prazo superior a cinco anos.\n(C) A anistia das infrações fiscais sem recolhimento.\n(D) A isenção tributária concedida por decreto municipal.\n(E) O parcelamento deferido pelo Secretário de Finanças.\n",
+  "expected_headers": [
+    "Questão 01.",
+    "Questão 02."
+  ],
+  "expected_options": [
+    "(A)",
+    "(B)",
+    "(C)",
+    "(D)",
+    "(E)"
+  ],
+  "expected_contexts": [
+    "Texto para as questões de 1 a 2"
+  ],
+  "expected_cleaners": []
+}

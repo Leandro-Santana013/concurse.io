@@ -1,0 +1,17 @@
+{
+  "exam_id": "fumarc_pc_2024",
+  "banca": "FUMARC",
+  "full_text": "POLÍCIA CIVIL DO ESTADO DE MINAS GERAIS\nCARGO: INVESTIGADOR DE POLÍCIA\n\nQUESTÃO 1.\nNo Direito Penal, a respeito da imputabilidade penal e do concurso de pessoas, assinale a afirmativa CORRETA:\nA) A menoridade penal cessa no primeiro instante do dia do 18º aniversário do agente.\nB) O coautor que desiste voluntariamente comunica o benefício aos demais partícipes.\nC) A embriaguez voluntária pelo álcool exclui plenamente a imputabilidade penal.\nD) Não se admite participação por omissão em nenhuma espécie criminosa.\n\nQUESTÃO 2.\nConstitui crime previsto no Estatuto do Desarmamento (Lei nº 10.826/2003):\nA) O porte ilegal de arma de fogo de uso permitido.\nB) A perda culposa de munição de caça registrada.\nC) A comercialização de coldres sem autorização militar.\nD) O transporte desmuniciado com guia de tráfego válida.\n",
+  "expected_headers": [
+    "QUESTÃO 1.",
+    "QUESTÃO 2."
+  ],
+  "expected_options": [
+    "A)",
+    "B)",
+    "C)",
+    "D)"
+  ],
+  "expected_contexts": [],
+  "expected_cleaners": []
+}

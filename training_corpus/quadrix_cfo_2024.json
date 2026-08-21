@@ -1,0 +1,17 @@
+{
+  "exam_id": "quadrix_cfo_2024",
+  "banca": "QUADRIX",
+  "full_text": "CONSELHO FEDERAL DE ODONTOLOGIA\nCARGO: AGENTE ADMINISTRATIVO\n\nTexto para os itens de 1 a 2\nA ética pública constitui baliza indispensável ao exercício funcional dos servidores.\n\nItem 1\nO servidor público que se recusa injustificadamente a atender o cidadão incorre em infração funcional.\nCERTO\nERRADO\n\nItem 2\nA publicidade dos atos administrativos é preceito universal sem qualquer possibilidade de sigilo legal.\nCERTO\nERRADO\n",
+  "expected_headers": [
+    "Item 1",
+    "Item 2"
+  ],
+  "expected_options": [
+    "CERTO",
+    "ERRADO"
+  ],
+  "expected_contexts": [
+    "Texto para os itens de 1 a 2"
+  ],
+  "expected_cleaners": []
+}

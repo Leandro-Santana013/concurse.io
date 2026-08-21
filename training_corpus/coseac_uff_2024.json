@@ -1,0 +1,20 @@
+{
+  "exam_id": "coseac_uff_2024",
+  "banca": "COSEAC",
+  "full_text": "UNIVERSIDADE FEDERAL FLUMINENSE - ASSISTENTE EM ADMINISTRAÇÃO\n\nInstrução para as questões 1 e 2.\nA gestão de documentos compreende o conjunto de medidas e rotinas visando à racionalização e eficiência.\n\n1. Na arquivologia, a fase corrente é caracterizada por:\nA) Documentos em curso consultados frequentemente pelo órgão produtor.\nB) Documentos de valor puramente histórico sem utilidade administrativa.\nC) Documentos destinados à eliminação sumária sem triagem preliminar.\nD) Guarda permanente e inalienável em arquivo central nacional.\nE) Acesso exclusivo aos pesquisadores e historiadores credenciados.\n\n2. O método de arquivamento alfabético é classificado como:\nA) Direto, pois a busca é feita diretamente pelo nome do titular.\nB) Indireto, exigindo consulta prévia a um índice numérico auxiliar.\nC) Cronológico, ordenado estritamente pela data de protocolo.\nD) Geográfico, agrupado primariamente por país ou estado emissor.\nE) Temático, indexado unicamente por palavras-chave conceituais.\n",
+  "expected_headers": [
+    "1.",
+    "2."
+  ],
+  "expected_options": [
+    "A)",
+    "B)",
+    "C)",
+    "D)",
+    "E)"
+  ],
+  "expected_contexts": [
+    "Instrução para as questões 1 e 2."
+  ],
+  "expected_cleaners": []
+}

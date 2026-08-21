@@ -1,0 +1,18 @@
+{
+  "exam_id": "cesgranrio_caixa_2024",
+  "banca": "CESGRANRIO",
+  "full_text": "CONCURSO PÚBLICO - CAIXA ECONÔMICA FEDERAL\nTÉCNICO BANCÁRIO NOVO\n\nQUESTÃO 01\nNo contexto do atendimento ao cliente no setor financeiro, a empatia se caracteriza por:\n(A) julgar previamente as demandas do correntista.\n(B) compreender a perspectiva e as necessidades do usuário.\n(C) restringir o diálogo aos termos contratuais estritos.\n(D) delegar o suporte aos canais estritamente digitais.\n(E) priorizar exclusivamente a venda de produtos de maior margem.\n\nQUESTÃO 02\nO Sistema Financeiro Nacional é estruturado por órgãos normativos e entidades supervisoras.\nÉ órgão exclusivamente normativo do SFN:\n(A) O Banco Central do Brasil.\n(B) A Comissão de Valores Mobiliários.\n(C) O Conselho Monetário Nacional.\n(D) O Banco Nacional de Desenvolvimento Econômico e Social.\n(E) A Superintendência de Seguros Privados.\n",
+  "expected_headers": [
+    "QUESTÃO 01",
+    "QUESTÃO 02"
+  ],
+  "expected_options": [
+    "(A)",
+    "(B)",
+    "(C)",
+    "(D)",
+    "(E)"
+  ],
+  "expected_contexts": [],
+  "expected_cleaners": []
+}

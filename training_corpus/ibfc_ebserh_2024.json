@@ -1,0 +1,20 @@
+{
+  "exam_id": "ibfc_ebserh_2024",
+  "banca": "IBFC",
+  "full_text": "EMPRESA BRASILEIRA DE SERVIÇOS HOSPITALARES\nInstrução: Leia o texto a seguir para responder às questões de 1 a 2.\nA epidemiologia descritiva ocupa-se do estudo da distribuição de doenças.\n\nQuestão 01\nEm relação à vigilância epidemiológica, assinale a alternativa correta.\na) O monitoramento contínuo é exclusivo de doenças transmissíveis.\nb) A notificação compulsória é facultativa aos profissionais de saúde.\nc) As ações de controle independem da confirmação laboratorial.\nd) A investigação deve ser realizada em tempo oportuno.\ne) O isolamento prescinde de respaldo técnico.\n\nQuestão 02\nO coeficiente de mortalidade infantil reflete:\na) O nível de desenvolvimento socioeconômico da população.\nb) Apenas a cobertura vacinal em menores de cinco anos.\nc) O índice de natalidade em áreas rurais.\nd) Exclusivamente a assistência ao parto hospitalar.\ne) A letalidade de afecções congênitas isoladas.\n",
+  "expected_headers": [
+    "Questão 01",
+    "Questão 02"
+  ],
+  "expected_options": [
+    "a)",
+    "b)",
+    "c)",
+    "d)",
+    "e)"
+  ],
+  "expected_contexts": [
+    "Instrução: Leia o texto a seguir para responder às questões de 1 a 2."
+  ],
+  "expected_cleaners": []
+}

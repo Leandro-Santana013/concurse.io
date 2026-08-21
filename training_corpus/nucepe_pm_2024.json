@@ -1,0 +1,17 @@
+{
+  "exam_id": "nucepe_pm_2024",
+  "banca": "NUCEPE",
+  "full_text": "POLÍCIA MILITAR DO PIAUÍ - SOLDADO\n\n01 - Sobre os crimes contra a administração pública, analise os itens a seguir:\nI. O peculato culposo tem a punibilidade extinta se a reparação do dano precede a sentença irrecorrível.\nII. A concussão se consuma com a mera exigência indevida de vantagem, independentemente do recebimento.\n\nEstá(ão) correto(s):\n(A) Apenas o item I.\n(B) Apenas o item II.\n(C) Os itens I e II.\n(D) Nenhum dos itens.\n\n02 - A corrupção passiva própria ocorre quando o funcionário público:\n(A) Aceita promessa de vantagem para praticar ato funcional legal.\n(B) Pratica ato ilegal em razão de vantagem ilícita solicitada.\n(C) Deixa de punir subordinado por indulgência voluntária.\n(D) Patrocina interesse privado perante a repartição fazendária.\n",
+  "expected_headers": [
+    "01 -",
+    "02 -"
+  ],
+  "expected_options": [
+    "(A)",
+    "(B)",
+    "(C)",
+    "(D)"
+  ],
+  "expected_contexts": [],
+  "expected_cleaners": []
+}

@@ -1,0 +1,17 @@
+{
+  "exam_id": "idcap_pref_2024",
+  "banca": "IDCAP",
+  "full_text": "PREFEITURA MUNICIPAL\nQ. 1) No que tange à Lei Orgânica Municipal, compete ao Município:\n[A] Legislar sobre assuntos de interesse local.\n[B] Instituir impostos de competência privativa da União.\n[C] Declarar guerra em caso de agressão estrangeira.\n[D] Emitir moeda e títulos da dívida pública federal.\n\nQ. 2) O plano diretor é obrigatório para cidades com:\n[A] Mais de vinte mil habitantes.\n[B] Menos de dez mil habitantes.\n[C] Qualquer contingente populacional.\n[D] Atividade estritamente agropecuária.\n",
+  "expected_headers": [
+    "Q. 1)",
+    "Q. 2)"
+  ],
+  "expected_options": [
+    "[A]",
+    "[B]",
+    "[C]",
+    "[D]"
+  ],
+  "expected_contexts": [],
+  "expected_cleaners": []
+}

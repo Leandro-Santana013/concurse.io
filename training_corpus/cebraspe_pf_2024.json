@@ -1,0 +1,18 @@
+{
+  "exam_id": "cebraspe_pf_2024",
+  "banca": "CEBRASPE",
+  "full_text": "POLÍCIA FEDERAL - AGENTE\nTexto para os itens de 1 a 3\nA soberania popular será exercida pelo sufrágio universal.\n\nItem 01\nO alistamento eleitoral e o voto são facultativos para os analfabetos.\nCERTO\nERRADO\n\nItem 02\nSão inelegíveis, no território de jurisdição do titular, os parentes consanguíneos.\nCERTO\nERRADO\n\nItem 03\nO mandato eletivo poderá ser impugnado ante a Justiça Eleitoral no prazo de 15 dias.\nCERTO\nERRADO\n",
+  "expected_headers": [
+    "Item 01",
+    "Item 02",
+    "Item 03"
+  ],
+  "expected_options": [
+    "CERTO",
+    "ERRADO"
+  ],
+  "expected_contexts": [
+    "Texto para os itens de 1 a 3"
+  ],
+  "expected_cleaners": []
+}

@@ -1,0 +1,18 @@
+{
+  "exam_id": "cotec_unimontes_2024",
+  "banca": "COTEC",
+  "full_text": "UNIMONTES - CONCURSO PÚBLICO MUNICIPAL\n\nQUESTÃO 01 - Sobre a responsabilidade civil do Estado no Brasil, adota-se a teoria do:\nA) Risco administrativo, respondendo objetivamente pelos danos causados por seus agentes.\nB) Risco integral em todas as situações de responsabilidade extracontratual.\nC) Culpa civilística individual, exigindo sempre comprovação de dolo do agente público.\nD) Irresponsabilidade estatal soberana perante terceiros e particulares.\nE) Risco mitigado exclusivamente nos contratos de concessão rodoviária.\n\nQUESTÃO 02 - A anulação de ato administrativo com vício insanável:\nA) Opera efeitos retroativos (ex tunc) e cabe tanto à Administração quanto ao Judiciário.\nB) Produz efeitos futuros (ex nunc) e depende de prévia audiência pública.\nC) É prerrogativa privativa do Ministério Público Federal.\nD) Gera indenização automática em todos os casos de boa-fé subjetiva.\nE) Não prescreve em nenhuma hipótese de interesse patrimonial.\n",
+  "expected_headers": [
+    "QUESTÃO 01 -",
+    "QUESTÃO 02 -"
+  ],
+  "expected_options": [
+    "A)",
+    "B)",
+    "C)",
+    "D)",
+    "E)"
+  ],
+  "expected_contexts": [],
+  "expected_cleaners": []
+}
