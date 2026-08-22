@@ -28,31 +28,28 @@ def inject_into_production():
     rust_dir = os.path.abspath("rust_engine")
     try:
         res = subprocess.run(
-            [sys.executable, "-m", "maturin", "build", "--release"],
+            ["cargo", "build", "--release"],
             cwd=rust_dir,
             capture_output=True,
             encoding='utf-8',
             errors='replace'
         )
         if res.returncode == 0:
-            print("  ✓ Crate Rust compilada com sucesso!")
-            wheels_dir = os.path.join(rust_dir, "target", "wheels")
-            wheels = [os.path.join(wheels_dir, f) for f in os.listdir(wheels_dir) if f.endswith(".whl")]
-            if wheels:
-                latest_wheel = max(wheels, key=os.path.getmtime)
-                subprocess.run([sys.executable, "-m", "pip", "install", "--force-reinstall", latest_wheel], capture_output=True)
-                print(f"  ✓ Extensão nativa instalada: {os.path.basename(latest_wheel)}")
-
-            # Copia também o .dll/.pyd diretamente para services/pdf_pipeline/concurse_core.pyd
+            print("  ✓ Crate Rust compilada com sucesso via Cargo!")
             target_release = os.path.join(rust_dir, "target", "release")
-            dll_path = os.path.join(target_release, "concurse_core.dll")
-            if os.path.exists(dll_path):
-                dest_pyd1 = os.path.join("services", "pdf_pipeline", "concurse_core.pyd")
+            if sys.platform == "win32":
+                built_lib = os.path.join(target_release, "concurse_core.dll")
                 dest_pyd2 = "concurse_core.pyd"
+            else:
+                built_lib = os.path.join(target_release, "libconcurse_core.so")
+                dest_pyd2 = "concurse_core.so"
+
+            dest_pyd1 = os.path.join("services", "pdf_pipeline", os.path.basename(dest_pyd2))
+            if os.path.exists(built_lib):
                 os.makedirs(os.path.dirname(dest_pyd1), exist_ok=True)
-                shutil.copy2(dll_path, dest_pyd1)
-                shutil.copy2(dll_path, dest_pyd2)
-                print("  ✓ Binário nativo sincronizado em services/pdf_pipeline/concurse_core.pyd")
+                shutil.copy2(built_lib, dest_pyd1)
+                shutil.copy2(built_lib, dest_pyd2)
+                print(f"  ✓ Binário nativo sincronizado em {dest_pyd1} e {dest_pyd2}")
         else:
             print(f"  ⚠️ Aviso na compilação do Rust (fallback Python ativo): {res.stderr[:200]}")
     except Exception as e:

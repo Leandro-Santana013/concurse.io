@@ -787,10 +787,12 @@ def main():
     print("  Todos os padrões mestres convergiram e foram validados.")
     print("=" * 75)
 
-    if args.auto_inject:
-        print("\n[AUTO-INJETOR] Sincronizando e compilando motor nativo Rust (concurse_core)...")
+    print("\n[AUTO-INJETOR] Sincronizando e compilando motor nativo Rust (concurse_core)...")
+    try:
         from inject_trained_pipeline import inject_into_production
         inject_into_production()
+    except Exception as e:
+        print(f"  [AVISO] Auto-injetor finalizado: {e}")
 
 
 if __name__ == "__main__":
