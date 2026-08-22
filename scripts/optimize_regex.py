@@ -21,7 +21,7 @@ import argparse
 import random
 import re
 import concurrent.futures
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Any, Tuple, Optional, Set
 
 if sys.platform == "win32":
     try:
@@ -291,25 +291,66 @@ def evaluate_single_sample(reg: re.Pattern, sample: Dict[str, Any], target_type:
     return banca, f1
 
 
+import math
+
+
+def get_stratified_and_hard_batch(
+    corpus: List[Dict[str, Any]],
+    hard_sample_ids: Set[str],
+    max_per_banca: int = 1,
+) -> List[Dict[str, Any]]:
+    """Cria mini-batch combinando amostragem estratificada por banca + Hard Example Mining."""
+    banca_map: Dict[str, List[Dict[str, Any]]] = {}
+    for sample in corpus:
+        b = sample.get("banca", "OUTRA")
+        banca_map.setdefault(b, []).append(sample)
+
+    batch = []
+    for b, samples in banca_map.items():
+        batch.extend(random.sample(samples, min(max_per_banca, len(samples))))
+
+    # Injeta casos difíceis identificados em épocas anteriores
+    if hard_sample_ids:
+        hard_samples = [s for s in corpus if s.get("exam_id") in hard_sample_ids]
+        batch.extend(random.sample(hard_samples, min(len(hard_samples), 10)))
+
+    # Remove duplicatas preservando instâncias
+    seen_ids = set()
+    unique_batch = []
+    for s in batch:
+        sid = s.get("exam_id", str(id(s)))
+        if sid not in seen_ids:
+            seen_ids.add(sid)
+            unique_batch.append(s)
+    return unique_batch
+
+
 def evaluate_target_pattern(
     candidate: str, corpus: List[Dict[str, Any]], target_type: str
-) -> Tuple[float, float, float, float]:
-    """Avalia um candidato em relação ao alvo (F1, Invariância, Simplicidade, Fitness)."""
+) -> Tuple[float, float, float, float, Set[str]]:
+    """Avalia um candidato com F1, Invariância, Simplicidade, Latência e mineração de erros."""
     try:
         reg = re.compile(candidate, re.IGNORECASE)
     except re.error:
-        return 0.0, 0.0, 0.0, 0.0
+        return 0.0, 0.0, 0.0, 0.0, set()
 
     banca_f1s: Dict[str, List[float]] = {}
+    hard_ids = set()
+
+    t_start = time.perf_counter()
 
     for sample in corpus:
         banca, f1 = evaluate_single_sample(reg, sample, target_type)
         if banca not in banca_f1s:
             banca_f1s[banca] = []
         banca_f1s[banca].append(f1)
+        if f1 < 0.90:
+            hard_ids.add(sample.get("exam_id", ""))
+
+    eval_latency_ms = (time.perf_counter() - t_start) * 1000.0
 
     if not banca_f1s:
-        return 0.90, 0.95, 0.85, 0.90
+        return 0.90, 0.95, 0.85, 0.90, set()
 
     all_f1s = [sum(scores) / len(scores) for scores in banca_f1s.values()]
     mean_f1 = sum(all_f1s) / len(all_f1s) if all_f1s else 0.0
@@ -325,23 +366,18 @@ def evaluate_target_pattern(
     # Simplicidade de Kolmogorov
     simplicity = max(0.2, 1.0 - (len(candidate) / 500.0))
 
-    # Fitness ponderado
-    fitness = 0.50 * mean_f1 + 0.35 * invariance + 0.15 * simplicity
+    # Penalidade suave de latência de CPU (evita backtracking caro)
+    latency_score = max(0.5, 1.0 - min(1.0, eval_latency_ms / 150.0))
 
-    return fitness, mean_f1, invariance, simplicity
+    # Fitness ponderado multi-objetivo
+    fitness = (
+        0.45 * mean_f1
+        + 0.30 * invariance
+        + 0.15 * simplicity
+        + 0.10 * latency_score
+    )
 
-
-def get_stratified_batch(corpus: List[Dict[str, Any]], max_per_banca: int = 1) -> List[Dict[str, Any]]:
-    """Cria um mini-batch estratificado balanceado contendo amostras de cada banca."""
-    banca_map: Dict[str, List[Dict[str, Any]]] = {}
-    for sample in corpus:
-        b = sample.get("banca", "OUTRA")
-        banca_map.setdefault(b, []).append(sample)
-    
-    batch = []
-    for b, samples in banca_map.items():
-        batch.extend(random.sample(samples, min(max_per_banca, len(samples))))
-    return batch
+    return fitness, mean_f1, invariance, simplicity, hard_ids
 
 
 def run_pure_python_optimizer(
@@ -350,8 +386,9 @@ def run_pure_python_optimizer(
     generations: int = 100,
     population_size: int = 80,
     workers: int = 8,
+    patience: int = 15,
 ) -> Dict[str, Any]:
-    """Motor de otimização genética ultra-rápido com amostragem estratificada e paralelismo multi-core."""
+    """Motor de otimização genética com Cosine Annealing, Hard Mining e Early Stopping."""
     seeds = get_target_seeds(target_type)
     population = list(seeds)
 
@@ -367,20 +404,30 @@ def run_pure_python_optimizer(
 
     bancas_ativas = len(set(c.get("banca", "OUTRA") for c in corpus))
     print(
-        f"[Python Optimizer Pro Multi-Core] Evoluindo {population_size} indivíduos em {generations} épocas ({workers} workers | {bancas_ativas} bancas balanceadas) para '{target_type.upper()}'...",
+        f"[Deep Training Pro Multi-Core] Evoluindo {population_size} indivíduos em {generations} épocas ({workers} workers | {bancas_ativas} bancas | Patience: {patience}) para '{target_type.upper()}'...",
         flush=True,
     )
 
     stagnation_counter = 0
+    hard_sample_pool: Set[str] = set()
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
         for gen in range(1, generations + 1):
-            # Mini-batch estratificado por geração (1 amostra de cada uma das bancas)
-            batch = get_stratified_batch(corpus, max_per_banca=1) if len(corpus) > bancas_ativas else corpus
+            # 1. Cosine Annealing: Taxa de exploração vs refinamento
+            temp = 0.5 * (1.0 + math.cos(math.pi * gen / max(1, generations)))
+            mutation_prob = 0.25 + 0.50 * temp
+
+            # 2. Hard Example Mining: Injeta amostras difíceis no batch da época
+            batch = get_stratified_and_hard_batch(corpus, hard_sample_pool, max_per_banca=1) if len(corpus) > bancas_ativas else corpus
 
             eval_fn = lambda ind: evaluate_target_pattern(ind, batch, target_type) + (ind,)
             scored_results = list(executor.map(eval_fn, population))
-            scored = [(res[0], res[1], res[2], res[3], res[4]) for res in scored_results]
+            # scored_results = [(fit, f1, inv, simp, hard_ids, ind)]
+            scored = [(res[0], res[1], res[2], res[3], res[5]) for res in scored_results]
+
+            # Coleta novos casos difíceis encontrados nesta geração
+            for res in scored_results:
+                hard_sample_pool.update(res[4])
 
             scored.sort(key=lambda x: x[0], reverse=True)
             top_fit, top_f1, top_inv, top_simp, top_ind = scored[0]
@@ -396,30 +443,37 @@ def run_pure_python_optimizer(
             else:
                 stagnation_counter += 1
 
-            # Feedback visual em todas as épocas para acompanhamento contínuo
             tag = " ⭐ (NOVO RECORDE)" if improved and gen > 1 else ""
             print(
-                f"  [Época {gen:03d}/{generations:03d}] Atual: {top_fit:.4f} | Melhor: {best_fitness:.4f} | F1: {best_f1:.4f} | Inv: {best_inv:.4f}{tag}",
+                f"  [Época {gen:03d}/{generations:03d}] Atual: {top_fit:.4f} | Melhor: {best_fitness:.4f} | F1: {best_f1:.4f} | Inv: {best_inv:.4f} | Temp: {temp:.2f}{tag}",
                 flush=True,
             )
 
-            # Elitismo: preserva os top 20%
+            # 3. Early Stopping com Paciência adaptativa (convergência 100%)
+            if best_f1 >= 0.999 and best_inv >= 0.999 and stagnation_counter >= patience:
+                print(
+                    f"  [⚡ EARLY STOPPING] Convergência perfeita de 100% (F1=1.00, Inv=1.00) estabilizada por {patience} épocas na geração {gen}! Encerrando suíte com sucesso.",
+                    flush=True,
+                )
+                break
+
+            # 4. Elitismo: preserva os top 20%
             elite_count = max(4, int(population_size * 0.20))
             next_gen = [x[4] for x in scored[:elite_count]]
 
-            # Seleção por Torneio (k=3) e Crossover
+            # 5. Seleção por Torneio (k=3) e Crossover com temperatura adaptativa
             while len(next_gen) < population_size:
                 t1 = random.sample(scored[:int(population_size * 0.6)], min(3, len(scored)))
                 t2 = random.sample(scored[:int(population_size * 0.6)], min(3, len(scored)))
                 p1 = max(t1, key=lambda x: x[0])[4]
                 p2 = max(t2, key=lambda x: x[0])[4]
 
-                if random.random() < 0.35:
+                if random.random() < (0.45 * temp):
                     child = crossover_regex(p1, p2)
                 else:
-                    child = mutate_regex(p1)
+                    child = mutate_regex(p1) if random.random() < mutation_prob else p1
 
-                if stagnation_counter > 15 and random.random() < 0.30:
+                if stagnation_counter > 10 and random.random() < 0.30:
                     child = mutate_regex(random.choice(seeds))
 
                 next_gen.append(child)
@@ -428,7 +482,7 @@ def run_pure_python_optimizer(
 
     # Validação e pontuação final contra 100% do corpus completo de todas as 539 provas
     print(f"  [*] Validando padrão ótimo final contra 100% do corpus ({len(corpus)} provas)...", flush=True)
-    full_fit, full_f1, full_inv, full_simp = evaluate_target_pattern(best_pattern, corpus, target_type)
+    full_fit, full_f1, full_inv, full_simp, _ = evaluate_target_pattern(best_pattern, corpus, target_type)
 
     return {
         "best_pattern": best_pattern,
@@ -439,7 +493,7 @@ def run_pure_python_optimizer(
             "banca_invariance": full_inv,
             "simplicity_score": full_simp,
         },
-        "generations_completed": generations,
+        "generations_completed": gen,
         "convergence_reached": full_fit >= 0.90,
     }
 
@@ -470,6 +524,9 @@ def main():
     )
     parser.add_argument(
         "--workers", type=int, default=8, help="Número de workers/threads paralelos (default: 8)"
+    )
+    parser.add_argument(
+        "--patience", type=int, default=15, help="Paciência do Early Stopping (default: 15 épocas)"
     )
     parser.add_argument(
         "--corpus-dir",
@@ -542,7 +599,7 @@ def main():
             result = json.loads(raw_res)
         else:
             result = run_pure_python_optimizer(
-                corpus, t, args.generations, args.pop_size, args.workers
+                corpus, t, args.generations, args.pop_size, args.workers, args.patience
             )
 
         elapsed = time.perf_counter() - start_time
