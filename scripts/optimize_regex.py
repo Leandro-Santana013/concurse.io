@@ -366,12 +366,16 @@ def evaluate_target_pattern(
     # Simplicidade de Kolmogorov
     simplicity = max(0.2, 1.0 - (len(candidate) / 500.0))
 
-    # Fitness ponderado padrão: 50% F1 + 35% Invariância + 15% Simplicidade
-    fitness = 0.50 * mean_f1 + 0.35 * invariance + 0.15 * simplicity
+    # Score de Latência de CPU (1.0 para execuções rápidas, penaliza backtracking)
+    latency_score = max(0.2, 1.0 - min(1.0, max(0.0, eval_latency_ms - 20.0) / 100.0))
 
-    # Guarda de segurança contra Catastrophic Backtracking (> 250ms)
-    if eval_latency_ms > 250.0:
-        fitness *= 0.80
+    # Fitness multi-objetivo avançado: 45% F1 + 30% Invariância + 15% Simplicidade + 10% Latência
+    fitness = (
+        0.45 * mean_f1
+        + 0.30 * invariance
+        + 0.15 * simplicity
+        + 0.10 * latency_score
+    )
 
     return fitness, mean_f1, invariance, simplicity, hard_ids
 
