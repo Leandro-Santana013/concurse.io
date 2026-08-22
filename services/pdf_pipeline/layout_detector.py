@@ -3,11 +3,22 @@ import re
 from typing import List, Dict, Set, Tuple, Any
 
 CONTEXT_TEXT_HEADER_REGEX = re.compile(
-    r'(?:^|\n)\s*'
-    r'(?:Instru[çc][ãa]o\s*[:\.\-]?\s*)?'
-    r'(?:(?:Texto(?:\s+[I|V|X\d]+)?|Considere\s+o\s+texto|Leia\s+o\s+texto|Com\s+base\s+no\s+texto|Para\s+responder\s+[àa]s?)[^\n]{0,60}?\s+)?'
-    r'(?:As\s+|Os\s+)?(?:quest[õo]es?|itens?)\s*(?:de\s+n[úu]meros?\s+|de\s+)?(\d{1,3})\s*(?:a|e|ao?|at[ée]|\be\b|,|\.)\s*(?:a\s+)?(\d{1,3})'
-    r'[^\n]*',
+    r'(?:^|\n|\.\s+|\s+)'
+    r'('
+    r'(?:'
+    r'Instru[çc][ãa\ufffd\?]?o\s*[:\.\-]?\s*|'
+    r'[Oo]\s+texto\s+(?:a\s+seguir|abaixo|seguinte|1|2|I|II)?\s*(?:servir[aá\ufffd\?]?\s+de\s+base\s+para\s+responder|refere-se|para\s+responder|para)?|'
+    r'[Pp]ara\s+(?:responder\s+(?:[àa\ufffd\?]?s\s+)?|as\s+)?quest[oõa\ufffd\?]?es|'
+    r'[Ll]eia\s+o\s+texto(?:\s+\d+)?\s*(?:para\s+responder|(?:a\s+seguir|abaixo))?|'
+    r'[Aa]s\s+quest[oõa\ufffd\?]?es(?:\s+de)?|'
+    r'[Cc]onsidere\s+(?:o\s+texto|a\s+situa[cç][aã\ufffd\?]?o\s+hipot[eé\ufffd\?]?tica|o\s+caso)\s*(?:(?:a\s+seguir|abaixo))?|'
+    r'[Cc]om\s+base\s+no\s+texto\s*(?:(?:abaixo|a\s+seguir))?\s*,\s*responda|'
+    r'[Tt]exto\s+(?:I|II|III|1|2|3)?\s*(?:\(?[^)]*\))?\s*[-–—:]?\s*(?:para\s+(?:as\s+)?quest[oõa\ufffd\?]?es|base\s+para\s+as\s+quest[oõa\ufffd\?]?es)'
+    r')'
+    r'[^\.\:]{0,100}?'
+    r'quest[oõa\ufffd\?]?es?\s*(?:de\s+n[úu]meros?\s+|de\s+)?(0*\d{1,3})\s*(?:a|e|ao?|at[eé\ufffd\?]?|\be\b|,|\-)\s*(?:a\s+)?(0*\d{1,3})'
+    r'[\.\:\–\—]?'
+    r')',
     re.IGNORECASE
 )
 
@@ -256,9 +267,10 @@ def detect_layout_and_ordered_blocks(page: fitz.Page, watermarks: Set[Tuple[int,
             lx0, ly0, lx1, ly1 = line['bbox']
 
             # Filtros de margem e ruídos institucionais
-            if ly0 < 15 or ly1 > height - 15:
+            if ly0 < 18 or ly1 > height - 32:
                 continue
-            if 'pcimarkpci' in line_text.lower() or 'pciconcursos.com.br' in line_text.lower() or 'qconcursos.com' in line_text.lower():
+            lt_lower = line_text.lower()
+            if 'pcimarkpci' in lt_lower or 'pciconcursos.com.br' in lt_lower or 'qconcursos.com' in lt_lower or 'confidencial at' in lt_lower or 'tjsp2301' in lt_lower:
                 continue
             if 'PROVA' in line_text.upper() and len(line_text) < 25 and any(f'PROVA {k}' in line_text.upper() for k in range(10)):
                 continue
@@ -295,8 +307,8 @@ def detect_layout_and_ordered_blocks(page: fitz.Page, watermarks: Set[Tuple[int,
 
     # Detecta se há 2 colunas paralelas
     text_only_lines = [l for l in lines_extracted if not l['text'].startswith('\n|')]
-    left_lines = [l for l in text_only_lines if l['mid_x'] < mid_x_page and l['width'] <= width * 0.65]
-    right_lines = [l for l in text_only_lines if l['mid_x'] >= mid_x_page and l['width'] <= width * 0.65]
+    left_lines = [l for l in text_only_lines if l['mid_x'] < mid_x_page]
+    right_lines = [l for l in text_only_lines if l['mid_x'] >= mid_x_page]
 
     has_columns = len(left_lines) >= 3 and len(right_lines) >= 3
 
@@ -312,9 +324,14 @@ def detect_layout_and_ordered_blocks(page: fitz.Page, watermarks: Set[Tuple[int,
     footers = []
 
     for l in lines_extracted:
-        if l['y1'] <= 75 and l['width'] > width * 0.40:
+        # Um cabeçalho de página inteira precisa cruzar o centro da página
+        is_page_header = (l['y1'] <= 60 and l['x0'] < width * 0.35 and l['x1'] > width * 0.65)
+        # Um rodapé de página inteira precisa cruzar o centro da página
+        is_page_footer = (l['y0'] >= height - 35 and l['x0'] < width * 0.35 and l['x1'] > width * 0.65)
+        
+        if is_page_header:
             top_headers.append(l)
-        elif l['y0'] >= height - 45:
+        elif is_page_footer:
             footers.append(l)
         elif l['mid_x'] < mid_x_page:
             col_left.append(l)
@@ -329,42 +346,43 @@ def detect_layout_and_ordered_blocks(page: fitz.Page, watermarks: Set[Tuple[int,
     ordered_groups = []
     if top_headers:
         t_raw = '\n'.join(l['text'] for l in top_headers)
-        ordered_groups.append({'page': page.number, 'x0': 0, 'y0': 0, 'x1': width, 'y1': 75, 'text': normalize_paragraph_flow(t_raw)})
+        ordered_groups.append({'page': page.number, 'x0': 0, 'y0': 0, 'x1': width, 'y1': 60, 'text': normalize_paragraph_flow(t_raw)})
     if col_left:
         t_raw = '\n'.join(l['text'] for l in col_left)
-        ordered_groups.append({'page': page.number, 'x0': 0, 'y0': 75, 'x1': mid_x_page, 'y1': height, 'text': normalize_paragraph_flow(t_raw)})
+        ordered_groups.append({'page': page.number, 'x0': 0, 'y0': 60, 'x1': mid_x_page, 'y1': height, 'text': normalize_paragraph_flow(t_raw)})
     if col_right:
         t_raw = '\n'.join(l['text'] for l in col_right)
-        ordered_groups.append({'page': page.number, 'x0': mid_x_page, 'y0': 75, 'x1': width, 'y1': height, 'text': normalize_paragraph_flow(t_raw)})
+        ordered_groups.append({'page': page.number, 'x0': mid_x_page, 'y0': 60, 'x1': width, 'y1': height, 'text': normalize_paragraph_flow(t_raw)})
     if footers:
         t_raw = '\n'.join(l['text'] for l in footers)
-        ordered_groups.append({'page': page.number, 'x0': 0, 'y0': height - 45, 'x1': width, 'y1': height, 'text': normalize_paragraph_flow(t_raw)})
+        ordered_groups.append({'page': page.number, 'x0': 0, 'y0': height - 40, 'x1': width, 'y1': height, 'text': normalize_paragraph_flow(t_raw)})
 
     return ordered_groups
 
-def extract_context_blocks(full_text: str) -> List[Tuple[int, int, str]]:
+def extract_context_blocks(full_text: str) -> List[Tuple[int, int, str, int]]:
     """
     Identifica blocos de textos de apoio compartilhados ('Texto para as questões X a Y')
-    e mapeia os intervalos de questões afetados. Retorna: [(q_min, q_max, text_content), ...]
+    e mapeia os intervalos de questões afetados. Retorna: [(q_min, q_max, text_content, banner_start_pos), ...]
     """
     context_blocks = []
     matches = list(CONTEXT_TEXT_HEADER_REGEX.finditer(full_text))
     
     for m in matches:
         try:
-            q_min = int(m.group(1))
-            q_max = int(m.group(2))
+            q_min = int(m.group(2))
+            q_max = int(m.group(3))
             if q_min > q_max or q_max - q_min > 50:
                 continue
                 
-            header_start = m.start()
-            q_pattern = rf'(?:^|\n)\s*(?:QUEST[AÃ\ufffd\?]?O\s+|ITEM\s+)?0*{q_min}\s*(?:[\.\-\–\—\)]|\s+)'
-            m_q = re.search(q_pattern, full_text[header_start:], re.IGNORECASE)
+            banner_start = m.start()
+            banner_end = m.end()
+            q_pattern = rf'(?:^|\n)[ \t]*(?:QUEST[AÃ\ufffd\?]?O\s+|ITEM\s+)?0*{q_min}\s*(?:[\.\-\–\—\:\)]|\n+|[ \t]+(?=[A-Z\u00C0-\u00DC\"“\'‘\(]))'
+            m_q = re.search(q_pattern, full_text[banner_end:], re.IGNORECASE)
             
             if m_q:
-                text_body = full_text[m.end():header_start + m_q.start()].strip()
+                text_body = full_text[banner_end:banner_end + m_q.start()].strip()
                 if len(text_body) >= 20:
-                    context_blocks.append((q_min, q_max, text_body))
+                    context_blocks.append((q_min, q_max, text_body, banner_start))
         except Exception:
             continue
             

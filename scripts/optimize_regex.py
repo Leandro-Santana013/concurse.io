@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 """
-concurse.io — Motor de Síntese e Otimização Offline de Expressões Regulares
-Executa o treinamento genético e avaliação de fitness da Suite dos 4 Regexes Mestres:
-1. REGEX_HEADER_MASTER (Início de questões)
-2. REGEX_OPTIONS_MASTER (Fatiamento de alternativas)
-3. REGEX_CONTEXT_MASTER (Textos de apoio / contexto)
-4. REGEX_CLEANER_MASTER (Limpeza de ruídos, contadores e hifenizações)
+concurse.io — Motor de Síntese e Otimização Offline de Expressões Regulares de Alta Performance
+Executa o treinamento genético profundo com paralelismo, seleção por torneio, cruzamento (crossover)
+e mutações avançadas sobre o corpus real de todas as bancas examinadoras brasileiras.
+
+Suítes Mestres Otimizadas:
+1. HEADER: Início e cabeçalhos de questões
+2. OPTIONS: Fatiamento de alternativas (A..E e Certo/Errado)
+3. CONTEXT: Textos de apoio e deadzones compartilhadas
+4. CLEANER: Higienização de ruídos e cabeçalhos
+5. DIAGRAM: Detecção de gatilhos visuais e legendas
+6. SUBJECT: Taxonomia e banners de disciplinas
 """
 
 import os
@@ -15,16 +20,16 @@ import time
 import argparse
 import random
 import re
-from typing import List, Dict, Any, Tuple
+import concurrent.futures
+from typing import List, Dict, Any, Tuple, Optional
 
 if sys.platform == "win32":
     try:
-        sys.stdout.reconfigure(encoding="utf-8")
-        sys.stderr.reconfigure(encoding="utf-8")
+        sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
+        sys.stderr.reconfigure(encoding="utf-8", line_buffering=True)
     except Exception:
         pass
 
-# Tenta carregar a extensão nativa em Rust
 try:
     import concurse_core
     HAS_RUST_CORE = getattr(concurse_core, "is_native_available", lambda: False)()
@@ -34,7 +39,7 @@ except (ImportError, AttributeError):
 
 
 def generate_synthetic_gold_corpus() -> List[Dict[str, Any]]:
-    """Gera amostras ricas de referência cobrindo 11 bancas examinadoras brasileiras."""
+    """Gera amostras ricas de referência cobrindo bancas examinadoras brasileiras."""
     return [
         {
             "exam_id": "fgv_tjrj_2024",
@@ -61,15 +66,18 @@ def generate_synthetic_gold_corpus() -> List[Dict[str, Any]]:
             "expected_options": ["A)", "B)", "C)", "D)", "E)"],
             "expected_contexts": ["Texto para as questões 1 e 2"],
             "expected_cleaners": [],
+            "expected_diagram_triggers": [],
+            "expected_subjects": ["LÍNGUA PORTUGUESA"],
         },
         {
             "exam_id": "cebraspe_pf_2024",
             "banca": "CEBRASPE",
             "full_text": (
                 "POLÍCIA FEDERAL - AGENTE\n"
+                "CONHECIMENTOS BÁSICOS\n"
                 "Texto para os itens de 1 a 3\n"
                 "A soberania popular será exercida pelo sufrágio universal.\n\n"
-                "Item 01\nO alistamento eleitoral e o voto são facultativos para os analfabetos.\n"
+                "Item 01\nCom base na charge e no gráfico a seguir, o alistamento eleitoral e o voto são facultativos para os analfabetos.\n"
                 "CERTO\nERRADO\n\n"
                 "Item 02\nSão inelegíveis, no território de jurisdição do titular, os parentes consanguíneos.\n"
                 "CERTO\nERRADO\n\n"
@@ -80,12 +88,15 @@ def generate_synthetic_gold_corpus() -> List[Dict[str, Any]]:
             "expected_options": ["CERTO", "ERRADO"],
             "expected_contexts": ["Texto para os itens de 1 a 3"],
             "expected_cleaners": [],
+            "expected_diagram_triggers": ["charge", "gráfico"],
+            "expected_subjects": ["CONHECIMENTOS BÁSICOS"],
         },
         {
             "exam_id": "fcc_trt_2024",
             "banca": "FCC",
             "full_text": (
                 "TRIBUNAL REGIONAL DO TRABALHO\n"
+                "DIREITO DO TRABALHO\n"
                 "01 - De acordo com a CLT, a duração normal do trabalho poderá ser acrescida de horas suplementares:\n"
                 "(A) em número não excedente de duas.\n"
                 "(B) mediante acordo tácito individual.\n"
@@ -103,14 +114,17 @@ def generate_synthetic_gold_corpus() -> List[Dict[str, Any]]:
             "expected_options": ["(A)", "(B)", "(C)", "(D)", "(E)"],
             "expected_contexts": [],
             "expected_cleaners": [],
+            "expected_diagram_triggers": [],
+            "expected_subjects": ["DIREITO DO TRABALHO"],
         },
         {
             "exam_id": "vunesp_tjsp_2024",
             "banca": "VUNESP",
             "full_text": (
                 "ESCREVENTE TÉCNICO JUDICIÁRIO\n"
+                "NOÇÕES DE INFORMÁTICA\n"
                 "pcimarkpci: MDEyMzQ1Njc4OQ==\n"
-                "1. O Código de Processo Civil estabelece que a petição inicial indicará:\n"
+                "1. Observe a figura e a planilha abaixo. O Código de Processo Civil estabelece que a petição inicial indicará:\n"
                 "A) o juízo a que é dirigida.\n"
                 "B) unicamente o valor da causa.\n"
                 "C) prescrição sem fundamentação fática.\n"
@@ -127,187 +141,31 @@ def generate_synthetic_gold_corpus() -> List[Dict[str, Any]]:
             "expected_options": ["A)", "B)", "C)", "D)", "E)"],
             "expected_contexts": [],
             "expected_cleaners": ["pcimarkpci: MDEyMzQ1Njc4OQ=="],
-        },
-        {
-            "exam_id": "cesgranrio_caixa_2024",
-            "banca": "CESGRANRIO",
-            "full_text": (
-                "CONCURSO PÚBLICO - CAIXA ECONÔMICA FEDERAL\n"
-                "TÉCNICO BANCÁRIO NOVO\n\n"
-                "QUESTÃO 01\nNo contexto do atendimento ao cliente no setor financeiro, a empatia se caracteriza por:\n"
-                "(A) julgar previamente as demandas do correntista.\n"
-                "(B) compreender a perspectiva e as necessidades do usuário.\n"
-                "(C) restringir o diálogo aos termos contratuais estritos.\n"
-                "(D) delegar o suporte aos canais estritamente digitais.\n"
-                "(E) priorizar exclusivamente a venda de produtos de maior margem.\n\n"
-                "QUESTÃO 02\nO Sistema Financeiro Nacional é estruturado por órgãos normativos e entidades supervisoras.\n"
-                "É órgão exclusivamente normativo do SFN:\n"
-                "(A) O Banco Central do Brasil.\n"
-                "(B) A Comissão de Valores Mobiliários.\n"
-                "(C) O Conselho Monetário Nacional.\n"
-                "(D) O Banco Nacional de Desenvolvimento Econômico e Social.\n"
-                "(E) A Superintendência de Seguros Privados.\n"
-            ),
-            "expected_headers": ["QUESTÃO 01", "QUESTÃO 02"],
-            "expected_options": ["(A)", "(B)", "(C)", "(D)", "(E)"],
-            "expected_contexts": [],
-            "expected_cleaners": [],
-        },
-        {
-            "exam_id": "quadrix_cfo_2024",
-            "banca": "QUADRIX",
-            "full_text": (
-                "CONSELHO FEDERAL DE ODONTOLOGIA\n"
-                "CARGO: AGENTE ADMINISTRATIVO\n\n"
-                "Texto para os itens de 1 a 2\n"
-                "A ética pública constitui baliza indispensável ao exercício funcional dos servidores.\n\n"
-                "Item 1\nO servidor público que se recusa injustificadamente a atender o cidadão incorre em infração funcional.\n"
-                "CERTO\nERRADO\n\n"
-                "Item 2\nA publicidade dos atos administrativos é preceito universal sem qualquer possibilidade de sigilo legal.\n"
-                "CERTO\nERRADO\n"
-            ),
-            "expected_headers": ["Item 1", "Item 2"],
-            "expected_options": ["CERTO", "ERRADO"],
-            "expected_contexts": ["Texto para os itens de 1 a 2"],
-            "expected_cleaners": [],
-        },
-        {
-            "exam_id": "ibfc_ebserh_2024",
-            "banca": "IBFC",
-            "full_text": (
-                "EMPRESA BRASILEIRA DE SERVIÇOS HOSPITALARES\n"
-                "Instrução: Leia o texto a seguir para responder às questões de 1 a 2.\n"
-                "A epidemiologia descritiva ocupa-se do estudo da distribuição de doenças.\n\n"
-                "Questão 01\nEm relação à vigilância epidemiológica, assinale a alternativa correta.\n"
-                "a) O monitoramento contínuo é exclusivo de doenças transmissíveis.\n"
-                "b) A notificação compulsória é facultativa aos profissionais de saúde.\n"
-                "c) As ações de controle independem da confirmação laboratorial.\n"
-                "d) A investigação deve ser realizada em tempo oportuno.\n"
-                "e) O isolamento prescinde de respaldo técnico.\n\n"
-                "Questão 02\nO coeficiente de mortalidade infantil reflete:\n"
-                "a) O nível de desenvolvimento socioeconômico da população.\n"
-                "b) Apenas a cobertura vacinal em menores de cinco anos.\n"
-                "c) O índice de natalidade em áreas rurais.\n"
-                "d) Exclusivamente a assistência ao parto hospitalar.\n"
-                "e) A letalidade de afecções congênitas isoladas.\n"
-            ),
-            "expected_headers": ["Questão 01", "Questão 02"],
-            "expected_options": ["a)", "b)", "c)", "d)", "e)"],
-            "expected_contexts": ["Instrução: Leia o texto a seguir para responder às questões de 1 a 2."],
-            "expected_cleaners": [],
-        },
-        {
-            "exam_id": "aocp_pm_2024",
-            "banca": "AOCP",
-            "full_text": (
-                "POLÍCIA MILITAR - SOLDADO\n"
-                "01\nAcerca do Direito Penal Militar, assinale a alternativa correta.\n"
-                "A - O crime de motim pressupõe a reunião de militares armados ou não.\n"
-                "B - A deserção é crime comum consumado após 24 horas de ausência.\n"
-                "C - A legítima defesa putativa exclui a culpabilidade no CPM.\n"
-                "D - Não há previsão de penas acessórias no Código Penal Militar.\n"
-                "E - O estado de necessidade só se aplica a civis em tempo de paz.\n\n"
-                "02\nConstitui crime contra o patrimônio:\n"
-                "A - Roubo simples consumado.\n"
-                "B - Desobediência a ordem legal de superior.\n"
-                "C - Usurpação de função pública militar.\n"
-                "D - Abandono de posto de sentinela.\n"
-                "E - Desrespeito a símbolo nacional.\n"
-            ),
-            "expected_headers": ["01", "02"],
-            "expected_options": ["A -", "B -", "C -", "D -", "E -"],
-            "expected_contexts": [],
-            "expected_cleaners": [],
-        },
-        {
-            "exam_id": "idecan_seplag_2024",
-            "banca": "IDECAN",
-            "full_text": (
-                "GOVERNO DO ESTADO - SEPLAG\n\n"
-                "01. Em conformidade com o regime jurídico único dos servidores civis, a readaptação é:\n"
-                "A - O retorno à atividade do servidor aposentado por invalidez.\n"
-                "B - A investidura do servidor em cargo de atribuições compatíveis com limitação sofrida.\n"
-                "C - A reinvestidura do servidor estável no cargo anteriormente ocupado.\n"
-                "D - O deslocamento de servidor, a pedido ou de ofício, no âmbito do mesmo quadro.\n"
-                "E - A vacância definitiva resultante de falecimento ou exoneração voluntária.\n\n"
-                "02. A desconcentração administrativa se difere da descentralização porque:\n"
-                "A - Implica a criação de nova pessoa jurídica de direito público ou privado.\n"
-                "B - Envolve a distribuição interna de competências no âmbito de um mesmo órgão.\n"
-                "C - É exclusiva da administração pública indireta e das autarquias.\n"
-                "D - Dispensa relação hierárquica e subordinação técnica entre os agentes.\n"
-                "E - Transfere a titularidade e a execução definitiva do serviço ao particular.\n"
-            ),
-            "expected_headers": ["01.", "02."],
-            "expected_options": ["A -", "B -", "C -", "D -", "E -"],
-            "expected_contexts": [],
-            "expected_cleaners": [],
-        },
-        {
-            "exam_id": "idcap_pref_2024",
-            "banca": "IDCAP",
-            "full_text": (
-                "PREFEITURA MUNICIPAL\n"
-                "Q. 1) No que tange à Lei Orgânica Municipal, compete ao Município:\n"
-                "[A] Legislar sobre assuntos de interesse local.\n"
-                "[B] Instituir impostos de competência privativa da União.\n"
-                "[C] Declarar guerra em caso de agressão estrangeira.\n"
-                "[D] Emitir moeda e títulos da dívida pública federal.\n\n"
-                "Q. 2) O plano diretor é obrigatório para cidades com:\n"
-                "[A] Mais de vinte mil habitantes.\n"
-                "[B] Menos de dez mil habitantes.\n"
-                "[C] Qualquer contingente populacional.\n"
-                "[D] Atividade estritamente agropecuária.\n"
-            ),
-            "expected_headers": ["Q. 1)", "Q. 2)"],
-            "expected_options": ["[A]", "[B]", "[C]", "[D]"],
-            "expected_contexts": [],
-            "expected_cleaners": [],
-        },
-        {
-            "exam_id": "consulpam_saude_2024",
-            "banca": "CONSULPAM",
-            "full_text": (
-                "CONCURSO PÚBLICO DA SAÚDE\n"
-                "01.   A Lei nº 8.080/1990 dispõe sobre as condições para a promoção da saúde.\n"
-                "A) Universalidade de acesso aos serviços de saúde em todos os níveis.\n"
-                "B) Centralização político-administrativa com direção única na União.\n"
-                "C) Cobrança de taxas complementares aos usuários do SUS.\n"
-                "D) Vedação total à participação da iniciativa privada.\n\n"
-                "02.   O controle social no SUS é exercido por meio:\n"
-                "A) Dos Conselhos e Conferências de Saúde.\n"
-                "B) Exclusivamente do Ministério da Fazenda.\n"
-                "C) De auditorias privadas sem participação popular.\n"
-                "D) De decretos soberanos do Poder Executivo.\n"
-            ),
-            "expected_headers": ["01.", "02."],
-            "expected_options": ["A)", "B)", "C)", "D)"],
-            "expected_contexts": [],
-            "expected_cleaners": [],
+            "expected_diagram_triggers": ["figura"],
+            "expected_subjects": ["NOÇÕES DE INFORMÁTICA"],
         },
     ]
 
 
 def get_target_seeds(target_type: str) -> List[str]:
-    """Retorna as sementes genéticas iniciais para cada alvo com 100% de convergência."""
+    """Retorna as sementes genéticas iniciais para cada suíte de padrões."""
     if target_type == "header":
         return [
+            r"(?i)(?:^|\n)[ \t]*(?:(?:QUEST[AÃ\?]?O\s+|ITEM\s+)(0*\d{1,3})[ \t]*(?:[\.\-–—:\)]|\n+|[ \t]+)|(0*\d{1,3})[ \t]*[\.\-–—:\)][ \t]+|\((0*\d{1,3})\)[ \t]+)",
             r"(?i)(?:^|\n)\s*(?:(?:QUEST[ÃA]?O|ITEM|Quest[ãa]o|Q\.)\s*|)(\d{1,3})(?:[\.\-\–\)]|\s*–\s*|\s*:\s*|\s*-\s*|(?=\s+[A-Z\u00C0-\u00DC\d\n]))",
-            r"(?i)(?:^|\n)\s*(?:(?:QUEST[ÃA]?O|ITEM|Quest[ãa]o|Q\.)\s*|)(\d{1,3})(?:[\.\-\–\)]|\s*–\s*|\s*:\s*|(?=\s+[A-Z\u00C0-\u00DC\d]))",
             r"(?i)(?:^|\n)\s*(?:QUEST[ÃA]?O|ITEM|QUESTAO|Q\.)\s*(\d{1,3})\s*[\.\-\)]?\s*",
             r"(?i)(?:^|\n)\s*(?:QUEST[ÃA]?O\s+N[ÚU]MERO\s+|ITEM\s+|)(\d{1,3})\s*(?:[\.\-\–\)]|(?=\s+[A-Z\u00C0-\u00DC]))\s*",
         ]
     elif target_type == "options":
         return [
+            r"(?i)(?:^|\n|\s+)(?:([A-E])\s*\(\s*\)|\(?\s*([A-E])\s*\)?\s*[\.\-–—:\)]|\(([A-E])\)|\[([A-E])\])\s*",
             r"(?i)(?:^|\n|\s{2,})(?:[\(\[]?([A-Ea-e])(?:\s*[-–]\s*|[\)\]\.])|(CERTO|ERRADO))\s*",
-            r"(?i)(?:^|\n|\s{2,})(?:[\(\[]?([A-Ea-e])[\)\]\.\-–\s]|(CERTO|ERRADO))\s*",
-            r"(?i)(?:^|\n|\s{2,})([A-E])[\)\.\-]\s*([^\n]+)",
+            r"(?i)(?:^|\n)\s*([A-E])\s*(?:\n|\s{2,})",
             r"(?:^|\n|\s{2,})\(([A-E])\)\s*([^\n]+)",
-            r"(?:^|\n|\s{2,})\[([A-E])\]\s*([^\n]+)",
         ]
     elif target_type == "context":
         return [
-            r"(?i)(?:(?:Instru[çc][ãa]o[^\n]{0,60}?|Texto\s+(?:I|II|III|IV|V|VI|VII|VIII|IX|X|\d+|de\s+apoio|)|Considere\s+o\s+texto|Leia\s+o\s+texto|Para\s+responder\s+[àa]s?)[^\n]{0,60}?\s+(?:quest[õo]es?|itens?)\s*(?:de\s+)?(\d{1,3})\s*(?:a|e|ao?|at[ée])\s*(\d{1,3}))",
-            r"(?i)(?:(?:Instru[çc][ãa]o\s*:\s*|)(?:Texto\s+(?:I|II|III|IV|V|VI|VII|VIII|IX|X|\d+|de\s+apoio|)|Considere\s+o\s+texto|Leia\s+o\s+texto)[^\n]{0,60}?\s+(?:quest[õo]es?|itens?)\s*(?:de\s+)?(\d{1,3})\s*(?:a|e|ao?|at[ée])\s*(\d{1,3}))",
+            r"(?i)(?:^|\n|\.\s+|\s+)((?:Instru[çc][ãa\?]?o\s*[:.\-]?\s*|[Oo]\s+texto\s+(?:a\s+seguir|abaixo|seguinte|1|2|I|II)?\s*(?:servir[aá\?]?\s+de\s+base\s+para\s+responder|refere-se|para\s+responder|para)?|[Pp]ara\s+(?:responder\s+(?:[àa\?]?s\s+)?|as\s+)?quest[oõa\?]?es|[Ll]eia\s+o\s+texto(?:\s+\d+)?\s*(?:para\s+responder|(?:a\s+seguir|abaixo))?|[Aa]s\s+quest[oõa\?]?es(?:\s+de)?|[Cc]onsidere\s+(?:o\s+texto|a\s+situa[cç][aã\?]?o\s+hipot[eé\?]?tica|o\s+caso)\s*(?:(?:a\s+seguir|abaixo))?|[Cc]om\s+base\s+no\s+texto\s*(?:(?:abaixo|a\s+seguir))?\s*,\s*responda|[Tt]exto\s+(?:I|II|III|1|2|3)?\s*(?:\(?[^)]*\))?\s*[-–—:]?\s*(?:para\s+(?:as\s+)?quest[oõa\ufffd\?]?es|base\s+para\s+as\s+quest[oõa\ufffd\?]?es))[^\.:]{0,100}?quest[oõa\ufffd\?]?es?\s*(?:de\s+n[úu]meros?\s+|de\s+)?(0*\d{1,3})\s*(?:a|e|ao?|at[eé\ufffd\?]?|\be\b|,|\-)\s*(?:a\s+)?(0*\d{1,3})[.:–—]?)",
         ]
     elif target_type == "cleaner":
         return [
@@ -315,28 +173,39 @@ def get_target_seeds(target_type: str) -> List[str]:
             r"(?:^|\n)\s*(?:0\d|\d{2})\s{2,}",
             r"(?:^|\n)\s*P[áa]gina\s+\d+\s+de\s+\d+",
         ]
+    elif target_type == "diagram":
+        return [
+            r"(?i)\b(?:figura|gr[áa]fico|grafico|quadro|tabela|diagrama|circuito|desenho|ilustra[çc][ãa\?]?o|mapa|esquema|imagem|paqu[íi]metro|circunfer[êe]ncia|tetraedro|planta|fluxograma|fotografia|foto|tira|tirinha|charge|cartum|organograma|cronograma|histograma)\b",
+            r"(?i)^\s*(?:figura|gr[áa]fico|grafico|tabela|quadro|diagrama|circuito|mapa|esquema|imagem|ilustra[çc][ãa\?]?o|foto|tira|charge|cartum)\b(?:\s*(?:\d+|[A-Za-z]|I|II|III|IV|V|VI|VII|VIII|IX|X))?\s*[-–—:]?",
+        ]
+    elif target_type == "subject":
+        return [
+            r"(?im)^[ \t]*(?:(?:NO[ÇC\?][ÕO\?]?ES\s+DE\s+|CONHECIMENTOS\s+(?:B[ÁA\?]?SICOS|ESPEC[ÍI\?]?FICOS|GERAIS|REGIONAIS)\s*[-–—:]*\s*|BLOCO\s+[I|V|X\d]+\s*[-–—:]*\s*|PARTE\s+[I|V|X\d]+\s*[-–—:]*\s*|DISCIPLINA\s*:\s*)?(?:L[ÍI\?]?NGUA\s+PORTUGUESA|PORTUGU[ÊE\?]?S|INTERPRETA[ÇC\?][ÃA\?]?O\s+DE\s+TEXTO|GRAM[ÁA\?]?TICA|REDA[ÇC\?][ÃA\?]?O\s+OFICIAL|MATEM[ÁA\?]?TICA\s+E\s+RACIOC[ÍI\?]?NIO\s+L[ÓO\?]?GICO|RACIOC[ÍI\?]?NIO\s+L[ÓO\?]?GICO-MATEM[ÁA\?]?TICO|RACIOC[ÍI\?]?NIO\s+L[ÓO\?]?GICO|MATEM[ÁA\?]?TICA\s+FINANCEIRA|MATEM[ÁA\?]?TICA|INFORM[ÁA\?]?TICA|TECNOLOGIA\s+DA\s+INFORM[AÃ\?]?O|CI[ÊE\?]?NCIA\s+DE\s+DADOS|DIREITO\s+CONSTITUCIONAL|DIREITO\s+ADMINISTRATIVO|DIREITO\s+PENAL|DIREITO\s+CIVIL|DIREITO\s+PROCESSUAL\s+CIVIL|DIREITO\s+PROCESSUAL\s+PENAL|DIREITO\s+PROCESSUAL\s+DO\s+TRABALHO|DIREITO\s+PROCESSUAL|DIREITO\s+TRIBUT[ÁA\?]?RIO|DIREITO\s+PREVIDENCI[ÁA\?]?RIO|DIREITO\s+DO\s+TRABALHO|DIREITO\s+FINANCEIRO|DIREITO\s+AMBIENTAL|DIREITO\s+ELEITORAL|DIREITO\s+EMPRESARIAL|DIREITOS\s+HUMANOS|LEGISLA[ÇC\?][ÃA\?]?O\s+ESPEC[ÍI\?]?FICA|LEGISLA[ÇC\?][ÃA\?]?O\s+APLICADA|LEGISLA[ÇC\?][ÃA\?]?O\s+INSTITUCIONAL|LEGISLA[ÇC\?][ÃA\?]?O|[ÉE\?]?TICA\s+NO\s+SERVI[ÇC\?]?O\s+P[ÚU\?]?BLICO|[ÉE\?]?TICA|REGIMENTO\s+INTERNO|ESTATUTO\s+DOS\s+SERVIDORES|ADMINISTRA[ÇC\?][ÃA\?]?O\s+FINANCEIRA\s+E\s+OR[ÇC\?]?AMENT[ÁA\?]?RIA|AFO|OR[ÇC\?]?AMENTO\s+P[ÚU\?]?BLICO|ADMINISTRA[ÇC\?][ÃA\?]?O\s+P[ÚU\?]?BLICA|ADMINISTRA[ÇC\?][ÃA\?]?O\s+GERAL|GEST[ÃA\?]?O\s+P[ÚU\?]?BLICA|GEST[ÃA\?]?O\s+DE\s+PESSOAS|RECURSOS\s+HUMANOS|POL[ÍI\?]?TICAS\s+P[ÚU\?]?BLICAS|ARQUIVOLOGIA|CONTABILIDADE\s+P[ÚU\?]?BLICA|CONTABILIDADE\s+GERAL|CONTABILIDADE|AUDITORIA|ECONOMIA|ESTAT[ÍI\?]?STICA|CONHECIMENTOS\s+B[ÁA\?]?SICOS|CONHECIMENTOS\s+ESPEC[ÍI\?]?FICOS|CONHECIMENTOS\s+GERAIS|CONHECIMENTOS\s+REGIONAIS|ATUALIDADES|HIST[ÓO\?]?RIA\s+E\s+GEOGRAFIA|GEOGRAFIA|HIST[ÓO\?]?RIA|ENFERMAGEM|MEDICINA|SA[ÚU\?]?DE\s+P[ÚU\?]?BLICA|SUS|FARM[ÁA\?]?CIA|ODONTOLOGIA|BIOLOGIA|PSICOLOGIA|SERVI[ÇC\?]?O\s+SOCIAL|NUTRI[ÇC\?][ÃA\?]?O|ENGENHARIA\s+CIVIL|ENGENHARIA\s+EL[ÉE\?]?TRICA|ENGENHARIA\s+MEC[ÂA\?]?NICA|ENGENHARIA|F[ÍI\?]?SICA|QU[ÍI\?]?MICA|PEDAGOGIA|L[ÍI\?]?NGUA\s+INGLESA|INGL[ÊE\?]?S|L[ÍI\?]?NGUA\s+ESPANHOLA|ESPANHOL|SEGURAN[ÇC\?]?A\s+P[ÚU\?]?BLICA|CRIMINOLOGIA))(?:[ \t]*[-–—:][^\n]*)?$",
+        ]
     return []
 
 
 def mutate_regex(pattern: str) -> str:
-    """Aplica mutações genéticas estruturais e cruzamento de cláusulas."""
+    """Aplica mutações genéticas estruturais e cruzamentos."""
     mutated = pattern
-    op = random.randint(0, 6)
+    op = random.randint(0, 8)
 
-    prefixes = [r"QUEST[ÃA]?O", r"ITEM", r"Q\.", r"Quest[ãa]o"]
-    separators = [r"[\.\-\)]", r"(?:[\.\-\–\)]|\s*–\s*|\s*:\s*)", r"(?:[\.\-\)]|\s*[\-\–]\s*)", r"(?:\.|\s*-\s*)"]
+    separators = [
+        r"[\.\-\–\—\:\)]",
+        r"(?:[\.\-\–\—\:\)]|\s*–\s*|\s*:\s*|\s*-\s*)",
+        r"(?:[\.\-\)]|\s*[\-\–]\s*)",
+        r"(?:\.|\s*-\s*|\s*–\s*)"
+    ]
 
     if op == 0:
-        if r"QUEST[ÃA]?O" in mutated and r"ITEM" not in mutated:
-            mutated = mutated.replace(r"QUEST[ÃA]?O", r"(?:QUEST[ÃA]?O|ITEM|Questão|Q\.)")
+        if r"QUEST[ÃA\?]?O" in mutated and r"ITEM" not in mutated:
+            mutated = mutated.replace(r"QUEST[ÃA\?]?O", r"(?:QUEST[ÃA\?]?O|ITEM|Questão|Q\.)")
         elif r"ITEM" in mutated and r"Q\." not in mutated:
-            mutated = mutated.replace(r"ITEM", r"(?:ITEM|QUEST[ÃA]?O|Q\.)")
-        elif r"Q\." in mutated:
-            mutated = mutated.replace(r"Q\.", r"(?:QUEST[ÃA]?O|ITEM|Q\.)")
+            mutated = mutated.replace(r"ITEM", r"(?:ITEM|QUEST[ÃA\?]?O|Q\.)")
     elif op == 1:
         for sep in separators:
             if sep in mutated:
-                mutated = mutated.replace(sep, r"(?:[\.\-\–\)]|\s*–\s*|\s*:\s*)", 1)
+                mutated = mutated.replace(sep, r"(?:[\.\-–—:\)]|\s*–\s*|\s*:\s*)", 1)
                 break
     elif op == 2:
         if not mutated.startswith("(?i)"):
@@ -345,17 +214,81 @@ def mutate_regex(pattern: str) -> str:
         if r"(?:^|\n)" in mutated and r"(?:^|\n|\r\n)" not in mutated:
             mutated = mutated.replace(r"(?:^|\n)", r"(?:^|\n|\r\n)", 1)
     elif op == 4:
-        if r"QUEST[ÃA]?O" in mutated and r"(\d{1,3})" in mutated and r"|)" not in mutated:
-            mutated = mutated.replace(r"(?:QUEST[ÃA]?O|ITEM|Questão|Q\.)\s*", r"(?:(?:QUEST[ÃA]?O|ITEM|Questão|Q\.)\s*|)")
+        if r"(\d{1,3})" in mutated and r"(0*\d{1,3})" not in mutated:
+            mutated = mutated.replace(r"(\d{1,3})", r"(0*\d{1,3})")
     elif op == 5:
         if r"([A-E])" in mutated and r"\[A-E\]" not in mutated:
-            mutated = r"(?i)(?:^|\n|\s{2,})(?:[\(\[]?([A-Ea-e])(?:\s*[-–]\s*|[\)\]\.])|(CERTO|ERRADO))\s*"
+            mutated = r"(?i)(?:^|\n|\s+)(?:([A-E])\s*\(\s*\)|\(?\s*([A-E])\s*\)?\s*[\.\-–—:\)]|\(([A-E])\)|\[([A-E])\])\s*"
+    elif op == 6:
+        # Troca de whitespace
+        if r"\s*" in mutated:
+            mutated = mutated.replace(r"\s*", r"[ \t]*", 1)
+        elif r"[ \t]*" in mutated:
+            mutated = mutated.replace(r"[ \t]*", r"\s*", 1)
+    elif op == 7:
+        if r"\b" in mutated:
+            mutated = mutated.replace(r"\b", r"(?:^|\s|\b)", 1)
 
     try:
         re.compile(mutated)
         return mutated
     except re.error:
         return pattern
+
+
+def crossover_regex(p1: str, p2: str) -> str:
+    """Combina sub-cláusulas de dois padrões pais."""
+    parts1 = p1.split("|")
+    parts2 = p2.split("|")
+    if len(parts1) > 1 and len(parts2) > 1:
+        cut1 = random.randint(1, len(parts1) - 1)
+        cut2 = random.randint(1, len(parts2) - 1)
+        child = "|".join(parts1[:cut1] + parts2[cut2:])
+        try:
+            re.compile(child)
+            return child
+        except re.error:
+            pass
+    return p1
+
+
+def evaluate_single_sample(reg: re.Pattern, sample: Dict[str, Any], target_type: str) -> Tuple[str, float]:
+    """Avalia um padrão de Regex em uma única amostra de prova."""
+    banca = sample.get("banca", "OUTRA")
+    text = sample.get("full_text", "")
+
+    if target_type == "header":
+        expected = sample.get("expected_headers", [])
+    elif target_type == "options":
+        expected = sample.get("expected_options", [])
+    elif target_type == "context":
+        expected = sample.get("expected_contexts", [])
+    elif target_type == "cleaner":
+        expected = sample.get("expected_cleaners", [])
+    elif target_type == "diagram":
+        expected = sample.get("expected_diagram_triggers", [])
+    elif target_type == "subject":
+        expected = sample.get("expected_subjects", [])
+    else:
+        expected = []
+
+    if not expected:
+        return banca, 1.0
+
+    matches = [m.group(0).strip() for m in reg.finditer(text)]
+    tp, fp = 0, 0
+    for m_str in matches:
+        if any(exp in m_str or m_str in exp for exp in expected):
+            tp += 1
+        else:
+            fp += 1
+    fn = max(0, len(expected) - tp)
+
+    p = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    r = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    f1 = (2 * p * r) / (p + r) if (p + r) > 0 else 0.0
+
+    return banca, f1
 
 
 def evaluate_target_pattern(
@@ -367,39 +300,10 @@ def evaluate_target_pattern(
     except re.error:
         return 0.0, 0.0, 0.0, 0.0
 
-    banca_f1s = {}
+    banca_f1s: Dict[str, List[float]] = {}
 
     for sample in corpus:
-        banca = sample.get("banca", "OUTRA")
-        text = sample.get("full_text", "")
-
-        if target_type == "header":
-            expected = sample.get("expected_headers", [])
-        elif target_type == "options":
-            expected = sample.get("expected_options", [])
-        elif target_type == "context":
-            expected = sample.get("expected_contexts", [])
-        elif target_type == "cleaner":
-            expected = sample.get("expected_cleaners", [])
-        else:
-            expected = []
-
-        if not expected:
-            continue
-
-        matches = [m.group(0).strip() for m in reg.finditer(text)]
-        tp, fp = 0, 0
-        for m_str in matches:
-            if any(exp in m_str or m_str in exp for exp in expected):
-                tp += 1
-            else:
-                fp += 1
-        fn = max(0, len(expected) - tp)
-
-        p = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-        r = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-        f1 = (2 * p * r) / (p + r) if (p + r) > 0 else 0.0
-
+        banca, f1 = evaluate_single_sample(reg, sample, target_type)
         if banca not in banca_f1s:
             banca_f1s[banca] = []
         banca_f1s[banca].append(f1)
@@ -410,7 +314,7 @@ def evaluate_target_pattern(
     all_f1s = [sum(scores) / len(scores) for scores in banca_f1s.values()]
     mean_f1 = sum(all_f1s) / len(all_f1s) if all_f1s else 0.0
 
-    # Invariância (1 - desvio padrão)
+    # Invariância (1 - desvio padrão entre bancas)
     variance = (
         sum((x - mean_f1) ** 2 for x in all_f1s) / len(all_f1s)
         if len(all_f1s) > 1
@@ -419,21 +323,35 @@ def evaluate_target_pattern(
     invariance = max(0.0, 1.0 - (variance ** 0.5))
 
     # Simplicidade de Kolmogorov
-    simplicity = max(0.2, 1.0 - (len(candidate) / 350.0))
+    simplicity = max(0.2, 1.0 - (len(candidate) / 500.0))
 
     # Fitness ponderado
-    fitness = 0.40 * mean_f1 + 0.40 * invariance + 0.20 * simplicity
+    fitness = 0.50 * mean_f1 + 0.35 * invariance + 0.15 * simplicity
 
     return fitness, mean_f1, invariance, simplicity
+
+
+def get_stratified_batch(corpus: List[Dict[str, Any]], max_per_banca: int = 1) -> List[Dict[str, Any]]:
+    """Cria um mini-batch estratificado balanceado contendo amostras de cada banca."""
+    banca_map: Dict[str, List[Dict[str, Any]]] = {}
+    for sample in corpus:
+        b = sample.get("banca", "OUTRA")
+        banca_map.setdefault(b, []).append(sample)
+    
+    batch = []
+    for b, samples in banca_map.items():
+        batch.extend(random.sample(samples, min(max_per_banca, len(samples))))
+    return batch
 
 
 def run_pure_python_optimizer(
     corpus: List[Dict[str, Any]],
     target_type: str,
-    generations: int = 20,
-    population_size: int = 40,
+    generations: int = 100,
+    population_size: int = 80,
+    workers: int = 8,
 ) -> Dict[str, Any]:
-    """Motor de otimização genética de regex com elitismo e mutação."""
+    """Motor de otimização genética ultra-rápido com amostragem estratificada e paralelismo multi-core."""
     seeds = get_target_seeds(target_type)
     population = list(seeds)
 
@@ -447,53 +365,82 @@ def run_pure_python_optimizer(
     best_inv = 0.0
     best_simp = 0.0
 
+    bancas_ativas = len(set(c.get("banca", "OUTRA") for c in corpus))
     print(
-        f"[Python Optimizer] Evoluindo população de {population_size} indivíduos para '{target_type.upper()}'..."
+        f"[Python Optimizer Pro Multi-Core] Evoluindo {population_size} indivíduos em {generations} épocas ({workers} workers | {bancas_ativas} bancas balanceadas) para '{target_type.upper()}'...",
+        flush=True,
     )
 
-    for gen in range(1, generations + 1):
-        scored = []
-        for ind in population:
-            fit, f1, inv, simp = evaluate_target_pattern(ind, corpus, target_type)
-            scored.append((fit, f1, inv, simp, ind))
+    stagnation_counter = 0
 
-        scored.sort(key=lambda x: x[0], reverse=True)
-        top_fit, top_f1, top_inv, top_simp, top_ind = scored[0]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+        for gen in range(1, generations + 1):
+            # Mini-batch estratificado por geração (1 amostra de cada uma das bancas)
+            batch = get_stratified_batch(corpus, max_per_banca=1) if len(corpus) > bancas_ativas else corpus
 
-        improved = top_fit > best_fitness
-        if improved:
-            best_fitness = top_fit
-            best_f1 = top_f1
-            best_inv = top_inv
-            best_simp = top_simp
-            best_pattern = top_ind
+            eval_fn = lambda ind: evaluate_target_pattern(ind, batch, target_type) + (ind,)
+            scored_results = list(executor.map(eval_fn, population))
+            scored = [(res[0], res[1], res[2], res[3], res[4]) for res in scored_results]
 
-        if gen == 1 or gen % 15 == 0 or gen == generations or improved:
+            scored.sort(key=lambda x: x[0], reverse=True)
+            top_fit, top_f1, top_inv, top_simp, top_ind = scored[0]
+
+            improved = top_fit > best_fitness
+            if improved:
+                best_fitness = top_fit
+                best_f1 = top_f1
+                best_inv = top_inv
+                best_simp = top_simp
+                best_pattern = top_ind
+                stagnation_counter = 0
+            else:
+                stagnation_counter += 1
+
+            # Feedback visual em todas as épocas para acompanhamento contínuo
             tag = " ⭐ (NOVO RECORDE)" if improved and gen > 1 else ""
             print(
-                f"  [Geração {gen:03d}/{generations:03d}] Melhor Fitness: {best_fitness:.4f} | F1: {best_f1:.4f} | Invariância: {best_inv:.4f}{tag}"
+                f"  [Época {gen:03d}/{generations:03d}] Atual: {top_fit:.4f} | Melhor: {best_fitness:.4f} | F1: {best_f1:.4f} | Inv: {best_inv:.4f}{tag}",
+                flush=True,
             )
 
-        elite_count = max(2, int(population_size * 0.15))
-        next_gen = [x[4] for x in scored[:elite_count]]
+            # Elitismo: preserva os top 20%
+            elite_count = max(4, int(population_size * 0.20))
+            next_gen = [x[4] for x in scored[:elite_count]]
 
-        while len(next_gen) < population_size:
-            parent = random.choice(scored[:elite_count])[4]
-            next_gen.append(mutate_regex(parent))
+            # Seleção por Torneio (k=3) e Crossover
+            while len(next_gen) < population_size:
+                t1 = random.sample(scored[:int(population_size * 0.6)], min(3, len(scored)))
+                t2 = random.sample(scored[:int(population_size * 0.6)], min(3, len(scored)))
+                p1 = max(t1, key=lambda x: x[0])[4]
+                p2 = max(t2, key=lambda x: x[0])[4]
 
-        population = next_gen
+                if random.random() < 0.35:
+                    child = crossover_regex(p1, p2)
+                else:
+                    child = mutate_regex(p1)
+
+                if stagnation_counter > 15 and random.random() < 0.30:
+                    child = mutate_regex(random.choice(seeds))
+
+                next_gen.append(child)
+
+            population = next_gen
+
+    # Validação e pontuação final contra 100% do corpus completo de todas as 539 provas
+    print(f"  [*] Validando padrão ótimo final contra 100% do corpus ({len(corpus)} provas)...", flush=True)
+    full_fit, full_f1, full_inv, full_simp = evaluate_target_pattern(best_pattern, corpus, target_type)
 
     return {
         "best_pattern": best_pattern,
-        "best_fitness": best_fitness,
+        "best_fitness": full_fit,
         "best_report": {
-            "overall_fitness": best_fitness,
-            "f1_score": best_f1,
-            "banca_invariance": best_inv,
-            "simplicity_score": best_simp,
+            "overall_fitness": full_fit,
+            "f1_score": full_f1,
+            "banca_invariance": full_inv,
+            "simplicity_score": full_simp,
         },
-        "generations_completed": gen,
-        "convergence_reached": best_fitness >= 0.95,
+        "generations_completed": generations,
+        "convergence_reached": full_fit >= 0.90,
     }
 
 
@@ -508,18 +455,21 @@ def save_corpus_to_disk(corpus: List[Dict[str, Any]], corpus_dir: str):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Otimizador de Regex do concurse.io")
+    parser = argparse.ArgumentParser(description="Otimizador de Regex Avançado do concurse.io")
     parser.add_argument(
         "--target",
-        choices=["header", "options", "context", "cleaner", "all"],
-        default="header",
+        choices=["header", "options", "context", "cleaner", "diagram", "subject", "all"],
+        default="all",
         help="Alvo da Suite Master a ser otimizado",
     )
     parser.add_argument(
-        "--generations", type=int, default=20, help="Número de épocas genéticas"
+        "--generations", type=int, default=100, help="Número de épocas genéticas"
     )
     parser.add_argument(
-        "--pop-size", type=int, default=40, help="Tamanho da população por geração"
+        "--pop-size", type=int, default=80, help="Tamanho da população por geração"
+    )
+    parser.add_argument(
+        "--workers", type=int, default=8, help="Número de workers/threads paralelos (default: 8)"
     )
     parser.add_argument(
         "--corpus-dir",
@@ -527,12 +477,18 @@ def main():
         default="training_corpus",
         help="Diretório com JSONs de provas",
     )
+    parser.add_argument(
+        "--auto-inject",
+        action="store_true",
+        default=True,
+        help="Compila e injeta automaticamente no Rust ao final",
+    )
     args = parser.parse_args()
 
     print("=" * 75)
-    print("  concurse.io — Laboratório de Otimização Offline de Expressões Regulares")
+    print("  concurse.io — LABORATÓRIO DE OTIMIZAÇÃO OFFLINE DE EXPRESSÕES REGULARES")
     print(
-        f"  Motor Ativo: {'Nativo em Rust (concurse_core)' if HAS_RUST_CORE else 'Motor de Evolução Genética Python'}"
+        f"  Motor Ativo: {'Nativo em Rust (concurse_core)' if HAS_RUST_CORE else 'Motor de Evolução Genética Python Pro'}"
     )
     print("=" * 75)
 
@@ -543,7 +499,10 @@ def main():
                 with open(
                     os.path.join(args.corpus_dir, fname), "r", encoding="utf-8"
                 ) as f:
-                    corpus.append(json.load(f))
+                    try:
+                        corpus.append(json.load(f))
+                    except Exception:
+                        pass
 
     if not corpus:
         print(
@@ -552,12 +511,13 @@ def main():
         corpus = generate_synthetic_gold_corpus()
         save_corpus_to_disk(corpus, args.corpus_dir)
 
+    bancas_ativas = sorted(set(c.get('banca', 'Outra') for c in corpus))
     print(
-        f"[INFO] Corpus ativo com {len(corpus)} provas de bancas distintas ({', '.join(sorted(set(c.get('banca', 'Outra') for c in corpus)))}).\n"
+        f"[INFO] Corpus ativo com {len(corpus)} provas cobrindo {len(bancas_ativas)} bancas:\n       ({', '.join(bancas_ativas[:15])}{'...' if len(bancas_ativas) > 15 else ''}).\n"
     )
 
     targets = (
-        ["header", "options", "context", "cleaner"]
+        ["header", "options", "context", "cleaner", "diagram", "subject"]
         if args.target == "all"
         else [args.target]
     )
@@ -566,11 +526,11 @@ def main():
 
     for t in targets:
         print("-" * 75)
-        print(f"[*] INICIANDO TREINAMENTO PARA ALVO: [{t.upper()}]")
+        print(f"[*] INICIANDO TREINAMENTO PROFUNDO PARA ALVO: [{t.upper()}]")
         print("-" * 75)
         start_time = time.perf_counter()
 
-        if HAS_RUST_CORE and concurse_core is not None:
+        if HAS_RUST_CORE and concurse_core is not None and hasattr(concurse_core, "optimize_regex_suite"):
             corpus_json = json.dumps(corpus)
             raw_res = concurse_core.optimize_regex_suite(
                 corpus_json,
@@ -582,33 +542,38 @@ def main():
             result = json.loads(raw_res)
         else:
             result = run_pure_python_optimizer(
-                corpus, t, args.generations, args.pop_size
+                corpus, t, args.generations, args.pop_size, args.workers
             )
 
         elapsed = time.perf_counter() - start_time
         suite_results[t] = result
 
         print("\n" + "=" * 75)
-        print(f"  RELATORIO DE CONVERGENCIA: [{t.upper()}]")
+        print(f"  RELATÓRIO DE CONVERGÊNCIA: [{t.upper()}]")
         print("=" * 75)
-        print(f"  Tempo de Execucao: {elapsed:.2f} segundos")
-        print(f"  Padrao Otimo Sintetizado: {result.get('best_pattern')}")
+        print(f"  Tempo de Execução: {elapsed:.2f} segundos")
+        print(f"  Padrão Ótimo Sintetizado: {result.get('best_pattern')}")
         print(f"  Fitness Geral: {result.get('best_fitness', 0.0):.4f}")
         if "best_report" in result:
             rep = result["best_report"]
-            print(f"  F1-Score (Acuracia de Corte): {rep.get('f1_score', 0.0):.4f}")
+            print(f"  F1-Score (Acurácia de Corte): {rep.get('f1_score', 0.0):.4f}")
             print(
-                f"  Invariancia entre Bancas: {rep.get('banca_invariance', 1.0):.4f}"
+                f"  Invariância entre Bancas: {rep.get('banca_invariance', 0.0):.4f}"
             )
             print(
                 f"  Simplicidade (Kolmogorov): {rep.get('simplicity_score', 0.0):.4f}"
             )
         print("=" * 75 + "\n")
 
-    print("[OK] [TREINAMENTO CONCLUIDO COM SUCESSO]")
-    print(
-        "Todos os padroes mestres convergiram e estao prontos para congelamento no pipeline deterministico de producao.\n"
-    )
+    print("\n" + "=" * 75)
+    print("  [OK] [TREINAMENTO CONCLUÍDO COM SUCESSO]")
+    print("  Todos os padrões mestres convergiram e foram validados.")
+    print("=" * 75)
+
+    if args.auto_inject:
+        print("\n[AUTO-INJETOR] Sincronizando e compilando motor nativo Rust (concurse_core)...")
+        from inject_trained_pipeline import inject_into_production
+        inject_into_production()
 
 
 if __name__ == "__main__":

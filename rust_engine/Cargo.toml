@@ -1,0 +1,13 @@
+[package]
+name = "concurse_core"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "concurse_core"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.22", features = ["extension-module"] }
+regex = "1.10"
+once_cell = "1.19"

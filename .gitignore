@@ -69,6 +69,12 @@ pw_user_data/
 Thumbs.db
 desktop.ini
 
+# Rust Artifacts
+rust_engine/target/
+**/target/
+*.pyd
+*.whl
+
 # Logs & Test Caches
 *.log
 npm-debug.log*

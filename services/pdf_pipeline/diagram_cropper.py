@@ -33,6 +33,11 @@ import collections
 import argparse
 from typing import List, Dict, Any, Optional, Tuple, Set
 
+try:
+    from .rust_bridge import rust_match_image_triggers
+except ImportError:
+    rust_match_image_triggers = lambda text: None
+
 
 # =============================================================================
 # CONSTANTES E PADRÕES REGEX DETERMINÍSTICOS
@@ -335,7 +340,14 @@ class ExamImageExtractor:
         # -------------------------------------------------------------------------
         for q in questions:
             enunciado = q.get('enunciado', q.get('statement', ''))
-            has_trigger = bool(IMAGE_TRIGGER_REGEX.search(enunciado))
+            
+            # Verificação com aceleração Rust (fallback regex)
+            rust_res = rust_match_image_triggers(enunciado)
+            if rust_res is not None:
+                has_trigger = rust_res.get('has_trigger', False)
+            else:
+                has_trigger = bool(IMAGE_TRIGGER_REGEX.search(enunciado))
+
             if not has_trigger:
                 continue
 

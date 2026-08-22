@@ -1,4 +1,10 @@
 import re
+from typing import Optional
+
+try:
+    from .rust_bridge import rust_classify_subject
+except ImportError:
+    rust_classify_subject = lambda text: None
 
 # Dicionário de matérias conhecidas em concursos públicos brasileiros (tolerante a encoding e variações)
 SUBJECT_PATTERNS = [
@@ -51,6 +57,12 @@ def format_subject_title(raw_text: str) -> str:
     """Normaliza o nome da matéria para seu título canônico em português."""
     if not raw_text:
         return 'Geral'
+    
+    # 1. Consulta prioritária de altíssima velocidade em Rust
+    rust_res = rust_classify_subject(raw_text)
+    if rust_res and rust_res != 'Geral':
+        return rust_res
+
     normalized = raw_text.strip()
     normalized_clean = re.sub(r'[\ufffd\?]', '', normalized)
     

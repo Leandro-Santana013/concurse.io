@@ -21,6 +21,7 @@ from .formula_formatter import format_latex_formulas
 from .subject_classifier import SUBJECT_REGEX, format_subject_title, _format_subject_title
 from services.gabarito_service import extract_gabarito_from_doc, _extract_gabarito_from_doc
 from services.html_exam_parser import clean_text_artifacts
+from .rust_bridge import rust_scan_question_headers, is_rust_available
 
 def parse_exam_document(
     pdf_bytes_or_path: Any,
@@ -126,67 +127,75 @@ def parse_exam_document(
     # 5. Mapeia textos de apoio compartilhados
     context_blocks = extract_context_blocks(full_text)
 
-    # 6. Scanner Global de Cabeçalhos de Questões (Duas Fases: Detecção + DP Chain)
-    header_pat = re.compile(
-        r'(?:^|\n)\s*'
-        r'(?:'
-        r'(?:QUEST[AÃ\ufffd\?]?O\s+|ITEM\s+)(0*\d{1,3})\s*(?:[\.\-\–\—\:\)]|\n+|\s+(?=[A-Z\u00C0-\u00DC\"“\'‘\(]))|'
-        r'(0*\d{1,3})\s*[\.\-\–\—\:\)]\s*(?=[A-Z\u00C0-\u00DC\"“\'‘\(])|'
-        r'\((0*\d{1,3})\)\s*(?=[A-Z\u00C0-\u00DC\"“\'‘\(])|'
-        r'(0*\d{1,3})\s*(?:\n+|\s+)(?=[A-Z\u00C0-\u00DC\"“\'‘\(])'
-        r')',
-        re.IGNORECASE
-    )
-
-    candidates = []
-    for m in header_pat.finditer(full_text):
-        q_str = m.group(1) or m.group(2) or m.group(3) or m.group(4)
-        if not q_str:
-            continue
-        try:
-            q_num = int(q_str)
-        except ValueError:
-            continue
-
-        if not (1 <= q_num <= 200):
-            continue
-
-        preview = full_text[m.end():m.end() + 150].upper()
-        if any(bad in preview for bad in ['RECEBEU DO FISCAL', 'CARTÃO-RESPOSTA', 'PREENCHA O CART', 'TEMPO DISPONÍVEL']):
-            continue
-
-        is_explicit = bool(m.group(1))
-        candidates.append((m.start(), m.end(), q_num, is_explicit))
-
-    # Algoritmo de Encadeamento Ótimo por Programação Dinâmica
+    # 6. Scanner Global de Cabeçalhos de Questões (Aceleração Rust nativa + Fallback Python)
+    rust_headers = rust_scan_question_headers(full_text)
     found_positions = []
-    if candidates:
-        n = len(candidates)
-        dp = [1] * n
-        prev = [-1] * n
 
-        for i in range(n):
-            for j in range(i):
-                diff = candidates[i][2] - candidates[j][2]
-                if 1 <= diff <= 4:
-                    step_score = (10 if diff == 1 else (5 if diff == 2 else 2)) + (3 if candidates[i][3] else 0)
+    if rust_headers:
+        found_positions = [(item['number'], item['start'], item['end']) for item in rust_headers]
+    else:
+        candidates = []
+        for m in header_pat.finditer(full_text):
+            q_str = m.group(1) or m.group(2) or m.group(3) or m.group(4)
+            if not q_str:
+                continue
+            try:
+                q_num = int(q_str)
+            except ValueError:
+                continue
+
+            if not (1 <= q_num <= 200):
+                continue
+
+            # Verifica se não é parte de uma alternativa (ex: "(A) 84.") na mesma linha
+            match_str = m.group(0)
+            if not match_str.startswith('\n'):
+                start_line = full_text.rfind('\n', 0, m.start())
+                start_line = 0 if start_line == -1 else start_line + 1
+                line_prefix = full_text[start_line:m.start()].strip()
+                if re.search(r'^[A-Ea-e]\s*[\)\.\-–]\s*$', line_prefix):
+                    continue
+
+            preview = full_text[m.end():m.end() + 150].upper()
+            if any(bad in preview for bad in ['RECEBEU DO FISCAL', 'CARTÃO-RESPOSTA', 'PREENCHA O CART', 'TEMPO DISPONÍVEL', 'CONFIDENCIAL ATÉ']):
+                continue
+
+            is_explicit = bool(m.group(1))
+            candidates.append((m.start(), m.end(), q_num, is_explicit))
+
+        # Algoritmo de Encadeamento Ótimo por Programação Dinâmica (favorece sequência contínua)
+        if candidates:
+            n = len(candidates)
+            dp = [1] * n
+            prev = [-1] * n
+
+            for i in range(n):
+                for j in range(i):
+                    diff = candidates[i][2] - candidates[j][2]
+                    if diff == 1:
+                        step_score = 100 + (5 if candidates[i][3] else 0)
+                    elif 2 <= diff <= 4:
+                        step_score = (25 - diff * 5) + (5 if candidates[i][3] else 0)
+                    else:
+                        continue
+
                     if dp[j] + step_score > dp[i]:
                         dp[i] = dp[j] + step_score
                         prev[i] = j
 
-        best_idx = max(range(n), key=lambda idx: dp[idx])
-        curr = best_idx
-        while curr != -1:
-            found_positions.append((candidates[curr][2], candidates[curr][0], candidates[curr][1]))
-            curr = prev[curr]
-        found_positions.reverse()
+            best_idx = max(range(n), key=lambda idx: dp[idx])
+            curr = best_idx
+            while curr != -1:
+                found_positions.append((candidates[curr][2], candidates[curr][0], candidates[curr][1]))
+                curr = prev[curr]
+            found_positions.reverse()
 
-    # Fallback caso a cadeia DP não tenha identificado posições suficientes
-    if not found_positions:
-        for m in header_pat.finditer(full_text):
-            q_str = m.group(1) or m.group(2) or m.group(3) or m.group(4)
-            if q_str and 1 <= int(q_str) <= 200:
-                found_positions.append((int(q_str), m.start(), m.end()))
+        # Fallback caso a cadeia DP não tenha identificado posições suficientes
+        if not found_positions:
+            for m in header_pat.finditer(full_text):
+                q_str = m.group(1) or m.group(2) or m.group(3) or m.group(4)
+                if q_str and 1 <= int(q_str) <= 200:
+                    found_positions.append((int(q_str), m.start(), m.end()))
 
     # 7. Estruturação das Questões, Alternativas e Fórmulas
     questions = []
@@ -194,6 +203,13 @@ def parse_exam_document(
 
     for i, (q_num, start_pos, end_pos) in enumerate(found_positions):
         next_start = found_positions[i+1][1] if i+1 < len(found_positions) else len(full_text)
+        
+        # Trunca o chunk se houver um banner de texto de apoio antes da próxima questão
+        for _, _, _, banner_start in context_blocks:
+            if end_pos < banner_start < next_start:
+                next_start = banner_start
+                break
+
         chunk = full_text[end_pos:next_start].strip()
 
         # Disciplina no prelúdio
@@ -241,9 +257,10 @@ def parse_exam_document(
         )
         matches = list(pattern_primary.finditer(chunk))
 
-        def find_valid_sequence(match_list):
+        def find_valid_sequence(match_list, chunk_length):
             if not match_list or len(match_list) < 2:
                 return None
+            valid_sequences = []
             start_indices = [idx for idx, m in enumerate(match_list) if (m.group(1) or m.group(2) or m.group(3) or m.group(4) or '').upper() == 'A']
             for s_idx in start_indices:
                 seq = [match_list[s_idx]]
@@ -258,15 +275,20 @@ def parse_exam_document(
                     elif ord(letter) < expected_ord:
                         continue
                 if len(seq) >= 3:
-                    return seq
-            return None
+                    # Pontuação: 5 opções > 4 opções > 3 opções; e posições finais no chunk têm preferência sobre subitens iniciais
+                    score = len(seq) * 1000 + (seq[0].start() / max(1, chunk_length)) * 100
+                    valid_sequences.append((score, seq))
+            if not valid_sequences:
+                return None
+            valid_sequences.sort(key=lambda x: x[0], reverse=True)
+            return valid_sequences[0][1]
 
-        valid_seq = find_valid_sequence(matches)
+        valid_seq = find_valid_sequence(matches, len(chunk))
 
         if not valid_seq:
             pattern_newline_letter = re.compile(r'(?:^|\n)\s*([A-Ea-e])\s*(?:\n|\s{2,})')
             matches_nl = list(pattern_newline_letter.finditer(chunk))
-            valid_seq = find_valid_sequence(matches_nl)
+            valid_seq = find_valid_sequence(matches_nl, len(chunk))
 
         options = {}
         is_certo_errado = False
@@ -282,6 +304,13 @@ def parse_exam_document(
                 opt_content = chunk[s_val:e_val].strip()
                 opt_content = re.sub(r'^\(\s*\)\s*', '', opt_content)
                 opt_content = clean_text_artifacts(opt_content)
+                if o_idx == len(valid_seq) - 1:
+                    # Remove cabeçalho de disciplina colado no final da última alternativa (ex: '4-C Conhecimentos Específicos')
+                    opt_content = re.sub(r'\s*(?:Conhecimentos\s+Espec[íi\ufffd\?]?ficos|Conhecimentos\s+Gerais|L[íi\ufffd\?]?ngua\s+Portuguesa|No[çc\ufffd\?][õo\ufffd\?]?es\s+de\s+[^\n]+|Racioc[íi\ufffd\?]?nio\s+L[óo\ufffd\?]?gico[^\n]*)\s*$', '', opt_content, flags=re.IGNORECASE)
+                    opt_lines = opt_content.splitlines()
+                    while opt_lines and SUBJECT_REGEX.match(opt_lines[-1].strip()):
+                        opt_lines.pop()
+                    opt_content = '\n'.join(opt_lines).strip()
                 formatted_opt, _ = format_latex_formulas(opt_content)
                 options[letter] = formatted_opt
 
@@ -298,14 +327,14 @@ def parse_exam_document(
 
         # Injeção de Texto de Apoio Compartilhado
         matching_context = None
-        for q_min, q_max, ctx_text in context_blocks:
+        for q_min, q_max, ctx_text, _ in context_blocks:
             if q_min <= q_num <= q_max:
                 matching_context = (q_min, q_max, ctx_text)
                 break
 
         if matching_context:
             q_min, q_max, ctx_text = matching_context
-            if ctx_text[:40] not in formatted_enunciado:
+            if ctx_text[:30] not in formatted_enunciado:
                 formatted_enunciado = f"📖 **Texto de Apoio (Questões {q_min} a {q_max}):**\n\n{ctx_text}\n\n---\n\n{formatted_enunciado}"
 
         # Determinação da Resposta Oficial
@@ -337,6 +366,21 @@ def parse_exam_document(
             page_diagrams=page_diagrams,
             exam_id=exam_id or 0
         )
+
+    # 9. Propagação de imagens de textos de apoio para todas as questões do bloco compartilhado
+    for q_min, q_max, _, _ in context_blocks:
+        shared_imgs = []
+        for q in questions:
+            num_int = int(q.get('numero_questao', 0)) if str(q.get('numero_questao', '')).isdigit() else 0
+            if q_min <= num_int <= q_max and q.get('images'):
+                for img in q['images']:
+                    if img not in shared_imgs:
+                        shared_imgs.append(img)
+        if shared_imgs:
+            for q in questions:
+                num_int = int(q.get('numero_questao', 0)) if str(q.get('numero_questao', '')).isdigit() else 0
+                if q_min <= num_int <= q_max:
+                    q['images'] = list(shared_imgs)
 
     # Limpeza de atributos internos temporários
     for q in questions:
