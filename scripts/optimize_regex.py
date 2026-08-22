@@ -366,16 +366,12 @@ def evaluate_target_pattern(
     # Simplicidade de Kolmogorov
     simplicity = max(0.2, 1.0 - (len(candidate) / 500.0))
 
-    # Penalidade suave de latência de CPU (evita backtracking caro)
-    latency_score = max(0.5, 1.0 - min(1.0, eval_latency_ms / 150.0))
+    # Fitness ponderado padrão: 50% F1 + 35% Invariância + 15% Simplicidade
+    fitness = 0.50 * mean_f1 + 0.35 * invariance + 0.15 * simplicity
 
-    # Fitness ponderado multi-objetivo
-    fitness = (
-        0.45 * mean_f1
-        + 0.30 * invariance
-        + 0.15 * simplicity
-        + 0.10 * latency_score
-    )
+    # Guarda de segurança contra Catastrophic Backtracking (> 250ms)
+    if eval_latency_ms > 250.0:
+        fitness *= 0.80
 
     return fitness, mean_f1, invariance, simplicity, hard_ids
 
@@ -604,6 +600,25 @@ def main():
 
         elapsed = time.perf_counter() - start_time
         suite_results[t] = result
+
+        # Salva o checkpoint imediatamente em disco para não perder o resultado
+        os.makedirs("checkpoints", exist_ok=True)
+        checkpoint_file = os.path.join("checkpoints", "best_patterns.json")
+        saved_checkpoints = {}
+        if os.path.exists(checkpoint_file):
+            try:
+                with open(checkpoint_file, "r", encoding="utf-8") as cf:
+                    saved_checkpoints = json.load(cf)
+            except Exception:
+                pass
+        saved_checkpoints[t] = {
+            "pattern": result.get("best_pattern"),
+            "fitness": result.get("best_fitness"),
+            "f1_score": result.get("best_report", {}).get("f1_score", 0.0),
+            "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        with open(checkpoint_file, "w", encoding="utf-8") as cf:
+            json.dump(saved_checkpoints, cf, ensure_ascii=False, indent=2)
 
         print("\n" + "=" * 75)
         print(f"  RELATÓRIO DE CONVERGÊNCIA: [{t.upper()}]")
