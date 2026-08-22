@@ -38,7 +38,7 @@ def rust_scan_question_headers(full_text: str) -> Optional[List[Dict[str, Any]]]
         return None
     try:
         return concurse_core.scan_question_headers(full_text)
-    except Exception:
+    except BaseException:
         return None
 
 def rust_scan_context_banners(full_text: str) -> Optional[List[Dict[str, Any]]]:
@@ -50,7 +50,7 @@ def rust_scan_context_banners(full_text: str) -> Optional[List[Dict[str, Any]]]:
         return None
     try:
         return concurse_core.scan_context_banners(full_text)
-    except Exception:
+    except BaseException:
         return None
 
 def rust_parse_options_fast(chunk: str) -> Optional[Dict[str, Any]]:
@@ -62,7 +62,7 @@ def rust_parse_options_fast(chunk: str) -> Optional[Dict[str, Any]]:
         return None
     try:
         return concurse_core.parse_options_fast(chunk)
-    except Exception:
+    except BaseException:
         return None
 
 def rust_classify_subject(raw_text: str) -> Optional[str]:
@@ -74,7 +74,7 @@ def rust_classify_subject(raw_text: str) -> Optional[str]:
     try:
         res = concurse_core.classify_subject_canonical(raw_text)
         return res if res and res != "Geral" else None
-    except Exception:
+    except BaseException:
         return None
 
 def rust_scan_subject_sections(full_text: str) -> Optional[List[Dict[str, Any]]]:

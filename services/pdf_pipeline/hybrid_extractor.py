@@ -25,11 +25,59 @@ from .rust_bridge import rust_scan_question_headers, is_rust_available
 from .banca_clusterizer import detect_banca_family, get_specialized_patterns, BancaFamily
 from .typography_restorer import restore_exam_typography
 
+def extract_heuristic_options(chunk: str) -> Tuple[Optional[Dict[str, str]], str]:
+    """
+    Quando as alternativas não possuem letras (A), (B), (C), (D) explícitas
+    porque o scanner da banca transformou as letras em símbolos (@, §, (â, 6) ou removeu,
+    detecta as 4 ou 5 opções verticais finais e atribui A, B, C, D, E.
+    """
+    if not chunk or len(chunk.strip()) < 20:
+        return None, chunk
+
+    lines = [l.strip() for l in chunk.split('\n') if l.strip()]
+    
+    # Se temos poucas linhas separadas por newline, tenta quebrar por períodos após o comando da questão
+    if len(lines) < 4:
+        # Tenta isolar o comando (ex: "assinale a alternativa correta:")
+        m_cmd = re.search(r'(?:assinale|marque|indique|identifique|correto|incorreto|podemos\s+afirmar|conclui-se|qual\s+alternativa)[^\.\:\?]*[\.\:\?]\s*', chunk, re.IGNORECASE)
+        if m_cmd:
+            cmd_end = m_cmd.end()
+            enunc_part = chunk[:cmd_end].strip()
+            rest_part = chunk[cmd_end:].strip()
+            sub_lines = [l.strip() for l in re.split(r'(?:\n+|\.(?=\s+[A-Z\u00C0-\u00DC]))', rest_part) if l.strip()]
+            if len(sub_lines) in [4, 5]:
+                lines = [enunc_part] + sub_lines
+
+    if len(lines) < 4:
+        return None, chunk
+
+    cleaned_lines = []
+    for l in lines:
+        c = re.sub(r'^(?:[\@\§\©\®\•\*\#\(\[\{]{1,3}[A-Za-z0-9\s]*[\)\]\}]?|[A-Za-z]\s*[\.\,\)]|[\(]?\s*[\â\ã\ä\ö\ü\ç\§\©\®\d]\s*[\)]?)\s*', '', l).strip()
+        cleaned_lines.append(c if c else l)
+
+    for num_opts in [5, 4]:
+        if len(cleaned_lines) >= num_opts + 1:
+            candidate_opts = cleaned_lines[-num_opts:]
+            candidate_enunciado = '\n'.join(lines[:-num_opts]).strip()
+
+            if all(len(opt) >= 1 for opt in candidate_opts) and len(candidate_enunciado) >= 15:
+                letters = ['A', 'B', 'C', 'D', 'E'][:num_opts]
+                options_dict = {}
+                for idx, opt_txt in enumerate(candidate_opts):
+                    opt_clean = restore_exam_typography(opt_txt, is_option=True)
+                    formatted_opt, _ = format_latex_formulas(opt_clean)
+                    options_dict[letters[idx]] = formatted_opt
+                return options_dict, candidate_enunciado
+
+    return None, chunk
+
 def parse_exam_document(
     pdf_bytes_or_path: Any,
     exam_id: Optional[int] = None,
     extract_images: bool = True,
-    gabarito_override: Optional[str] = None
+    gabarito_override: Optional[str] = None,
+    force_ocr: bool = False
 ) -> List[Dict[str, Any]]:
     """
     Motor híbrido avançado de processamento de exames:
@@ -112,7 +160,7 @@ def parse_exam_document(
                 except ValueError:
                     pass
 
-        ordered_blocks = detect_layout_and_ordered_blocks(page, watermarks)
+        ordered_blocks = detect_layout_and_ordered_blocks(page, watermarks, force_ocr=force_ocr)
         for b in ordered_blocks:
             raw_blocks.append(b['text'])
 
@@ -126,88 +174,116 @@ def parse_exam_document(
         doc.close()
         return []
 
+    # 4.1 Normalização resiliente de cabeçalhos gerados por OCR degradado
+    full_text = re.sub(r'(?:\b|(?<=[\s\n]))(\d{1,3})\s*[\,\"\']+[ \t]*(?=[\.\,\:\'\`\~\s]*[A-Za-z\u00C0-\u00DC\"\'\(\[])', r'\n\1. ', full_text)
+    full_text = re.sub(r'(?:\b|(?<=[\s\n]))[íI!|](\d)\s*[\.\,\:\-\"\']+[ \t]*(?=[\.\,\:\'\`\~\s]*[A-Za-z\u00C0-\u00DC\"\'\(\[])', r'\n1\1. ', full_text)
+    full_text = re.sub(r'(?:\b|(?<=[\s\n]))3[üuU]\s*[\.\,\:\-\"\']+[ \t]*(?=[\.\,\:\'\`\~\s]*[A-Za-z\u00C0-\u00DC\"\'\(\[])', r'\n30. ', full_text)
+    full_text = re.sub(r'(?:\b|(?<=[\s\n]))[íI!|]0\s*[\.\,\:\-\"\']+[ \t]*(?=[\.\,\:\'\`\~\s]*[A-Za-z\u00C0-\u00DC\"\'\(\[])', r'\n10. ', full_text)
+
     # 5. Scanner Global de Cabeçalhos de Questões (Aceleração Rust nativa + Fallback Python)
     rust_headers = rust_scan_question_headers(full_text)
     found_positions = []
 
     header_pat = re.compile(
-        r'(?i)(?:^|\n)[ \t]*(?:(?:QUEST[AÃ\?]?O\s+|ITEM\s+)(0*\d{1,3})[ \t]*(?:[\.\-–—:\)]|\n+|[ \t]+)|(0*\d{1,3})[ \t]*[\.\-–—:\)][ \t]+|\((0*\d{1,3})\)[ \t]+)'
+        r'(?i)(?:^|\n|\.\s+|\s{2,})(?:(?:QUEST[AÃ\?]?O\s+|ITEM\s+)(0*\d{1,3})[ \t]*(?:[\.\-–—:\)]|\n+|[ \t]+)|(0*\d{1,3})[ \t]*[\.\-–—:\)][ \t]*(?=[\.\,\:\'\`\~]*[A-Za-z\u00C0-\u00DC\"\'\(\[])|\((0*\d{1,3})\)[ \t]+)'
     )
 
-    if rust_headers:
+    py_found_positions = []
+    candidates = []
+    for m in header_pat.finditer(full_text):
+        q_str = m.group(1) or m.group(2) or m.group(3) or m.group(4)
+        if not q_str:
+            continue
+        try:
+            q_num = int(q_str)
+        except ValueError:
+            continue
+
+        if not (1 <= q_num <= 200):
+            continue
+
+        # Verifica se não é parte de uma alternativa (ex: "(A) 84.") na mesma linha
+        match_str = m.group(0)
+        if not match_str.startswith('\n'):
+            start_line = full_text.rfind('\n', 0, m.start())
+            start_line = 0 if start_line == -1 else start_line + 1
+            line_prefix = full_text[start_line:m.start()].strip()
+            if re.search(r'^[A-Ea-e]\s*[\)\.\-–]\s*$', line_prefix):
+                continue
+
+        preview = full_text[m.end():m.end() + 150].upper()
+        if any(bad in preview for bad in ['RECEBEU DO FISCAL', 'CARTÃO-RESPOSTA', 'PREENCHA O CART', 'TEMPO DISPONÍVEL', 'CONFIDENCIAL ATÉ']):
+            continue
+
+        is_explicit = bool(m.group(1))
+
+        if not is_explicit:
+            prefix_slice = full_text[max(0, m.start() - 40):m.start()].upper()
+            if any(bad in prefix_slice for bad in ['QUADRO', 'FIGURA', 'TABELA', 'TEXTO', 'PÁGINA', 'PAGINA', 'ART.', 'ARTIGO', 'QUESTÕES DE', 'QUESTOES DE']):
+                continue
+
+        candidates.append((m.start(), m.end(), q_num, is_explicit))
+
+    # Algoritmo de Encadeamento Ótimo por Programação Dinâmica (favorece sequência contínua)
+    if candidates:
+        n = len(candidates)
+        dp = [1] * n
+        prev = [-1] * n
+
+        for i in range(n):
+            for j in range(i):
+                diff = candidates[i][2] - candidates[j][2]
+                dist = max(0, candidates[i][0] - candidates[j][1])
+                dist_penalty = 15 if dist > 10000 else (5 if dist > 5000 else 0)
+
+                if diff == 1:
+                    step_score = 1000 + (200 if candidates[i][3] else 0) + (200 if candidates[j][3] else 0) - dist_penalty
+                elif 2 <= diff <= 4:
+                    step_score = (200 - diff * 30) + (50 if candidates[i][3] else 0) - dist_penalty
+                else:
+                    continue
+
+                if dp[j] + step_score > dp[i]:
+                    dp[i] = dp[j] + step_score
+                    prev[i] = j
+
+        best_idx = max(range(n), key=lambda idx: dp[idx])
+        curr = best_idx
+        while curr != -1:
+            py_found_positions.append((candidates[curr][2], candidates[curr][0], candidates[curr][1]))
+            curr = prev[curr]
+        py_found_positions.reverse()
+
+    # Mapeamento de candidatos únicos por número de questão
+    unique_candidates_by_num = {}
+    all_header_spans = []
+    for c in candidates:
+        all_header_spans.append((c[0], c[1], c[2]))
+        q_n = c[2]
+        is_exp = c[3]
+        if q_n not in unique_candidates_by_num or is_exp:
+            unique_candidates_by_num[q_n] = (c[0], c[1])
+
+    all_header_spans.sort(key=lambda x: x[0])
+
+    if len(unique_candidates_by_num) >= max(len(py_found_positions) + 2, 10):
+        found_positions = []
+        max_q = max(unique_candidates_by_num.keys())
+        for q_idx in range(1, max_q + 1):
+            if q_idx in unique_candidates_by_num:
+                s_p, e_p = unique_candidates_by_num[q_idx]
+                found_positions.append((q_idx, s_p, e_p))
+    elif rust_headers and len(rust_headers) > len(py_found_positions):
         found_positions = [(item['number'], item['start'], item['end']) for item in rust_headers]
     else:
-        candidates = []
+        found_positions = py_found_positions
+
+    # Fallback caso a cadeia DP não tenha identificado posições suficientes
+    if not found_positions:
         for m in header_pat.finditer(full_text):
             q_str = m.group(1) or m.group(2) or m.group(3) or m.group(4)
-            if not q_str:
-                continue
-            try:
-                q_num = int(q_str)
-            except ValueError:
-                continue
-
-            if not (1 <= q_num <= 200):
-                continue
-
-            # Verifica se não é parte de uma alternativa (ex: "(A) 84.") na mesma linha
-            match_str = m.group(0)
-            if not match_str.startswith('\n'):
-                start_line = full_text.rfind('\n', 0, m.start())
-                start_line = 0 if start_line == -1 else start_line + 1
-                line_prefix = full_text[start_line:m.start()].strip()
-                if re.search(r'^[A-Ea-e]\s*[\)\.\-–]\s*$', line_prefix):
-                    continue
-
-            preview = full_text[m.end():m.end() + 150].upper()
-            if any(bad in preview for bad in ['RECEBEU DO FISCAL', 'CARTÃO-RESPOSTA', 'PREENCHA O CART', 'TEMPO DISPONÍVEL', 'CONFIDENCIAL ATÉ']):
-                continue
-
-            is_explicit = bool(m.group(1))
-
-            if not is_explicit:
-                prefix_slice = full_text[max(0, m.start() - 40):m.start()].upper()
-                if any(bad in prefix_slice for bad in ['QUADRO', 'FIGURA', 'TABELA', 'TEXTO', 'PÁGINA', 'PAGINA', 'ART.', 'ARTIGO', 'QUESTÕES DE', 'QUESTOES DE']):
-                    continue
-
-            candidates.append((m.start(), m.end(), q_num, is_explicit))
-
-        # Algoritmo de Encadeamento Ótimo por Programação Dinâmica (favorece sequência contínua)
-        if candidates:
-            n = len(candidates)
-            dp = [1] * n
-            prev = [-1] * n
-
-            for i in range(n):
-                for j in range(i):
-                    diff = candidates[i][2] - candidates[j][2]
-                    dist = max(0, candidates[i][0] - candidates[j][1])
-                    dist_penalty = 15 if dist > 10000 else (5 if dist > 5000 else 0)
-
-                    if diff == 1:
-                        step_score = 1000 + (200 if candidates[i][3] else 0) + (200 if candidates[j][3] else 0) - dist_penalty
-                    elif 2 <= diff <= 3:
-                        step_score = (200 - diff * 40) + (50 if candidates[i][3] else 0) - dist_penalty
-                    else:
-                        continue
-
-                    if dp[j] + step_score > dp[i]:
-                        dp[i] = dp[j] + step_score
-                        prev[i] = j
-
-            best_idx = max(range(n), key=lambda idx: dp[idx])
-            curr = best_idx
-            while curr != -1:
-                found_positions.append((candidates[curr][2], candidates[curr][0], candidates[curr][1]))
-                curr = prev[curr]
-            found_positions.reverse()
-
-        # Fallback caso a cadeia DP não tenha identificado posições suficientes
-        if not found_positions:
-            for m in header_pat.finditer(full_text):
-                q_str = m.group(1) or m.group(2) or m.group(3) or m.group(4)
-                if q_str and 1 <= int(q_str) <= 200:
-                    found_positions.append((int(q_str), m.start(), m.end()))
+            if q_str and 1 <= int(q_str) <= 200:
+                found_positions.append((int(q_str), m.start(), m.end()))
 
     # 6. Mapeia textos de apoio compartilhados com base nas posições exatas das questões
     context_blocks = extract_context_blocks(full_text, found_positions)
@@ -217,7 +293,8 @@ def parse_exam_document(
     current_subject = 'Geral'
 
     for i, (q_num, start_pos, end_pos) in enumerate(found_positions):
-        next_start = found_positions[i+1][1] if i+1 < len(found_positions) else len(full_text)
+        next_headers = [h for h in all_header_spans if h[0] > start_pos]
+        next_start = next_headers[0][0] if next_headers else len(full_text)
         
         # Trunca o chunk se houver um banner de texto de apoio antes da próxima questão
         for _, _, _, banner_start in context_blocks:
@@ -332,11 +409,17 @@ def parse_exam_document(
 
             enunciado = clean_text_artifacts(raw_enunciado)
         else:
-            # Detecta estilo CEBRASPE / Assertiva Certo ou Errado
-            chunk_clean = clean_text_artifacts(chunk)
-            is_certo_errado = True
-            options = {'C': 'Certo', 'E': 'Errado'}
-            enunciado = chunk_clean
+            # Fallback 1: Heurística para OCR degradado / símbolos de checkbox no lugar de A..E
+            h_opts, h_enunciado = extract_heuristic_options(chunk)
+            if h_opts:
+                options = h_opts
+                enunciado = clean_text_artifacts(h_enunciado)
+            else:
+                # Fallback 2: Detecta estilo CEBRASPE / Assertiva Certo ou Errado
+                chunk_clean = clean_text_artifacts(chunk)
+                is_certo_errado = True
+                options = {'C': 'Certo', 'E': 'Errado'}
+                enunciado = chunk_clean
 
         # Fórmulas KaTeX no enunciado
         formatted_enunciado, has_latex_enunciado = format_latex_formulas(enunciado)

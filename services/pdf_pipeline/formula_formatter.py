@@ -52,8 +52,8 @@ def format_latex_formulas(text: str) -> Tuple[str, bool]:
         text = re.sub(r'(?<=\s)(\d+)/(\d+)(?=\s|\.|\,)', r'$\\frac{\1}{\2}$', text)
         has_latex = True
 
-    # 5. Detecção de blocos já em notação LaTeX ($...$ ou $$...$$ ou \frac)
-    if '$' in text or '\\frac' in text or '\\sqrt' in text or '\\sum' in text:
+    # 5. Detecção de blocos já em notação LaTeX ($$...$$ ou comandos LaTeX explícitos)
+    if '$$' in text or '\\frac' in text or '\\sqrt' in text or '\\sum' in text or '\\times' in text or '\\div' in text or '\\leq' in text or '\\geq' in text or '\\neq' in text:
         has_latex = True
 
     return text, has_latex

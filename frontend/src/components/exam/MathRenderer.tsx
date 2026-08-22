@@ -6,7 +6,35 @@ interface MathRendererProps {
   className?: string;
 }
 
-// Renderiza uma tabela Markdown simples em HTML estilizado
+// Verifica se um trecho $...$ é uma fórmula LaTeX real ou apenas valor monetário/texto
+const isRealLatexFormula = (str: string): boolean => {
+  if (!str) return false;
+  const trimmed = str.trim();
+  
+  // Moeda comum (ex: 150, 150 million, 10.00, 500 mil, etc.) -> NÃO é LaTeX!
+  if (/^\d+(?:[.,]\d+)?\s*(?:million|billion|trillion|mil|milhões|bilhões|milhoes|bilhoes|k|m|b)?$/i.test(trimmed)) {
+    return false;
+  }
+  
+  // Se contiver comandos explícitos de LaTeX ou caracteres matemáticos típicos
+  if (/[\\[\]{}^_]|\\[a-zA-Z]+|\\frac|\\sqrt|\\times|\\div|\\leq|\\geq|\\neq|\\in|\\pm|\\alpha|\\beta|\\theta|\\pi|\\cdot/.test(trimmed)) {
+    return true;
+  }
+  
+  // Se contiver muitas palavras normais ou pontuação de narrativa -> NÃO é LaTeX
+  if (/\b(?:the|and|for|about|according|when|was|were|that|this|with|from|como|para|sobre|entre|pelo|pela)\b/i.test(trimmed)) {
+    return false;
+  }
+  
+  // Expressão matemática compacta (ex: x + y = 2, f(x) = 0, a^2 + b^2)
+  if (/^[a-zA-Z0-9\s+\-*\/=()<>]+$/.test(trimmed) && trimmed.length <= 40 && /[+\-*\/=^<>]/.test(trimmed)) {
+    return true;
+  }
+  
+  return false;
+};
+
+// Renderiza tabela Markdown simples em HTML estilizado
 const renderMarkdownTable = (tableText: string, keyPrefix: string | number) => {
   const lines = tableText.trim().split('\n').filter(l => l.includes('|'));
   if (lines.length < 2) return null;
@@ -59,7 +87,35 @@ const renderMarkdownTable = (tableText: string, keyPrefix: string | number) => {
   );
 };
 
-// Renderiza Markdown inline básico (**negrito**, *itálico*, links e quebras de linha)
+// Renderiza KaTeX inline ou display com fallback seguro
+const renderKaTeX = (formula: string, displayMode: boolean, key: string | number) => {
+  try {
+    const html = katex.renderToString(formula, {
+      displayMode,
+      throwOnError: false,
+    });
+    if (displayMode) {
+      return (
+        <span
+          key={key}
+          className="my-3 block overflow-x-auto py-1 text-center font-serif text-indigo-300"
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+      );
+    }
+    return (
+      <span
+        key={key}
+        className="inline-block px-0.5 font-serif text-indigo-200"
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    );
+  } catch {
+    return <span key={key} className="text-amber-300 font-mono text-sm">{formula}</span>;
+  }
+};
+
+// Renderiza Markdown inline (**negrito**, *itálico*, links e KaTeX inline)
 const renderInlineMarkdown = (text: string) => {
   if (!text) return null;
 
@@ -72,31 +128,58 @@ const renderInlineMarkdown = (text: string) => {
     );
   }
 
-  // Divide por marcadores **negrito** e *itálico*
-  const tokens = text.split(/(\*\*.*?\*\*|\*.*?\*)/g);
-  return tokens.map((token, idx) => {
-    if (token.startsWith('**') && token.endsWith('**') && token.length >= 4) {
-      return (
-        <strong key={idx} className="font-bold text-white">
-          {token.slice(2, -2)}
-        </strong>
-      );
+  // 1. Processamento de KaTeX Display ($$...$$) e Inline ($...$)
+  // Dividimos por delimitadores matemáticos
+  const mathTokens = text.split(/(\$\$.*?\$\$|\$[^\$\n]+?\$)/gs);
+
+  return mathTokens.map((mToken, mIdx) => {
+    // Bloco Display $$...$$
+    if (mToken.startsWith('$$') && mToken.endsWith('$$') && mToken.length >= 4) {
+      const formula = mToken.slice(2, -2).trim();
+      return renderKaTeX(formula, true, `disp_${mIdx}`);
     }
-    if (token.startsWith('*') && token.endsWith('*') && token.length >= 2) {
-      return (
-        <em key={idx} className="italic text-slate-300">
-          {token.slice(1, -1)}
-        </em>
-      );
+
+    // Bloco Inline $...$ (somente se for fórmula real, não valor monetário como $150 million)
+    if (mToken.startsWith('$') && mToken.endsWith('$') && mToken.length > 2) {
+      const inner = mToken.slice(1, -1).trim();
+      if (isRealLatexFormula(inner)) {
+        return renderKaTeX(inner, false, `inl_${mIdx}`);
+      }
+      // Se não for fórmula LaTeX real, renderiza o texto original normalmente
+      mToken = mToken;
     }
+
+    // 2. Formatação padrão de Markdown (**negrito**, *itálico*)
+    const formatTokens = mToken.split(/(\*\*.*?\*\*|\*.*?\*)/g);
     return (
-      <span key={idx} className="whitespace-pre-wrap">
-        {token}
-      </span>
+      <React.Fragment key={`fmt_${mIdx}`}>
+        {formatTokens.map((fToken, fIdx) => {
+          if (fToken.startsWith('**') && fToken.endsWith('**') && fToken.length >= 4) {
+            return (
+              <strong key={fIdx} className="font-bold text-white">
+                {fToken.slice(2, -2)}
+              </strong>
+            );
+          }
+          if (fToken.startsWith('*') && fToken.endsWith('*') && fToken.length >= 2) {
+            return (
+              <em key={fIdx} className="italic text-slate-300">
+                {fToken.slice(1, -1)}
+              </em>
+            );
+          }
+          return (
+            <span key={fIdx} className="whitespace-pre-wrap">
+              {fToken}
+            </span>
+          );
+        })}
+      </React.Fragment>
     );
   });
 };
 
+// Renderiza blocos estruturais (Divisores, Texto de Apoio, Parágrafos)
 const renderFormattedBlock = (rawText: string, keyPrefix: string | number) => {
   if (!rawText) return null;
 
@@ -177,63 +260,10 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content, className =
     }
   }
 
-  // 2. Separação de blocos Display $$...$$ e Inline $...$
-  const displayParts = content.split(/(\$\$.*?\$\$)/gs);
-
+  // 2. Renderiza a estrutura de blocos e formatação do documento
   return (
     <span className={`inline-block w-full leading-relaxed ${className}`}>
-      {displayParts.map((dPart, dIdx) => {
-        // Bloco Display $$...$$
-        if (dPart.startsWith('$$') && dPart.endsWith('$$')) {
-          const formula = dPart.slice(2, -2).trim();
-          try {
-            const html = katex.renderToString(formula, {
-              displayMode: true,
-              throwOnError: false,
-            });
-            return (
-              <span
-                key={dIdx}
-                className="my-3 block overflow-x-auto py-1 text-center font-serif text-indigo-300"
-                dangerouslySetInnerHTML={{ __html: html }}
-              />
-            );
-          } catch (e) {
-            return <code key={dIdx} className="bg-slate-800 text-amber-300 px-1 rounded">{formula}</code>;
-          }
-        }
-
-        // Inline $...$ dentro de texto normal
-        const inlineParts = dPart.split(/(\$[^\$\n]+?\$)/g);
-
-        return (
-          <span key={dIdx}>
-            {inlineParts.map((iPart, iIdx) => {
-              if (iPart.startsWith('$') && iPart.endsWith('$') && iPart.length > 2) {
-                const inlineFormula = iPart.slice(1, -1).trim();
-                try {
-                  const html = katex.renderToString(inlineFormula, {
-                    displayMode: false,
-                    throwOnError: false,
-                  });
-                  return (
-                    <span
-                      key={iIdx}
-                      className="inline-block px-0.5 font-serif text-indigo-200"
-                      dangerouslySetInnerHTML={{ __html: html }}
-                    />
-                  );
-                } catch (e) {
-                  return <span key={iIdx} className="text-amber-300 font-mono text-sm">{inlineFormula}</span>;
-                }
-              }
-
-              // Texto puro com renderização enriquecida (parágrafos, negrito, divisores)
-              return renderFormattedBlock(iPart, `${dIdx}_${iIdx}`);
-            })}
-          </span>
-        );
-      })}
+      {renderFormattedBlock(content, 'root')}
     </span>
   );
 };

@@ -22,6 +22,54 @@ CONTEXT_TEXT_HEADER_REGEX = re.compile(
     re.IGNORECASE
 )
 
+_OCR_ENGINE = None
+
+def _get_ocr_engine():
+    global _OCR_ENGINE
+    if _OCR_ENGINE is None:
+        try:
+            from rapidocr_onnxruntime import RapidOCR
+            _OCR_ENGINE = RapidOCR()
+        except Exception:
+            _OCR_ENGINE = False
+    return _OCR_ENGINE
+
+def extract_ocr_lines_from_page(page: fitz.Page, dpi: int = 150) -> List[Dict[str, Any]]:
+    engine = _get_ocr_engine()
+    if not engine:
+        return []
+    try:
+        pix = page.get_pixmap(dpi=dpi)
+        img_bytes = pix.tobytes("png")
+        result, _ = engine(img_bytes)
+        if not result:
+            return []
+        
+        scale = 72.0 / dpi
+        lines_extracted = []
+        
+        for r in result:
+            bbox_img, text, score = r
+            text_clean = text.strip()
+            if not text_clean or score < 0.4:
+                continue
+            
+            lx0 = bbox_img[0][0] * scale
+            ly0 = bbox_img[0][1] * scale
+            lx1 = bbox_img[2][0] * scale
+            ly1 = bbox_img[2][1] * scale
+            
+            lines_extracted.append({
+                'page': page.number,
+                'x0': lx0, 'y0': ly0, 'x1': lx1, 'y1': ly1,
+                'mid_x': (lx0 + lx1) / 2.0,
+                'width': lx1 - lx0,
+                'text': text_clean
+            })
+        return lines_extracted
+    except Exception:
+        return []
+
 def detect_watermarks(doc: fitz.Document) -> Set[Tuple[int, int, int, int]]:
     """
     Identifica elementos que se repetem na mesma posição em 3 ou mais páginas
@@ -62,8 +110,8 @@ def clean_marginal_line_numbers(text_str: str) -> str:
 def is_instruction_or_cover_page(page_text: str) -> bool:
     """Detecta se uma página é capa de prova, folha de rosto ou instruções gerais."""
     clean = re.sub(r'pcimarkpci[^\n]*|www\.pciconcursos\.com\.br|qconcursos\.com', '', page_text, flags=re.IGNORECASE).strip()
-    if len(clean) < 80:
-        return True
+    if len(clean) < 30:
+        return False
     
     clean_norm = re.sub(r'\s+', ' ', clean).upper()
     clean_norm = re.sub(r'[\ufffd\?]', 'C', clean_norm)
@@ -132,23 +180,32 @@ def normalize_paragraph_flow(text_str: str) -> str:
     current_buf = []
 
     for line in raw_lines:
-        if block_start_pat.match(line):
+        line_clean = line.strip()
+        if not line_clean:
+            continue
+            
+        if block_start_pat.match(line_clean):
             if current_buf:
                 combined_lines.append(' '.join(current_buf))
                 current_buf = []
-            current_buf.append(line)
+            current_buf.append(line_clean)
         else:
             if not current_buf:
-                current_buf.append(line)
+                current_buf.append(line_clean)
             else:
                 prev = current_buf[-1]
-                if prev.endswith('-') and len(prev) > 1 and prev[-2].isalpha() and line and line[0].isalpha():
-                    current_buf[-1] = prev[:-1] + line
-                elif prev.endswith(('.', ':', '?', '!', ';')) and len(prev) > 30 and (line[0].isupper() or block_start_pat.match(line)):
+                # Hifenização explícita no fim da linha anterior
+                if prev.endswith('-') and len(prev) > 1 and prev[-2].isalpha() and line_clean[0].isalpha():
+                    current_buf[-1] = prev[:-1] + line_clean
+                elif prev.endswith(('.', ':', '?', '!', ';')):
                     combined_lines.append(' '.join(current_buf))
-                    current_buf = [line]
+                    current_buf = [line_clean]
+                # Se a linha atual começa com maiúscula e a anterior tem comprimento substancial, trata como nova linha/opção
+                elif len(prev) > 20 and (line_clean[0].isupper() or re.match(r'^(?:[A-Za-z0-9\(\[\@\§\•\-])', line_clean)):
+                    combined_lines.append(' '.join(current_buf))
+                    current_buf = [line_clean]
                 else:
-                    current_buf.append(line)
+                    current_buf.append(line_clean)
 
     if current_buf:
         combined_lines.append(' '.join(current_buf))
@@ -232,7 +289,7 @@ def extract_tables_from_page(page: fitz.Page) -> List[Dict[str, Any]]:
 
     return tables_found
 
-def detect_layout_and_ordered_blocks(page: fitz.Page, watermarks: Set[Tuple[int, int, int, int]]) -> List[Dict[str, Any]]:
+def detect_layout_and_ordered_blocks(page: fitz.Page, watermarks: Set[Tuple[int, int, int, int]], force_ocr: bool = False) -> List[Dict[str, Any]]:
     """
     Algoritmo adaptativo multi-coluna (PyMuPDF Layout-Aware em nível de linha).
     Reorganiza o texto respeitando a ordem natural e espacial de leitura:
@@ -242,75 +299,119 @@ def detect_layout_and_ordered_blocks(page: fitz.Page, watermarks: Set[Tuple[int,
     width, height = page.rect.width, page.rect.height
     mid_x_page = width * 0.5
 
-    # 1. Extração de tabelas na página
-    page_tables = extract_tables_from_page(page)
+    if force_ocr:
+        ocr_lines = extract_ocr_lines_from_page(page, dpi=150)
+        if ocr_lines:
+            lines_extracted = ocr_lines
+        else:
+            lines_extracted = []
+    else:
+        # 1. Extração de tabelas na página
+        page_tables = extract_tables_from_page(page)
 
-    def is_inside_table(bbox):
-        bx0, by0, bx1, by1 = bbox
+        def is_inside_table(bbox):
+            bx0, by0, bx1, by1 = bbox
+            for t in page_tables:
+                tx0, ty0, tx1, ty1 = t['bbox']
+                if not (bx1 < tx0 or bx0 > tx1 or by1 < ty0 or by0 > ty1):
+                    return True
+            return False
+
+        # 2. Extração precisa em nível de linha via dict de spans do PyMuPDF
+        text_page = page.get_text('dict')
+        lines_extracted = []
+
+        for block in text_page.get('blocks', []):
+            if block.get('type') != 0:
+                continue
+            for line in block.get('lines', []):
+                line_text = ' '.join([span.get('text', '').strip() for span in line.get('spans', []) if span.get('text', '').strip()]).strip()
+                if not line_text:
+                    continue
+                lx0, ly0, lx1, ly1 = line['bbox']
+
+                # Filtros de margem e ruídos institucionais
+                if ly0 < 18 or ly1 > height - 32:
+                    continue
+                lt_lower = line_text.lower()
+                if 'pcimarkpci' in lt_lower or 'pciconcursos.com.br' in lt_lower or 'qconcursos.com' in lt_lower or 'confidencial at' in lt_lower or 'tjsp2301' in lt_lower:
+                    continue
+                if 'PROVA' in line_text.upper() and len(line_text) < 25 and any(f'PROVA {k}' in line_text.upper() for k in range(10)):
+                    continue
+
+                cleaned = clean_marginal_line_numbers(line_text)
+                if not cleaned.strip():
+                    continue
+
+                if is_inside_table((lx0, ly0, lx1, ly1)):
+                    continue
+
+                mid_x = (lx0 + lx1) / 2
+                lines_extracted.append({
+                    'page': page.number,
+                    'x0': lx0, 'y0': ly0, 'x1': lx1, 'y1': ly1,
+                    'mid_x': mid_x,
+                    'width': lx1 - lx0,
+                    'text': cleaned
+                })
+
+        # Insere as tabelas detectadas como blocos estruturados
         for t in page_tables:
             tx0, ty0, tx1, ty1 = t['bbox']
-            if not (bx1 < tx0 or bx0 > tx1 or by1 < ty0 or by0 > ty1):
-                return True
-        return False
-
-    # 2. Extração precisa em nível de linha via dict de spans do PyMuPDF
-    text_page = page.get_text('dict')
-    lines_extracted = []
-
-    for block in text_page.get('blocks', []):
-        if block.get('type') != 0:
-            continue
-        for line in block.get('lines', []):
-            line_text = ' '.join([span.get('text', '').strip() for span in line.get('spans', []) if span.get('text', '').strip()]).strip()
-            if not line_text:
-                continue
-            lx0, ly0, lx1, ly1 = line['bbox']
-
-            # Filtros de margem e ruídos institucionais
-            if ly0 < 18 or ly1 > height - 32:
-                continue
-            lt_lower = line_text.lower()
-            if 'pcimarkpci' in lt_lower or 'pciconcursos.com.br' in lt_lower or 'qconcursos.com' in lt_lower or 'confidencial at' in lt_lower or 'tjsp2301' in lt_lower:
-                continue
-            if 'PROVA' in line_text.upper() and len(line_text) < 25 and any(f'PROVA {k}' in line_text.upper() for k in range(10)):
-                continue
-
-            cleaned = clean_marginal_line_numbers(line_text)
-            if not cleaned.strip():
-                continue
-
-            if is_inside_table((lx0, ly0, lx1, ly1)):
-                continue
-
-            mid_x = (lx0 + lx1) / 2
             lines_extracted.append({
                 'page': page.number,
-                'x0': lx0, 'y0': ly0, 'x1': lx1, 'y1': ly1,
-                'mid_x': mid_x,
-                'width': lx1 - lx0,
-                'text': cleaned
+                'x0': tx0, 'y0': ty0, 'x1': tx1, 'y1': ty1,
+                'mid_x': (tx0 + tx1) / 2,
+                'width': tx1 - tx0,
+                'text': t['markdown']
             })
 
-    # Insere as tabelas detectadas como blocos estruturados
-    for t in page_tables:
-        tx0, ty0, tx1, ty1 = t['bbox']
-        lines_extracted.append({
-            'page': page.number,
-            'x0': tx0, 'y0': ty0, 'x1': tx1, 'y1': ty1,
-            'mid_x': (tx0 + tx1) / 2,
-            'width': tx1 - tx0,
-            'text': t['markdown']
-        })
+        # 2.1 Fallback para OCR caso a página seja scan ou tenha pouquíssimo texto nativo
+        if len(lines_extracted) < 4:
+            ocr_lines = extract_ocr_lines_from_page(page, dpi=150)
+            if ocr_lines:
+                lines_extracted = ocr_lines
+
+    # 2.2 Costura horizontal de caixas de cabeçalho e números isolados na mesma linha Y (ex: '16.' ou '1.' com texto adjacente)
+    if lines_extracted and not force_ocr:
+        lines_extracted.sort(key=lambda l: (round(l['y0'] / 6.0) * 6.0, l['x0']))
+        stitched = []
+        skip_idx = set()
+        for i in range(len(lines_extracted)):
+            if i in skip_idx:
+                continue
+            cur = lines_extracted[i]
+            for j in range(i + 1, min(i + 5, len(lines_extracted))):
+                if j in skip_idx:
+                    continue
+                nxt = lines_extracted[j]
+                if abs(cur['y0'] - nxt['y0']) < 8 and nxt['x0'] >= cur['x0'] and (nxt['x0'] - cur['x1']) < 90:
+                    if len(cur['text'].strip()) < 12 or cur['text'].strip().endswith(('.', '-', ':', 'Afi', 'fi', 'fl', 'Obs')):
+                        cur['text'] = cur['text'].strip() + ' ' + nxt['text'].strip()
+                        cur['x1'] = max(cur['x1'], nxt['x1'])
+                        cur['width'] = cur['x1'] - cur['x0']
+                        cur['mid_x'] = (cur['x0'] + cur['x1']) / 2.0
+                        skip_idx.add(j)
+            stitched.append(cur)
+        lines_extracted = stitched
 
     if not lines_extracted:
         return []
 
-    # Detecta se há 2 colunas paralelas
+    # Extrai linhas de texto (excluindo tabelas Markdown)
     text_only_lines = [l for l in lines_extracted if not l['text'].startswith('\n|')]
     left_lines = [l for l in text_only_lines if l['mid_x'] < mid_x_page]
     right_lines = [l for l in text_only_lines if l['mid_x'] >= mid_x_page]
 
-    has_columns = len(left_lines) >= 3 and len(right_lines) >= 3
+    # Detecta se há realmente 2 colunas paralelas concorrentes na mesma faixa Y
+    overlapping_y_pairs = 0
+    for l in left_lines:
+        if any(abs(r['y0'] - l['y0']) < 20 for r in right_lines):
+            overlapping_y_pairs += 1
+            if overlapping_y_pairs >= 3:
+                break
+
+    has_columns = overlapping_y_pairs >= 3 and len(left_lines) >= 3 and len(right_lines) >= 3
 
     if not has_columns:
         lines_extracted.sort(key=lambda l: (round(l['y0'], -1), l['x0']))
@@ -318,41 +419,52 @@ def detect_layout_and_ordered_blocks(page: fitz.Page, watermarks: Set[Tuple[int,
         norm_text = normalize_paragraph_flow(raw_full)
         return [{'page': page.number, 'x0': 0, 'y0': 0, 'x1': width, 'y1': height, 'text': norm_text}]
 
+    # Detecta candidatas a colunas paralelas na esquerda e direita
+    left_cands = [l for l in text_only_lines if l['x1'] < mid_x_page + 30 and l['mid_x'] < mid_x_page]
+    right_cands = [l for l in text_only_lines if l['x0'] > mid_x_page - 30 and l['mid_x'] >= mid_x_page]
+
+    # Encontra faixa Y inicial onde coexistem colunas paralelas
+    two_col_y_min = None
+    for l in left_cands:
+        if any(abs(r['y0'] - l['y0']) < 40 for r in right_cands):
+            if two_col_y_min is None or l['y0'] < two_col_y_min:
+                two_col_y_min = l['y0']
+
+    # Se não houver início detectável de colunas paralelas, usa 60pt como padrão
+    y_col_start = two_col_y_min if two_col_y_min is not None else 60.0
+
     top_headers = []
     col_left = []
     col_right = []
     footers = []
 
     for l in lines_extracted:
-        # Um cabeçalho de página inteira precisa cruzar o centro da página
-        is_page_header = (l['y1'] <= 60 and l['x0'] < width * 0.35 and l['x1'] > width * 0.65)
-        # Um rodapé de página inteira precisa cruzar o centro da página
-        is_page_footer = (l['y0'] >= height - 35 and l['x0'] < width * 0.35 and l['x1'] > width * 0.65)
-        
-        if is_page_header:
+        # Linha na faixa superior antes do início das 2 colunas paralelas
+        if l['y1'] <= y_col_start:
             top_headers.append(l)
-        elif is_page_footer:
+        # Rodapé de página inteira
+        elif l['y0'] >= height - 35 and l['x0'] < width * 0.35 and l['x1'] > width * 0.65:
             footers.append(l)
         elif l['mid_x'] < mid_x_page:
             col_left.append(l)
         else:
             col_right.append(l)
 
-    top_headers.sort(key=lambda l: l['y0'])
-    col_left.sort(key=lambda l: l['y0'])
-    col_right.sort(key=lambda l: l['y0'])
-    footers.sort(key=lambda l: l['y0'])
+    top_headers.sort(key=lambda l: (round(l['y0'], -1), l['x0']))
+    col_left.sort(key=lambda l: (round(l['y0'], -1), l['x0']))
+    col_right.sort(key=lambda l: (round(l['y0'], -1), l['x0']))
+    footers.sort(key=lambda l: (round(l['y0'], -1), l['x0']))
 
     ordered_groups = []
     if top_headers:
         t_raw = '\n'.join(l['text'] for l in top_headers)
-        ordered_groups.append({'page': page.number, 'x0': 0, 'y0': 0, 'x1': width, 'y1': 60, 'text': normalize_paragraph_flow(t_raw)})
+        ordered_groups.append({'page': page.number, 'x0': 0, 'y0': 0, 'x1': width, 'y1': y_col_start, 'text': normalize_paragraph_flow(t_raw)})
     if col_left:
         t_raw = '\n'.join(l['text'] for l in col_left)
-        ordered_groups.append({'page': page.number, 'x0': 0, 'y0': 60, 'x1': mid_x_page, 'y1': height, 'text': normalize_paragraph_flow(t_raw)})
+        ordered_groups.append({'page': page.number, 'x0': 0, 'y0': y_col_start, 'x1': mid_x_page, 'y1': height, 'text': normalize_paragraph_flow(t_raw)})
     if col_right:
         t_raw = '\n'.join(l['text'] for l in col_right)
-        ordered_groups.append({'page': page.number, 'x0': mid_x_page, 'y0': 60, 'x1': width, 'y1': height, 'text': normalize_paragraph_flow(t_raw)})
+        ordered_groups.append({'page': page.number, 'x0': mid_x_page, 'y0': y_col_start, 'x1': width, 'y1': height, 'text': normalize_paragraph_flow(t_raw)})
     if footers:
         t_raw = '\n'.join(l['text'] for l in footers)
         ordered_groups.append({'page': page.number, 'x0': 0, 'y0': height - 40, 'x1': width, 'y1': height, 'text': normalize_paragraph_flow(t_raw)})

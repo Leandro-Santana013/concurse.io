@@ -189,6 +189,20 @@ def get_target_seeds(target_type: str) -> List[str]:
         seeds = [
             r"(?im)^[ \t]*(?:(?:NO[ÇC\?][ÕO\?]?ES\s+DE\s+|CONHECIMENTOS\s+(?:B[ÁA\?]?SICOS|ESPEC[ÍI\?]?FICOS|GERAIS|REGIONAIS)\s*[-–—:]*\s*|BLOCO\s+[I|V|X\d]+\s*[-–—:]*\s*|PARTE\s+[I|V|X\d]+\s*[-–—:]*\s*|DISCIPLINA\s*:\s*)?(?:L[ÍI\?]?NGUA\s+PORTUGUESA|PORTUGU[ÊE\?]?S|INTERPRETA[ÇC\?][ÃA\?]?O\s+DE\s+TEXTO|GRAM[ÁA\?]?TICA|REDA[ÇC\?][ÃA\?]?O\s+OFICIAL|MATEM[ÁA\?]?TICA\s+E\s+RACIOC[ÍI\?]?NIO\s+L[ÓO\?]?GICO|RACIOC[ÍI\?]?NIO\s+L[ÓO\?]?GICO-MATEM[ÁA\?]?TICA|RACIOC[ÍI\?]?NIO\s+L[ÓO\?]?GICO|MATEM[ÁA\?]?TICA\s+FINANCEIRA|MATEM[ÁA\?]?TICA|INFORM[ÁA\?]?TICA|TECNOLOGIA\s+DA\s+INFORM[AÃ\?]?O|CI[ÊE\?]?NCIA\s+DE\s+DADOS|DIREITO\s+CONSTITUCIONAL|DIREITO\s+ADMINISTRATIVO|DIREITO\s+PENAL|DIREITO\s+CIVIL|DIREITO\s+PROCESSUAL\s+CIVIL|DIREITO\s+PROCESSUAL\s+PENAL|DIREITO\s+PROCESSUAL\s+DO\s+TRABALHO|DIREITO\s+PROCESSUAL|DIREITO\s+TRIBUT[ÁA\?]?RIO|DIREITO\s+PREVIDENCI[ÁA\?]?RIO|DIREITO\s+DO\s+TRABALHO|DIREITO\s+FINANCEIRO|DIREITO\s+AMBIENTAL|DIREITO\s+ELEITORAL|DIREITO\s+EMPRESARIAL|DIREITOS\s+HUMANOS|LEGISLA[ÇC\?][ÃA\?]?O\s+ESPEC[ÍI\?]?FICA|LEGISLA[ÇC\?][ÃA\?]?O\s+APLICADA|LEGISLA[ÇC\?][ÃA\?]?O\s+INSTITUCIONAL|LEGISLA[ÇC\?][ÃA\?]?O|[ÉE\?]?TICA\s+NO\s+SERVI[ÇC\?]?O\s+P[ÚU\?]?BLICO|[ÉE\?]?TICA|REGIMENTO\s+INTERNO|ESTATUTO\s+DOS\s+SERVIDORES|ADMINISTRA[ÇC\?][ÃA\?]?O\s+FINANCEIRA\s+E\s+OR[ÇC\?]?AMENT[ÁA\?]?RIA|AFO|OR[ÇC\?]?AMENTO\s+P[ÚU\?]?BLICO|ADMINISTRA[ÇC\?][ÃA\?]?O\s+P[ÚU\?]?BLICA|ADMINISTRA[ÇC\?][ÃA\?]?O\s+GERAL|GEST[ÃA\?]?O\s+P[ÚU\?]?BLICA|GEST[ÃA\?]?O\s+DE\s+PESSOAS|RECURSOS\s+HUMANOS|POL[ÍI\?]?TICAS\s+P[ÚU\?]?BLICAS|ARQUIVOLOGIA|CONTABILIDADE\s+P[ÚU\?]?BLICA|CONTABILIDADE\s+GERAL|CONTABILIDADE|AUDITORIA|ECONOMIA|ESTAT[ÍI\?]?STICA|CONHECIMENTOS\s+B[ÁA\?]?SICOS|CONHECIMENTOS\s+ESPEC[ÍI\?]?FICOS|CONHECIMENTOS\s+GERAIS|CONHECIMENTOS\s+REGIONAIS|ATUALIDADES|HIST[ÓO\?]?RIA\s+E\s+GEOGRAFIA|GEOGRAFIA|HIST[ÓO\?]?RIA|ENFERMAGEM|MEDICINA|SA[ÚU\?]?DE\s+P[ÚU\?]?BLICA|SUS|FARM[ÁA\?]?CIA|ODONTOLOGIA|BIOLOGIA|PSICOLOGIA|SERVI[ÇC\?]?O\s+SOCIAL|NUTRI[ÇC\?][ÃA\?]?O|ENGENHARIA\s+CIVIL|ENGENHARIA\s+EL[ÉE\?]?TRICA|ENGENHARIA\s+MEC[ÂA\?]?NICA|ENGENHARIA|F[ÍI\?]?SICA|QU[ÍI\?]?MICA|PEDAGOGIA|L[ÍI\?]?NGUA\s+INGLESA|INGL[ÊE\?]?S|L[ÍI\?]?NGUA\s+ESPANHOLA|ESPANHOL|SEGURAN[ÇC\?]?A\s+P[ÚU\?]?BLICA|CRIMINOLOGIA))(?:[ \t]*[-–—:][^\n]*)?$",
         ]
+    elif target_type == "typography_item":
+        seeds = [
+            r"(?:^|\n|(?<=\.|\;|\:|\))\s*|\s{2,}|\b)(I|II|III|IV|V|VI|VII|VIII|IX|X|\d{1,2})\s*[\.\-\–\—\)]\s*(?=[A-Za-z\u00C0-\u00DC0-9\"])",
+            r"(?:^|\n|(?<=\.|\;|\:|\))\s*|\s{2,}|\b)(\(\s*_{1,4}\s*\)|\(\s*\)|\(\d{1,2}\))\s*(?=[A-Za-z\u00C0-\u00DC0-9\"])",
+            r"(?:^|\n|(?<=\.|\;|\:|\))\s*|\s{2,})([A-E])\s*[\.\)]\s*(?=[A-Z\u00C0-\u00DC\"])",
+        ]
+    elif target_type == "typography_command":
+        seeds = [
+            r"(?i)(?:^|\n|\s+)(?:A\s+sequ[êe]ncia\s+CORRETA|A\s+sequ[êe]ncia\s+correta|Correlacione\s+corretamente|Associe\s+corretamente|Match\s+column|Choose\s+the\s+option|Assinale\s+a\s+alternativa|Assinale\s+a\s+op[çc][ãa]o|Marque\s+a\s+alternativa|Marque\s+a\s+op[çc][ãa]o|Est[áa]\s*\([ãa]o\)\s+correta\s*\([s\)]\)|Est[ãa]o\s+corretas?|Est[áa]\s+correta?|Est[áa]\s+CORRETO|Quais\s+est[ãa]o\s+corretas?|[ÉE]\s+correto\s+o\s+que\s+se\s+afirma\s+em|A\s+respeito\s+dessas\s+afirmativas|Julgue\s+os\s+itens)[^\n\.\:\?]*[:\.]?",
+        ]
+    elif target_type == "typography_column":
+        seeds = [
+            r"(?i)(?:^|\n|(?<=\.|\))\s+)(?:QUADRO\s+\d+|PAINEL\s+\d+|TIRA\s+\d+|(?:Coluna|Column)\s+(?:0*\d+|I{1,3}|IV|V|[A-E]))\s*[:.\-]?\s*",
+        ]
     else:
         seeds = []
 
@@ -325,6 +339,12 @@ def evaluate_single_sample(reg: re.Pattern, sample: Dict[str, Any], target_type:
         expected = sample.get("expected_diagram_triggers", [])
     elif target_type == "subject":
         expected = sample.get("expected_subjects", [])
+    elif target_type == "typography_item":
+        expected = sample.get("expected_typography_items", [])
+    elif target_type == "typography_command":
+        expected = sample.get("expected_typography_commands", [])
+    elif target_type == "typography_column":
+        expected = sample.get("expected_typography_columns", [])
     else:
         expected = []
 
@@ -556,6 +576,55 @@ def run_pure_python_optimizer(
     }
 
 
+def mine_corpus_from_real_pdfs(base_dir: str = "provas_bancas", limit_per_banca: int = 2) -> List[Dict[str, Any]]:
+    """Minera texto real e anotações heurísticas a partir dos 519 PDFs em provas_bancas/."""
+    import glob
+    try:
+        import fitz
+    except ImportError:
+        return []
+
+    mined = []
+    if not os.path.exists(base_dir):
+        return []
+
+    for banca_dir in os.listdir(base_dir):
+        bpath = os.path.join(base_dir, banca_dir)
+        if not os.path.isdir(bpath):
+            continue
+        banca_name = banca_dir.upper()
+        pdf_files = glob.glob(os.path.join(bpath, "*.pdf"))[:limit_per_banca]
+        for p_idx, pdf_path in enumerate(pdf_files):
+            try:
+                doc = fitz.open(pdf_path)
+                full_pages_text = []
+                for page in doc[:6]: # Amostra as primeiras 6 páginas
+                    full_pages_text.append(page.get_text("text"))
+                doc.close()
+                combined_text = "\n".join(full_pages_text)
+                if len(combined_text) < 100:
+                    continue
+
+                sample_id = f"real_{banca_name.lower()}_{p_idx+1}"
+                mined.append({
+                    "exam_id": sample_id,
+                    "banca": banca_name,
+                    "full_text": combined_text,
+                    "expected_headers": [f"{i}." for i in range(1, 15)] + [f"0{i} -" for i in range(1, 10)],
+                    "expected_options": ["A)", "B)", "C)", "D)", "E)", "(A)", "(B)", "(C)", "(D)", "(E)"],
+                    "expected_contexts": [],
+                    "expected_cleaners": ["pcimarkpci"],
+                    "expected_diagram_triggers": ["figura", "quadro", "tabela", "gráfico"],
+                    "expected_subjects": ["LÍNGUA PORTUGUESA", "MATEMÁTICA", "INFORMÁTICA"],
+                    "expected_typography_items": ["I.", "II.", "III.", "IV.", "V.", "(1)", "(2)", "(3)", "(__)"],
+                    "expected_typography_commands": ["Assinale a alternativa", "É correto o que se afirma", "A sequência CORRETA", "Marque a alternativa"],
+                    "expected_typography_columns": ["Coluna 1", "Coluna 2", "Coluna 01", "Coluna 02", "Column 1", "Column 2"],
+                })
+            except Exception:
+                pass
+    return mined
+
+
 def save_corpus_to_disk(corpus: List[Dict[str, Any]], corpus_dir: str):
     """Salva os arquivos JSON do corpus em training_corpus se não existirem."""
     os.makedirs(corpus_dir, exist_ok=True)
@@ -570,7 +639,7 @@ def main():
     parser = argparse.ArgumentParser(description="Otimizador de Regex Avançado do concurse.io")
     parser.add_argument(
         "--target",
-        choices=["header", "options", "context", "cleaner", "diagram", "subject", "all"],
+        choices=["header", "options", "context", "cleaner", "diagram", "subject", "typography_item", "typography_command", "typography_column", "typography", "all"],
         default="all",
         help="Alvo da Suite Master a ser otimizado",
     )
@@ -593,9 +662,15 @@ def main():
         help="Diretório com JSONs de provas",
     )
     parser.add_argument(
-        "--auto-inject",
+        "--mine-real-pdfs",
         action="store_true",
         default=True,
+        help="Minera amostras reais a partir de provas_bancas/",
+    )
+    parser.add_argument(
+        "--auto-inject",
+        action="store_true",
+        default=False,
         help="Compila e injeta automaticamente no Rust ao final",
     )
     args = parser.parse_args()
@@ -619,6 +694,13 @@ def main():
                     except Exception:
                         pass
 
+    if args.mine_real_pdfs:
+        print("[INFO] Minerando amostras reais dos 519 PDFs em 'provas_bancas/'...")
+        real_samples = mine_corpus_from_real_pdfs(base_dir="provas_bancas", limit_per_banca=2)
+        if real_samples:
+            corpus.extend(real_samples)
+            print(f"[INFO] +{len(real_samples)} amostras reais de PDFs integradas ao corpus de treinamento.")
+
     if not corpus:
         print(
             f"[INFO] Gerando e salvando corpus multi-banca de referência em '{args.corpus_dir}'..."
@@ -631,11 +713,12 @@ def main():
         f"[INFO] Corpus ativo com {len(corpus)} provas cobrindo {len(bancas_ativas)} bancas:\n       ({', '.join(bancas_ativas[:15])}{'...' if len(bancas_ativas) > 15 else ''}).\n"
     )
 
-    targets = (
-        ["header", "options", "context", "cleaner", "diagram", "subject"]
-        if args.target == "all"
-        else [args.target]
-    )
+    if args.target == "all":
+        targets = ["header", "options", "context", "cleaner", "diagram", "subject", "typography_item", "typography_command", "typography_column"]
+    elif args.target == "typography":
+        targets = ["typography_item", "typography_command", "typography_column"]
+    else:
+        targets = [args.target]
 
     suite_results = {}
 

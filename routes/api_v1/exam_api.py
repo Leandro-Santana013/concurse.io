@@ -99,12 +99,30 @@ def get_exam_detail(exam_id: int, db: Session = Depends(get_db)):
     questions_list = []
     for q in exam.questions:
         try:
-            options_dict = json.loads(q.options) if q.options else {}
+            raw_opts = json.loads(q.options) if q.options else {}
+            if isinstance(raw_opts, dict):
+                options_dict = raw_opts
+            elif isinstance(raw_opts, list):
+                options_dict = {}
+                for item in raw_opts:
+                    if isinstance(item, dict):
+                        k = item.get('letter') or item.get('key') or item.get('letra') or ''
+                        v = item.get('text') or item.get('texto') or ''
+                        if k:
+                            options_dict[k.upper()] = v
+                    elif isinstance(item, str):
+                        m = re.match(r'^\(?([A-Ea-e])\)?[\.\:\-\s]+(.*)', item)
+                        if m:
+                            options_dict[m.group(1).upper()] = m.group(2)
+            else:
+                options_dict = {}
         except Exception:
             options_dict = {}
 
         try:
             images_list = json.loads(q.images) if q.images else []
+            if isinstance(images_list, str):
+                images_list = [images_list]
         except Exception:
             images_list = []
 

@@ -45,10 +45,11 @@ except ImportError:
 
 IMAGE_TRIGGER_PATTERN = (
     r'\b('
-    r'figura|gr[áa]fico|quadro|tabela|diagrama|circuito|desenho|'
-    r'ilustra[çc][ãa]o|mapa|esquema|imagem|paqu[íi]metro|circunfer[êe]ncia|'
-    r'tetraedro|planta|fluxograma|fotografia|foto|tira|tirinha|charge|'
-    r'cartum|organograma|cronograma|histograma'
+    r'figura|gr[áa]fico|quadro|tabela|diagrama|desenho|'
+    r'ilustra[çc][ãa]o|mapa|esquema|imagem|paqu[íi]metro|'
+    r'planta|fluxograma|fotografia|foto|tira|tirinha|charge|'
+    r'cartum|organograma|histograma|'
+    r'circuito\s+(?:abaixo|acima|a\s+seguir|da\s+figura)|diagrama\s+de\s+circuito'
     r')\b'
 )
 
@@ -328,84 +329,41 @@ class ExamImageExtractor:
         exam_id: Any = 0
     ) -> List[Dict[str, Any]]:
         """
-        Executa o pipeline de vinculação de imagens em 2 Fases (arquitetura robusta de main):
-        - Fase 1: Vinculação por Palavra-Gatilho (Trigger Word) + Proximidade Espacial
-        - Fase 2: Varredura de Lacunas Visuais (Gap Scan) na mesma coluna
+        Executa o pipeline de vinculação espacial e contextual de imagens:
+        Para cada diagrama detectado em uma página:
+        1. Calcula sua posição (X, Y) e coluna.
+        2. Avalia todas as questões candidatas na página (e páginas adjacentes).
+        3. Prioriza a questão que contém a imagem espacialmente no seu corpo ou
+           que tem palavra-gatilho explícita na vizinhança imediata.
         """
-        used_diagrams: Set[Tuple[int, int]] = set()  # {(page_num, cluster_index)}
+        if not page_diagrams or not questions:
+            return questions
+
         total_pages = len(doc)
 
-        # -------------------------------------------------------------------------
-        # FASE 1: TRIGGER WORD (Alta Precisão)
-        # -------------------------------------------------------------------------
+        # Mapeia triggers nas questões
         for q in questions:
             enunciado = q.get('enunciado', q.get('statement', ''))
-            
-            # Verificação com aceleração Rust (fallback regex)
             rust_res = rust_match_image_triggers(enunciado)
             if rust_res is not None:
-                has_trigger = rust_res.get('has_trigger', False)
+                q['_has_trigger'] = rust_res.get('has_trigger', False)
             else:
-                has_trigger = bool(IMAGE_TRIGGER_REGEX.search(enunciado))
+                q['_has_trigger'] = bool(IMAGE_TRIGGER_REGEX.search(enunciado))
 
-            if not has_trigger:
-                continue
+        used_diagrams: Set[Tuple[int, int]] = set()
 
-            q_page = q.get('_page', 0)
-            q_num = q.get('numero_questao', '0')
-            q_images = q.get('images') or []
-
-            pages_to_check = [q_page]
-            if q_page + 1 < total_pages:
-                pages_to_check.append(q_page + 1)
-
-            for p_target in pages_to_check:
-                if p_target not in page_diagrams:
-                    continue
-
-                for c_idx, cluster in enumerate(page_diagrams[p_target]):
-                    diag_key = (p_target, c_idx)
-                    if diag_key in used_diagrams:
-                        continue
-
-                    page_obj = doc[p_target]
-                    rel_url = self.render_and_save_crop(
-                        page_obj=page_obj,
-                        cluster=cluster,
-                        exam_id=exam_id,
-                        q_num=q_num,
-                        img_index=len(q_images) + 1
-                    )
-
-                    if rel_url:
-                        q_images.append(rel_url)
-                        used_diagrams.add(diag_key)
-
-                    multi_fig = bool(MULTI_FIGURE_REGEX.search(enunciado))
-                    max_imgs = 3 if multi_fig else 1
-                    if len(q_images) >= max_imgs:
-                        break
-
-                if q_images:
-                    break
-
-            q['images'] = q_images if q_images else None
-
-        # -------------------------------------------------------------------------
-        # FASE 2: GAP VISUAL SCAN (Alta Cobertura para imagens sem gatilho explícito)
-        # -------------------------------------------------------------------------
+        # Processa página por página de forma ordenada
         for p_idx in sorted(page_diagrams.keys()):
             clusters = page_diagrams[p_idx]
             page_obj = doc[p_idx]
             page_w = page_obj.rect.width
+            page_h = page_obj.rect.height
 
+            # Candidatos na página
             page_qs = [(i, q) for i, q in enumerate(questions) if q.get('_page') == p_idx]
             page_qs.sort(key=lambda x: x[1].get('_y', 0))
 
-            # Se a página não tem questões e não há questões anteriores, é capa/instruções! Ignora.
             prev_qs = [(i, q) for i, q in enumerate(questions) if q.get('_page', -1) < p_idx]
-            if not page_qs and not prev_qs:
-                continue
 
             for c_idx, cluster in enumerate(clusters):
                 diag_key = (p_idx, c_idx)
@@ -424,49 +382,66 @@ class ExamImageExtractor:
                     continue
 
                 best_q_idx = -1
-                best_distance = float('inf')
+                best_score = float('inf')
 
-                # Prioriza questões na mesma coluna (diferença X < 180px)
-                same_col_qs = [pq for pq in page_qs if abs(pq[1].get('_x', 0) - cluster_center_x) < 180]
-                candidate_qs = same_col_qs if same_col_qs else page_qs
+                # Questões na mesma coluna (diferença X < 200px)
+                same_col_qs = [pq for pq in page_qs if abs(pq[1].get('_x', 0) - cluster_center_x) < 200]
+                candidates = same_col_qs if same_col_qs else page_qs
 
-                # Pega a questão que está ACIMA da imagem
-                for q_idx, q in candidate_qs:
+                # Avalia cada questão candidata
+                for q_idx, q in candidates:
                     q_y = q.get('_y', 0)
-                    if q_y <= cluster_center_y + 25:
-                        dist = cluster_center_y - q_y
-                        if dist < best_distance:
-                            best_distance = dist
+                    has_trigger = q.get('_has_trigger', False)
+
+                    # A questão começa acima ou muito próxima da imagem
+                    if q_y <= cluster_center_y + 40:
+                        vertical_dist = cluster_center_y - q_y
+                        
+                        # Se tem palavra-gatilho explícita na vizinhança (distância razoável), dá prioridade máxima
+                        if has_trigger and vertical_dist <= 350:
+                            score = vertical_dist * 0.1 # Altíssima prioridade
+                        else:
+                            score = vertical_dist
+
+                        if score < best_score:
+                            best_score = score
                             best_q_idx = q_idx
 
-                # Se não há questão acima na coluna, herda da coluna anterior ou da última da página anterior
+                # Se nenhuma questão foi encontrada acima na mesma coluna/página:
                 if best_q_idx == -1:
-                    if prev_qs:
+                    # Procura se há alguma questão com trigger na mesma página
+                    trigger_qs = [pq for pq in page_qs if pq[1].get('_has_trigger')]
+                    if trigger_qs:
+                        best_q_idx = min(trigger_qs, key=lambda pq: abs(pq[1].get('_y', 0) - cluster_center_y))[0]
+                    elif prev_qs:
                         best_q_idx = max(prev_qs, key=lambda x: (x[1].get('_page', 0), x[1].get('_y', 0)))[0]
-                    elif candidate_qs:
-                        best_q_idx = candidate_qs[0][0]
+                    elif candidates:
+                        best_q_idx = candidates[0][0]
 
-                if best_q_idx == -1:
-                    continue
+                if best_q_idx != -1:
+                    target_q = questions[best_q_idx]
+                    q_images = target_q.get('images') or []
+                    q_num = target_q.get('numero_questao', '0')
 
-                target_q = questions[best_q_idx]
-                target_q_num = target_q.get('numero_questao', '0')
-                existing_imgs = target_q.get('images') or []
+                    rel_url = self.render_and_save_crop(
+                        page_obj=page_obj,
+                        cluster=cluster,
+                        exam_id=exam_id,
+                        q_num=q_num,
+                        img_index=len(q_images) + 1
+                    )
 
-                rel_url = self.render_and_save_crop(
-                    page_obj=page_obj,
-                    cluster=cluster,
-                    exam_id=exam_id,
-                    q_num=target_q_num,
-                    img_index=len(existing_imgs) + 1
-                )
+                    if rel_url:
+                        if rel_url not in q_images:
+                            q_images.append(rel_url)
+                        target_q['images'] = q_images
+                        used_diagrams.add(diag_key)
 
-                if rel_url:
-                    if target_q.get('images') is None:
-                        target_q['images'] = []
-                    if rel_url not in target_q['images']:
-                        target_q['images'].append(rel_url)
-                    used_diagrams.add(diag_key)
+        # Limpeza temporária
+        for q in questions:
+            q.pop('_has_trigger', None)
+
+        return questions
 
         return questions
 

@@ -17,8 +17,27 @@ use subject_classifier::{
 };
 
 #[inline]
+fn safe_prefix_slice<'a>(s: &'a str, end_byte: usize, max_lookback_bytes: usize) -> &'a str {
+    let mut start = end_byte.saturating_sub(max_lookback_bytes);
+    while start > 0 && !s.is_char_boundary(start) {
+        start = start.saturating_sub(1);
+    }
+    let mut end = end_byte.min(s.len());
+    while end > 0 && !s.is_char_boundary(end) {
+        end = end.saturating_sub(1);
+    }
+    if start <= end {
+        &s[start..end]
+    } else {
+        ""
+    }
+}
+
 fn byte_to_char_index(s: &str, byte_offset: usize) -> usize {
-    let bound = byte_offset.min(s.len());
+    let mut bound = byte_offset.min(s.len());
+    while bound > 0 && !s.is_char_boundary(bound) {
+        bound = bound.saturating_sub(1);
+    }
     s[..bound].chars().count()
 }
 
@@ -38,7 +57,7 @@ fn scan_question_headers(py: Python, full_text: &str) -> PyResult<PyObject> {
                     
                     // Se não for cabeçalho explícito (ex: 'QUESTÃO 01'), filtra falsos positivos de números em legendas/artigos
                     if !is_explicit {
-                        let prefix_slice = &full_text[m.start().saturating_sub(40)..m.start()];
+                        let prefix_slice = safe_prefix_slice(full_text, m.start(), 40);
                         let prefix_upper = prefix_slice.to_uppercase();
                         if prefix_upper.contains("QUADRO")
                             || prefix_upper.contains("FIGURA")
