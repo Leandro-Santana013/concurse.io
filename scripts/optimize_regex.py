@@ -228,6 +228,18 @@ def mutate_regex(pattern: str) -> str:
     elif op == 7:
         if r"\b" in mutated:
             mutated = mutated.replace(r"\b", r"(?:^|\s|\b)", 1)
+    elif op == 8:
+        # Mutação de prefixos de disciplinas/matérias
+        if "CONHECIMENTOS" in mutated and "PROVA DE" not in mutated:
+            mutated = mutated.replace("CONHECIMENTOS", r"(?:CONHECIMENTOS|PROVA DE|ESTUDO DE)", 1)
+        elif "DISCIPLINA" in mutated and "MATÉRIA" not in mutated:
+            mutated = mutated.replace("DISCIPLINA", r"(?:DISCIPLINA|MAT[ÉE]RIA)", 1)
+    elif op == 9:
+        # Tolerância a caracteres acentuados corrompidos em OCR/PDF
+        if "PORTUGUESA" in mutated and r"PORTUGU[ÊE\?]?S" in mutated:
+            mutated = mutated.replace("PORTUGUESA", r"PORTUGUES[A\?]?")
+        elif "INFORMÁTICA" in mutated:
+            mutated = mutated.replace("INFORMÁTICA", r"INFORM[ÁA\?]?TICA")
 
     try:
         re.compile(mutated)
@@ -413,9 +425,15 @@ def run_pure_python_optimizer(
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
         for gen in range(1, generations + 1):
-            # 1. Cosine Annealing: Taxa de exploração vs refinamento
-            temp = 0.5 * (1.0 + math.cos(math.pi * gen / max(1, generations)))
-            mutation_prob = 0.25 + 0.50 * temp
+            # 1. Cyclic Cosine Annealing com Warm Restarts (SGDR)
+            if stagnation_counter >= 8 and best_f1 < 0.90:
+                temp = 1.0  # Reaquece a temperatura para saltar fora do mínimo local
+                mutation_prob = 0.85
+                stagnation_counter = 0
+            else:
+                cycle_progress = (gen % 25) / 25.0
+                temp = 0.5 * (1.0 + math.cos(math.pi * cycle_progress))
+                mutation_prob = 0.25 + 0.55 * temp
 
             # 2. Hard Example Mining: Injeta amostras difíceis no batch da época
             batch = get_stratified_and_hard_batch(corpus, hard_sample_pool, max_per_banca=1) if len(corpus) > bancas_ativas else corpus
