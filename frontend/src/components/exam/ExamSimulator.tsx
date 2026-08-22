@@ -545,14 +545,9 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
               </button>
             </div>
 
-            {/* Statement */}
-            <div className={`mt-6 ${fontSizeClass} font-reading text-slate-100`}>
-              <MathRenderer content={currentQ?.statement || ''} />
-            </div>
-
-            {/* Embedded Diagrams */}
+            {/* Embedded Diagrams (Renderizado no topo do card para visibilidade imediata) */}
             {currentQ?.images && currentQ.images.length > 0 && (
-              <div className="mt-6 space-y-3">
+              <div className="mt-5 space-y-3">
                 {currentQ.images.map((imgSrc, imgIdx) => (
                   <div
                     key={imgIdx}
@@ -571,6 +566,11 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
                 ))}
               </div>
             )}
+
+            {/* Statement / Enunciado */}
+            <div className={`mt-6 ${fontSizeClass} font-reading text-slate-100`}>
+              <MathRenderer content={currentQ?.statement || ''} />
+            </div>
 
             {/* Options List */}
             <div className="mt-8 space-y-3">

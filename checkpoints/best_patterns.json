@@ -1,0 +1,38 @@
+{
+  "subject": {
+    "pattern": "(?i)(?im)^[ \\t]*(?:(?:NO[ÇC\\?][ÕO\\?]?ES\\s+DE\\s+|CONHECIMENTOS\\s+(?:B[ÁA\\?]?SICOS|ESPEC[ÍI\\?]?FICOS|GERAIS|REGIONAIS)\\s*[-–—:]*\\s*|CRIMINOLOGIA))(?:[ \\t]*[-–—:][^\\n]*)?$",
+    "fitness": 0.5685236206953639,
+    "f1_score": 0.4620362728689696,
+    "updated_at": "2026-08-22 02:44:24"
+  },
+  "header": {
+    "pattern": "(?i)(?:^|(?=\\s+[A-Z\\u00C0-\\u00DC\\d\\n]))",
+    "fitness": 0.9083,
+    "f1_score": 1.0,
+    "updated_at": "2026-08-22 02:05:29"
+  },
+  "options": {
+    "pattern": "(?i)(?:^|\\n|\\[([A-E])\\])\\s*",
+    "fitness": 0.9919,
+    "f1_score": 1.0,
+    "updated_at": "2026-08-22 02:05:30"
+  },
+  "context": {
+    "pattern": "(?i)(?:^|\\n|\\.\\s+|\\s+)((?:Instru[çc][ãa\\?]?o\\s*[:.\\-]?\\s*|\\be\\b|,|\\-)\\s*(?:a\\s+)?(0*\\d{1,3})[.:–—]?)",
+    "fitness": 0.9606547665807407,
+    "f1_score": 0.9937297996121526,
+    "updated_at": "2026-08-22 02:05:32"
+  },
+  "cleaner": {
+    "pattern": "(?:^|\\d{2})\\s{2,}",
+    "fitness": 0.9903165412770772,
+    "f1_score": 0.9982174688057041,
+    "updated_at": "2026-08-22 02:05:33"
+  },
+  "diagram": {
+    "pattern": "(?i)\\b(?:figura|gr[áa]fico|quadro|tabela|mapa|imagem|histograma)\\b",
+    "fitness": 0.8168621474107022,
+    "f1_score": 0.8767832644609376,
+    "updated_at": "2026-08-22 02:38:55"
+  }
+}

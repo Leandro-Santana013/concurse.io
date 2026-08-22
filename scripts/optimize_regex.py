@@ -31,6 +31,13 @@ if sys.platform == "win32":
         pass
 
 try:
+    from services.pdf_pipeline.ast_regex import parse_regex_to_ast, mutate_ast, crossover_ast, ast_to_compiled_regex
+    from services.pdf_pipeline.banca_clusterizer import detect_banca_family, get_specialized_patterns, BancaFamily
+    HAS_AST_ENGINE = True
+except ImportError:
+    HAS_AST_ENGINE = False
+
+try:
     import concurse_core
     HAS_RUST_CORE = getattr(concurse_core, "is_native_available", lambda: False)()
 except (ImportError, AttributeError):
@@ -179,16 +186,42 @@ def get_target_seeds(target_type: str) -> List[str]:
             r"(?i)^\s*(?:figura|gr[áa]fico|grafico|tabela|quadro|diagrama|circuito|mapa|esquema|imagem|ilustra[çc][ãa\?]?o|foto|tira|charge|cartum)\b(?:\s*(?:\d+|[A-Za-z]|I|II|III|IV|V|VI|VII|VIII|IX|X))?\s*[-–—:]?",
         ]
     elif target_type == "subject":
-        return [
-            r"(?im)^[ \t]*(?:(?:NO[ÇC\?][ÕO\?]?ES\s+DE\s+|CONHECIMENTOS\s+(?:B[ÁA\?]?SICOS|ESPEC[ÍI\?]?FICOS|GERAIS|REGIONAIS)\s*[-–—:]*\s*|BLOCO\s+[I|V|X\d]+\s*[-–—:]*\s*|PARTE\s+[I|V|X\d]+\s*[-–—:]*\s*|DISCIPLINA\s*:\s*)?(?:L[ÍI\?]?NGUA\s+PORTUGUESA|PORTUGU[ÊE\?]?S|INTERPRETA[ÇC\?][ÃA\?]?O\s+DE\s+TEXTO|GRAM[ÁA\?]?TICA|REDA[ÇC\?][ÃA\?]?O\s+OFICIAL|MATEM[ÁA\?]?TICA\s+E\s+RACIOC[ÍI\?]?NIO\s+L[ÓO\?]?GICO|RACIOC[ÍI\?]?NIO\s+L[ÓO\?]?GICO-MATEM[ÁA\?]?TICO|RACIOC[ÍI\?]?NIO\s+L[ÓO\?]?GICO|MATEM[ÁA\?]?TICA\s+FINANCEIRA|MATEM[ÁA\?]?TICA|INFORM[ÁA\?]?TICA|TECNOLOGIA\s+DA\s+INFORM[AÃ\?]?O|CI[ÊE\?]?NCIA\s+DE\s+DADOS|DIREITO\s+CONSTITUCIONAL|DIREITO\s+ADMINISTRATIVO|DIREITO\s+PENAL|DIREITO\s+CIVIL|DIREITO\s+PROCESSUAL\s+CIVIL|DIREITO\s+PROCESSUAL\s+PENAL|DIREITO\s+PROCESSUAL\s+DO\s+TRABALHO|DIREITO\s+PROCESSUAL|DIREITO\s+TRIBUT[ÁA\?]?RIO|DIREITO\s+PREVIDENCI[ÁA\?]?RIO|DIREITO\s+DO\s+TRABALHO|DIREITO\s+FINANCEIRO|DIREITO\s+AMBIENTAL|DIREITO\s+ELEITORAL|DIREITO\s+EMPRESARIAL|DIREITOS\s+HUMANOS|LEGISLA[ÇC\?][ÃA\?]?O\s+ESPEC[ÍI\?]?FICA|LEGISLA[ÇC\?][ÃA\?]?O\s+APLICADA|LEGISLA[ÇC\?][ÃA\?]?O\s+INSTITUCIONAL|LEGISLA[ÇC\?][ÃA\?]?O|[ÉE\?]?TICA\s+NO\s+SERVI[ÇC\?]?O\s+P[ÚU\?]?BLICO|[ÉE\?]?TICA|REGIMENTO\s+INTERNO|ESTATUTO\s+DOS\s+SERVIDORES|ADMINISTRA[ÇC\?][ÃA\?]?O\s+FINANCEIRA\s+E\s+OR[ÇC\?]?AMENT[ÁA\?]?RIA|AFO|OR[ÇC\?]?AMENTO\s+P[ÚU\?]?BLICO|ADMINISTRA[ÇC\?][ÃA\?]?O\s+P[ÚU\?]?BLICA|ADMINISTRA[ÇC\?][ÃA\?]?O\s+GERAL|GEST[ÃA\?]?O\s+P[ÚU\?]?BLICA|GEST[ÃA\?]?O\s+DE\s+PESSOAS|RECURSOS\s+HUMANOS|POL[ÍI\?]?TICAS\s+P[ÚU\?]?BLICAS|ARQUIVOLOGIA|CONTABILIDADE\s+P[ÚU\?]?BLICA|CONTABILIDADE\s+GERAL|CONTABILIDADE|AUDITORIA|ECONOMIA|ESTAT[ÍI\?]?STICA|CONHECIMENTOS\s+B[ÁA\?]?SICOS|CONHECIMENTOS\s+ESPEC[ÍI\?]?FICOS|CONHECIMENTOS\s+GERAIS|CONHECIMENTOS\s+REGIONAIS|ATUALIDADES|HIST[ÓO\?]?RIA\s+E\s+GEOGRAFIA|GEOGRAFIA|HIST[ÓO\?]?RIA|ENFERMAGEM|MEDICINA|SA[ÚU\?]?DE\s+P[ÚU\?]?BLICA|SUS|FARM[ÁA\?]?CIA|ODONTOLOGIA|BIOLOGIA|PSICOLOGIA|SERVI[ÇC\?]?O\s+SOCIAL|NUTRI[ÇC\?][ÃA\?]?O|ENGENHARIA\s+CIVIL|ENGENHARIA\s+EL[ÉE\?]?TRICA|ENGENHARIA\s+MEC[ÂA\?]?NICA|ENGENHARIA|F[ÍI\?]?SICA|QU[ÍI\?]?MICA|PEDAGOGIA|L[ÍI\?]?NGUA\s+INGLESA|INGL[ÊE\?]?S|L[ÍI\?]?NGUA\s+ESPANHOLA|ESPANHOL|SEGURAN[ÇC\?]?A\s+P[ÚU\?]?BLICA|CRIMINOLOGIA))(?:[ \t]*[-–—:][^\n]*)?$",
+        seeds = [
+            r"(?im)^[ \t]*(?:(?:NO[ÇC\?][ÕO\?]?ES\s+DE\s+|CONHECIMENTOS\s+(?:B[ÁA\?]?SICOS|ESPEC[ÍI\?]?FICOS|GERAIS|REGIONAIS)\s*[-–—:]*\s*|BLOCO\s+[I|V|X\d]+\s*[-–—:]*\s*|PARTE\s+[I|V|X\d]+\s*[-–—:]*\s*|DISCIPLINA\s*:\s*)?(?:L[ÍI\?]?NGUA\s+PORTUGUESA|PORTUGU[ÊE\?]?S|INTERPRETA[ÇC\?][ÃA\?]?O\s+DE\s+TEXTO|GRAM[ÁA\?]?TICA|REDA[ÇC\?][ÃA\?]?O\s+OFICIAL|MATEM[ÁA\?]?TICA\s+E\s+RACIOC[ÍI\?]?NIO\s+L[ÓO\?]?GICO|RACIOC[ÍI\?]?NIO\s+L[ÓO\?]?GICO-MATEM[ÁA\?]?TICA|RACIOC[ÍI\?]?NIO\s+L[ÓO\?]?GICO|MATEM[ÁA\?]?TICA\s+FINANCEIRA|MATEM[ÁA\?]?TICA|INFORM[ÁA\?]?TICA|TECNOLOGIA\s+DA\s+INFORM[AÃ\?]?O|CI[ÊE\?]?NCIA\s+DE\s+DADOS|DIREITO\s+CONSTITUCIONAL|DIREITO\s+ADMINISTRATIVO|DIREITO\s+PENAL|DIREITO\s+CIVIL|DIREITO\s+PROCESSUAL\s+CIVIL|DIREITO\s+PROCESSUAL\s+PENAL|DIREITO\s+PROCESSUAL\s+DO\s+TRABALHO|DIREITO\s+PROCESSUAL|DIREITO\s+TRIBUT[ÁA\?]?RIO|DIREITO\s+PREVIDENCI[ÁA\?]?RIO|DIREITO\s+DO\s+TRABALHO|DIREITO\s+FINANCEIRO|DIREITO\s+AMBIENTAL|DIREITO\s+ELEITORAL|DIREITO\s+EMPRESARIAL|DIREITOS\s+HUMANOS|LEGISLA[ÇC\?][ÃA\?]?O\s+ESPEC[ÍI\?]?FICA|LEGISLA[ÇC\?][ÃA\?]?O\s+APLICADA|LEGISLA[ÇC\?][ÃA\?]?O\s+INSTITUCIONAL|LEGISLA[ÇC\?][ÃA\?]?O|[ÉE\?]?TICA\s+NO\s+SERVI[ÇC\?]?O\s+P[ÚU\?]?BLICO|[ÉE\?]?TICA|REGIMENTO\s+INTERNO|ESTATUTO\s+DOS\s+SERVIDORES|ADMINISTRA[ÇC\?][ÃA\?]?O\s+FINANCEIRA\s+E\s+OR[ÇC\?]?AMENT[ÁA\?]?RIA|AFO|OR[ÇC\?]?AMENTO\s+P[ÚU\?]?BLICO|ADMINISTRA[ÇC\?][ÃA\?]?O\s+P[ÚU\?]?BLICA|ADMINISTRA[ÇC\?][ÃA\?]?O\s+GERAL|GEST[ÃA\?]?O\s+P[ÚU\?]?BLICA|GEST[ÃA\?]?O\s+DE\s+PESSOAS|RECURSOS\s+HUMANOS|POL[ÍI\?]?TICAS\s+P[ÚU\?]?BLICAS|ARQUIVOLOGIA|CONTABILIDADE\s+P[ÚU\?]?BLICA|CONTABILIDADE\s+GERAL|CONTABILIDADE|AUDITORIA|ECONOMIA|ESTAT[ÍI\?]?STICA|CONHECIMENTOS\s+B[ÁA\?]?SICOS|CONHECIMENTOS\s+ESPEC[ÍI\?]?FICOS|CONHECIMENTOS\s+GERAIS|CONHECIMENTOS\s+REGIONAIS|ATUALIDADES|HIST[ÓO\?]?RIA\s+E\s+GEOGRAFIA|GEOGRAFIA|HIST[ÓO\?]?RIA|ENFERMAGEM|MEDICINA|SA[ÚU\?]?DE\s+P[ÚU\?]?BLICA|SUS|FARM[ÁA\?]?CIA|ODONTOLOGIA|BIOLOGIA|PSICOLOGIA|SERVI[ÇC\?]?O\s+SOCIAL|NUTRI[ÇC\?][ÃA\?]?O|ENGENHARIA\s+CIVIL|ENGENHARIA\s+EL[ÉE\?]?TRICA|ENGENHARIA\s+MEC[ÂA\?]?NICA|ENGENHARIA|F[ÍI\?]?SICA|QU[ÍI\?]?MICA|PEDAGOGIA|L[ÍI\?]?NGUA\s+INGLESA|INGL[ÊE\?]?S|L[ÍI\?]?NGUA\s+ESPANHOLA|ESPANHOL|SEGURAN[ÇC\?]?A\s+P[ÚU\?]?BLICA|CRIMINOLOGIA))(?:[ \t]*[-–—:][^\n]*)?$",
         ]
-    return []
+    else:
+        seeds = []
+
+    # Warm Start cumulativo: Injeta o melhor padrão do checkpoint anterior como Seed #1
+    checkpoint_file = os.path.join("checkpoints", "best_patterns.json")
+    if os.path.exists(checkpoint_file):
+        try:
+            with open(checkpoint_file, "r", encoding="utf-8") as cf:
+                ck = json.load(cf)
+                if target_type in ck and "pattern" in ck[target_type]:
+                    saved_p = ck[target_type]["pattern"]
+                    if saved_p and saved_p not in seeds:
+                        seeds.insert(0, saved_p)
+        except Exception:
+            pass
+
+    return seeds
 
 
 def mutate_regex(pattern: str) -> str:
-    """Aplica mutações genéticas estruturais e cruzamentos."""
+    """Aplica mutações genéticas estruturais garantidas via AST Synthesizer."""
+    if HAS_AST_ENGINE:
+        try:
+            ast_tree = parse_regex_to_ast(pattern)
+            mutated_tree = mutate_ast(ast_tree)
+            pat_str, compiled = ast_to_compiled_regex(mutated_tree)
+            if compiled is not None:
+                return pat_str
+        except Exception:
+            pass
+
     mutated = pattern
-    op = random.randint(0, 8)
+    op = random.randint(0, 9)
 
     separators = [
         r"[\.\-\–\—\:\)]",
@@ -249,7 +282,18 @@ def mutate_regex(pattern: str) -> str:
 
 
 def crossover_regex(p1: str, p2: str) -> str:
-    """Combina sub-cláusulas de dois padrões pais."""
+    """Combina sub-cláusulas de dois padrões pais via AST Crossover."""
+    if HAS_AST_ENGINE:
+        try:
+            ast1 = parse_regex_to_ast(p1)
+            ast2 = parse_regex_to_ast(p2)
+            child_ast = crossover_ast(ast1, ast2)
+            pat_str, compiled = ast_to_compiled_regex(child_ast)
+            if compiled is not None:
+                return pat_str
+        except Exception:
+            pass
+
     parts1 = p1.split("|")
     parts2 = p2.split("|")
     if len(parts1) > 1 and len(parts2) > 1:
@@ -425,15 +469,10 @@ def run_pure_python_optimizer(
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
         for gen in range(1, generations + 1):
-            # 1. Cyclic Cosine Annealing com Warm Restarts (SGDR)
-            if stagnation_counter >= 8 and best_f1 < 0.90:
-                temp = 1.0  # Reaquece a temperatura para saltar fora do mínimo local
-                mutation_prob = 0.85
-                stagnation_counter = 0
-            else:
-                cycle_progress = (gen % 25) / 25.0
-                temp = 0.5 * (1.0 + math.cos(math.pi * cycle_progress))
-                mutation_prob = 0.25 + 0.55 * temp
+            # 1. Cyclic Cosine Annealing (SGDR): ciclos periódicos de 25 gerações sem alterar stagnation_counter
+            cycle_progress = ((gen - 1) % 25) / 25.0
+            temp = 0.5 * (1.0 + math.cos(math.pi * cycle_progress))
+            mutation_prob = 0.20 + 0.60 * temp
 
             # 2. Hard Example Mining: Injeta amostras difíceis no batch da época
             batch = get_stratified_and_hard_batch(corpus, hard_sample_pool, max_per_banca=1) if len(corpus) > bancas_ativas else corpus
@@ -468,10 +507,10 @@ def run_pure_python_optimizer(
                 flush=True,
             )
 
-            # 3. Early Stopping: Dispara quando AMBOS (Fitness e Invariância/F1) param de evoluir juntos
-            if stagnation_counter >= patience and best_f1 >= 0.90:
+            # 3. Early Stopping: Dispara quando não há melhoria em N épocas consecutivas
+            if stagnation_counter >= patience:
                 print(
-                    f"  [⚡ EARLY STOPPING] Estagnação conjunta confirmada: Ambos os índices (Fitness={best_fitness:.4f}, Inv={best_inv:.4f}, F1={best_f1:.4f}) pararam de evoluir por {patience} épocas consecutivas na geração {gen}! Encerrando suíte.",
+                    f"  [⚡ EARLY STOPPING] Convergência/Estagnação confirmada: Sem melhorias por {patience} épocas consecutivas na geração {gen} (Melhor Fitness={best_fitness:.4f}, F1={best_f1:.4f}, Inv={best_inv:.4f})! Encerrando suíte com sucesso.",
                     flush=True,
                 )
                 break

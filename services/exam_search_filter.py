@@ -322,62 +322,56 @@ def standardize_card_title(
 ) -> str:
     """
     Higieniza e formata o título do card para o padrão canônico:
-    Ex: '[2024] POLÍCIA FEDERAL - AGENTE DE POLÍCIA'
+    Ex: '[2024] OGMO PARANAGUÁ - ESTIVADOR'
     """
+    if not raw_title:
+        return 'Geral / Conhecimentos Básicos'
+
     t = raw_title.strip()
-    
-    # Extração de Ano
-    ano_original = ''
+
+    # 1. Extração de Ano
+    ano = ''
     m_ano = re.search(r'\b(19\d{2}|20\d{2})\b', t)
     if not m_ano and url:
         m_ano = re.search(r'\b(19\d{2}|20\d{2})\b', url)
     if m_ano:
-        ano_original = m_ano.group(1)
+        ano = m_ano.group(1)
+    elif nlp_data and nlp_data.get('ano') and str(nlp_data['ano']).lower() not in ['n/a', '', 'null']:
+        ano = str(nlp_data['ano']).strip()
 
-    # Limpeza de ruídos administrativos do título
+    # 2. Limpeza de ruídos de portais e bancas
+    t = re.sub(r'^(?:\[\d{4}\]\s*)+', '', t)
     t = re.sub(r'[—–]', '-', t)
-    t = re.sub(r'^(provas para download|prova para download|provas?)\s*-\s*', '', t, flags=re.IGNORECASE)
-    t = re.sub(r'^(IDCAP|IDECAN|PCI|QConcursos|Web)\s*-\s*', '', t, flags=re.IGNORECASE)
-    t = re.sub(r'(processo seletivo(\s*privado|\s*priv|\s*pri)*)+', '', t, flags=re.IGNORECASE)
-    t = re.sub(r'(concurso\s*p[uú]blico.*?)(para|-|\s|$)', '', t, flags=re.IGNORECASE)
-    t = re.sub(r'\d{3}/\d{4}\s*-\s*', '', t)
-    t = re.sub(r'\bedital\s*(?:n[º°o]?)?\s*\d+/\d+\b', '', t, flags=re.IGNORECASE)
+    t = re.sub(r'^(?:provas?\s+para\s+download|provas?)\s*-\s*', '', t, flags=re.IGNORECASE)
+    t = re.sub(r'^(?:IDCAP|IDECAN|PCI|QConcursos|Web)\s*-\s*', '', t, flags=re.IGNORECASE)
+    t = re.sub(r'Processo\s+Seletivo(?:\s+Privado)?\s*[-–]?\s*', '', t, flags=re.IGNORECASE)
+    t = re.sub(r'Concurso\s+P[úu]blico\s*[-–]?\s*', '', t, flags=re.IGNORECASE)
+    t = re.sub(r'\d{3}/\d{4}\s*[-–]?\s*', '', t)
+    t = re.sub(r'Edital\s*(?:n[º°o]?)?\s*(?:\d+/\d+|\d+)?\s*[-–]?\s*', '', t, flags=re.IGNORECASE)
+    t = re.sub(r'\bEdital\s*(?:n[º°o]?)?\b', '', t, flags=re.IGNORECASE)
     t = re.sub(r'\b(caderno de quest[oõ]es|prova objetiva|prova matriz|gabarito definitivo|gabarito preliminar)\b', '', t, flags=re.IGNORECASE)
     t = re.sub(r'\.pdf$', '', t, flags=re.IGNORECASE)
 
-    ano = nlp_data.get('ano', '') if nlp_data else ''
-    orgao = nlp_data.get('orgao', '') if nlp_data else ''
-    local = nlp_data.get('local', '') if nlp_data else ''
+    # 3. Divide por hífens e limpa cada segmento
+    parts = [re.sub(r'\s+', ' ', p).strip() for p in t.split('-') if p.strip()]
 
-    if orgao and str(orgao).lower() in ['n/a', '', 'null']:
-        orgao = ''
-    
-    local_str = f' - {local}' if local and str(local).lower() not in ['n/a', '', 'null'] and local.lower() not in orgao.lower() else ''
-    cargo = t.strip() or 'Geral / Conhecimentos Básicos'
-
-    if ano_original:
-        ano = ano_original
-    elif not ano or str(ano).lower() in ['n/a', '', 'null']:
-        ano = ''
-
-    prefix = f'[{ano}] ' if ano else ''
-    orgao_final = f'{orgao}{local_str} - ' if orgao else f'{local} - ' if local_str else ''
-    
-    final_string = f'{orgao_final}{cargo}'.upper()
-    final_parts = [p.strip() for p in final_string.split('-') if p.strip()]
-    
-    # Deduplica termos repetidos no título
+    # 4. Deduplica termos repetidos adjacentes mantendo a riqueza do cargo
     dedup_parts = []
-    for p in final_parts:
+    for p in parts:
+        p_clean = re.sub(r'[^\w]', '', p).lower()
+        if not p_clean:
+            continue
         if not dedup_parts:
             dedup_parts.append(p)
         else:
-            p_clean = re.sub(r'[^\w]', '', p).lower()
             last_clean = re.sub(r'[^\w]', '', dedup_parts[-1]).lower()
-            if not (p_clean and last_clean and (p_clean == last_clean or p_clean in last_clean or last_clean in p_clean)):
+            if p_clean != last_clean:
                 dedup_parts.append(p)
 
-    return f"{prefix}{' - '.join(dedup_parts)}"
+    title_body = ' - '.join(dedup_parts).upper() if dedup_parts else 'PROVA DE CONCURSO'
+    prefix = f'[{ano}] ' if ano else ''
+
+    return f"{prefix}{title_body}"
 
 
 # =============================================================================

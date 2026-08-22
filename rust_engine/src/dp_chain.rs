@@ -22,10 +22,18 @@ pub fn solve_dp_chain(candidates: &[QuestionCandidate]) -> Vec<QuestionCandidate
         let min_j = if i > 50 { i - 50 } else { 0 };
         for j in min_j..i {
             let diff = (candidates[i].number as i32) - (candidates[j].number as i32);
+            let dist = candidates[i].start.saturating_sub(candidates[j].end);
+            
+            // Rejeita saltos absurdamente longos (> 15000 caracteres) se houver opções melhores
+            let dist_penalty = if dist > 10000 { 15 } else if dist > 5000 { 5 } else { 0 };
+
             let step_score = if diff == 1 {
-                100 + if candidates[i].is_explicit { 5 } else { 0 }
-            } else if (2..=4).contains(&diff) {
-                (25 - diff * 5) + if candidates[i].is_explicit { 5 } else { 0 }
+                1000 
+                + (if candidates[i].is_explicit { 200 } else { 0 })
+                + (if candidates[j].is_explicit { 200 } else { 0 })
+                - dist_penalty
+            } else if (2..=3).contains(&diff) {
+                (200 - diff * 40) + if candidates[i].is_explicit { 50 } else { 0 } - dist_penalty
             } else {
                 continue;
             };

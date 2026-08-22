@@ -18,10 +18,12 @@ from .diagram_cropper import (
     CAPTION_REGEX,
 )
 from .formula_formatter import format_latex_formulas
-from .subject_classifier import SUBJECT_REGEX, format_subject_title, _format_subject_title
+from .subject_classifier import SUBJECT_REGEX, format_subject_title, _format_subject_title, rust_classify_subject
 from services.gabarito_service import extract_gabarito_from_doc, _extract_gabarito_from_doc
 from services.html_exam_parser import clean_text_artifacts
 from .rust_bridge import rust_scan_question_headers, is_rust_available
+from .banca_clusterizer import detect_banca_family, get_specialized_patterns, BancaFamily
+from .typography_restorer import restore_exam_typography
 
 def parse_exam_document(
     pdf_bytes_or_path: Any,
@@ -124,12 +126,13 @@ def parse_exam_document(
         doc.close()
         return []
 
-    # 5. Mapeia textos de apoio compartilhados
-    context_blocks = extract_context_blocks(full_text)
-
-    # 6. Scanner Global de Cabeçalhos de Questões (Aceleração Rust nativa + Fallback Python)
+    # 5. Scanner Global de Cabeçalhos de Questões (Aceleração Rust nativa + Fallback Python)
     rust_headers = rust_scan_question_headers(full_text)
     found_positions = []
+
+    header_pat = re.compile(
+        r'(?i)(?:^|\n)[ \t]*(?:(?:QUEST[AÃ\?]?O\s+|ITEM\s+)(0*\d{1,3})[ \t]*(?:[\.\-–—:\)]|\n+|[ \t]+)|(0*\d{1,3})[ \t]*[\.\-–—:\)][ \t]+|\((0*\d{1,3})\)[ \t]+)'
+    )
 
     if rust_headers:
         found_positions = [(item['number'], item['start'], item['end']) for item in rust_headers]
@@ -161,6 +164,12 @@ def parse_exam_document(
                 continue
 
             is_explicit = bool(m.group(1))
+
+            if not is_explicit:
+                prefix_slice = full_text[max(0, m.start() - 40):m.start()].upper()
+                if any(bad in prefix_slice for bad in ['QUADRO', 'FIGURA', 'TABELA', 'TEXTO', 'PÁGINA', 'PAGINA', 'ART.', 'ARTIGO', 'QUESTÕES DE', 'QUESTOES DE']):
+                    continue
+
             candidates.append((m.start(), m.end(), q_num, is_explicit))
 
         # Algoritmo de Encadeamento Ótimo por Programação Dinâmica (favorece sequência contínua)
@@ -172,10 +181,13 @@ def parse_exam_document(
             for i in range(n):
                 for j in range(i):
                     diff = candidates[i][2] - candidates[j][2]
+                    dist = max(0, candidates[i][0] - candidates[j][1])
+                    dist_penalty = 15 if dist > 10000 else (5 if dist > 5000 else 0)
+
                     if diff == 1:
-                        step_score = 100 + (5 if candidates[i][3] else 0)
-                    elif 2 <= diff <= 4:
-                        step_score = (25 - diff * 5) + (5 if candidates[i][3] else 0)
+                        step_score = 1000 + (200 if candidates[i][3] else 0) + (200 if candidates[j][3] else 0) - dist_penalty
+                    elif 2 <= diff <= 3:
+                        step_score = (200 - diff * 40) + (50 if candidates[i][3] else 0) - dist_penalty
                     else:
                         continue
 
@@ -196,6 +208,9 @@ def parse_exam_document(
                 q_str = m.group(1) or m.group(2) or m.group(3) or m.group(4)
                 if q_str and 1 <= int(q_str) <= 200:
                     found_positions.append((int(q_str), m.start(), m.end()))
+
+    # 6. Mapeia textos de apoio compartilhados com base nas posições exatas das questões
+    context_blocks = extract_context_blocks(full_text, found_positions)
 
     # 7. Estruturação das Questões, Alternativas e Fórmulas
     questions = []
@@ -311,6 +326,7 @@ def parse_exam_document(
                     while opt_lines and SUBJECT_REGEX.match(opt_lines[-1].strip()):
                         opt_lines.pop()
                     opt_content = '\n'.join(opt_lines).strip()
+                opt_content = restore_exam_typography(opt_content, is_option=True)
                 formatted_opt, _ = format_latex_formulas(opt_content)
                 options[letter] = formatted_opt
 
@@ -334,8 +350,12 @@ def parse_exam_document(
 
         if matching_context:
             q_min, q_max, ctx_text = matching_context
-            if ctx_text[:30] not in formatted_enunciado:
-                formatted_enunciado = f"📖 **Texto de Apoio (Questões {q_min} a {q_max}):**\n\n{ctx_text}\n\n---\n\n{formatted_enunciado}"
+            cleaned_ctx = restore_exam_typography(ctx_text)
+            if cleaned_ctx[:30] not in formatted_enunciado:
+                formatted_enunciado = f"📖 **Texto de Apoio (Questões {q_min} a {q_max}):**\n\n{cleaned_ctx}\n\n---\n\n{formatted_enunciado}"
+
+        # Restauração Tipográfica e de Parágrafos Editorial
+        formatted_enunciado = restore_exam_typography(formatted_enunciado)
 
         # Determinação da Resposta Oficial
         final_answer = master_gabarito.get(q_num) or embedded_ans
@@ -345,12 +365,19 @@ def parse_exam_document(
         # Recupera as coordenadas espaciais da questão
         approx_page, q_x, q_y = q_spatial_map.get(q_num, (start_page, 0.0, 0.0))
 
+        # Determinação da Disciplina (Banner de Seção ou Classificador Semântico Rust)
+        question_subject = current_subject
+        if question_subject == 'Geral' or not question_subject:
+            inferred = rust_classify_subject(enunciado)
+            if inferred:
+                question_subject = inferred
+
         questions.append({
             'numero_questao': str(q_num),
             'enunciado': formatted_enunciado,
             'opcoes': options,
             'resposta': final_answer,
-            'disciplina': current_subject,
+            'disciplina': question_subject,
             'images': None,
             'latex_support': 1 if has_latex_enunciado else 0,
             '_page': approx_page,

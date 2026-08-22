@@ -57,6 +57,21 @@ export const SearchHub: React.FC<SearchHubProps> = ({ onExamReady }) => {
     }
   };
 
+  const handleSourceChange = (newSource: string) => {
+    setSelectedSource(newSource);
+    if (query.trim()) {
+      const sourceParam = newSource === 'all' ? undefined : newSource;
+      setIsLoading(true);
+      setErrorMsg(null);
+      api.searchExams(query, sourceParam)
+        .then((data) => setResults(data))
+        .catch((err: any) => {
+          setErrorMsg(err.message || 'Erro ao filtrar fonte.');
+        })
+        .finally(() => setIsLoading(false));
+    }
+  };
+
   const handleIngest = async (item: SearchResultItem) => {
     const key = item.url;
     setIngestingUrls((prev) => ({
@@ -173,7 +188,7 @@ export const SearchHub: React.FC<SearchHubProps> = ({ onExamReady }) => {
             ].map((chip) => (
               <button
                 key={chip.id}
-                onClick={() => setSelectedSource(chip.id)}
+                onClick={() => handleSourceChange(chip.id)}
                 className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition ${
                   selectedSource === chip.id
                     ? 'glass-btn-primary text-white shadow-md'

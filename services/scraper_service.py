@@ -26,15 +26,16 @@ from services.exam_search_filter import (
 KNOWN_EXAMS_DB = []
 
 
-# Termos que identificam inequivocamente documentos administrativos que NÃO devem aparecer na busca
 DISCARD_TERMS = [
-    'resultado', 'convoca', 'retifica', 'cronograma', 'edital', 'rela',
+    'resultado', 'convoca', 'retifica', 'cronograma', 'rela',
     'recurso', 'divulga', 'homologa', 'inscri', 'isen', 'anexo',
     'aditivo', 'comunicado', 'aviso', 'lista', 'decreto', 'lei', 'portaria',
     'informa', 'classifica', 'quantitativo', 'local', 'data', 'nota',
     'judicial', 'decis', 'cumprimento', 'parecer', 'termo de posse', 'convocados',
     'audiometria', 'psicol', 'aptid', 'exame m', 'reintegra', 'curso de forma',
-    'entrevista', 'devolutiva', 'apresenta', 'termo de', 'comprovação de requisitos'
+    'entrevista', 'devolutiva', 'apresenta', 'termo de', 'comprovação', 'comprovacao',
+    'convenção', 'convencao', 'acordo coletivo', 'cct', 'laudo', 'atendimento especial',
+    'edital de abertura', 'edital consolidado'
 ]
 
 def is_administrative_document(text_or_url):
@@ -101,27 +102,42 @@ def _search_qc_provas(query):
     return results
 
 def _scrape_pci_pdfs(query, nlp_data=None):
-    """Busca rápida e filtrada de provas no PCI Concursos."""
+    """Busca rápida, expandida e filtrada de provas no PCI Concursos."""
     results = []
     try:
         ddgs_cls = get_ddgs_class()
         if not ddgs_cls:
             return results
-        
-        # Query direta e otimizada para o PCI Concursos
-        search_query = f"{query} site:pciconcursos.com.br/provas"
+
+        queries_to_try = [
+            f"{query} site:pciconcursos.com.br/provas",
+            f"{query} site:pciconcursos.com.br",
+        ]
+        if nlp_data:
+            cargo = str(nlp_data.get('cargo', '')).strip()
+            orgao = str(nlp_data.get('orgao', '')).strip()
+            if cargo and cargo.lower() not in ['n/a', 'none', '']:
+                queries_to_try.append(f"{cargo} site:pciconcursos.com.br/provas")
+            if orgao and orgao.lower() not in ['n/a', 'none', '']:
+                queries_to_try.append(f"{orgao} site:pciconcursos.com.br/provas")
+
         ddgs_results = []
-        try:
-            with ddgs_cls() as ddgs:
-                ddgs_results = list(ddgs.text(search_query, max_results=10))
-        except Exception as ddg_err:
-            # Fallback com query simplificada
+        seen_hrefs = set()
+
+        for search_q in queries_to_try[:3]:
             try:
                 with ddgs_cls() as ddgs:
-                    ddgs_results = list(ddgs.text(f"{query} site:pciconcursos.com.br", max_results=8))
+                    batch = list(ddgs.text(search_q, max_results=8))
+                    for b in batch:
+                        h = b.get('href', '')
+                        if h and h not in seen_hrefs:
+                            seen_hrefs.add(h)
+                            ddgs_results.append(b)
+                if len(ddgs_results) >= 8:
+                    break
             except Exception:
-                pass
-        
+                continue
+
         if not ddgs_results:
             return results
             
@@ -204,7 +220,7 @@ def _scrape_idcap_pdfs(query, nlp_data=None):
                 url = f"https://idcap.selecao.net.br{status_page}"
                 page_concursos = []
                 try:
-                    resp = session.get(url, timeout=2.0)
+                    resp = session.get(url, timeout=5.0)
                     if resp.status_code == 200:
                         soup = BeautifulSoup(resp.text, 'html.parser')
                         for a in soup.find_all('a', href=lambda h: h and '/informacoes/' in h):
@@ -235,15 +251,15 @@ def _scrape_idcap_pdfs(query, nlp_data=None):
                     concurso_links.extend(fut.result())
 
         concurso_links.sort(key=lambda x: x[0], reverse=True)
-        # Prioriza estritamente os concursos mais relevantes (top 3)
-        concurso_links = concurso_links[:3]
+        # Varre os concursos correspondentes encontrados (top 10)
+        concurso_links = concurso_links[:10]
 
         def fetch_concurso_pdfs(item):
             concurso_score, href, concurso_title = item
             c_results = []
             try:
                 url = f"https://idcap.selecao.net.br{href}" if href.startswith('/') else href
-                resp = session.get(url, timeout=2.0)
+                resp = session.get(url, timeout=5.0)
                 if resp.status_code == 200:
                     soup = BeautifulSoup(resp.text, 'html.parser')
                     

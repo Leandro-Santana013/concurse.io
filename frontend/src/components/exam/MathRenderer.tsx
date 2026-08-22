@@ -59,6 +59,102 @@ const renderMarkdownTable = (tableText: string, keyPrefix: string | number) => {
   );
 };
 
+// Renderiza Markdown inline básico (**negrito**, *itálico*, links e quebras de linha)
+const renderInlineMarkdown = (text: string) => {
+  if (!text) return null;
+
+  // Cabeçalho H3 Markdown
+  if (text.startsWith('### ')) {
+    return (
+      <h3 className="text-base sm:text-lg font-bold font-heading text-indigo-200 my-2 border-b border-indigo-500/20 pb-1">
+        {text.slice(4)}
+      </h3>
+    );
+  }
+
+  // Divide por marcadores **negrito** e *itálico*
+  const tokens = text.split(/(\*\*.*?\*\*|\*.*?\*)/g);
+  return tokens.map((token, idx) => {
+    if (token.startsWith('**') && token.endsWith('**') && token.length >= 4) {
+      return (
+        <strong key={idx} className="font-bold text-white">
+          {token.slice(2, -2)}
+        </strong>
+      );
+    }
+    if (token.startsWith('*') && token.endsWith('*') && token.length >= 2) {
+      return (
+        <em key={idx} className="italic text-slate-300">
+          {token.slice(1, -1)}
+        </em>
+      );
+    }
+    return (
+      <span key={idx} className="whitespace-pre-wrap">
+        {token}
+      </span>
+    );
+  });
+};
+
+const renderFormattedBlock = (rawText: string, keyPrefix: string | number) => {
+  if (!rawText) return null;
+
+  // Divisor horizontal markdown ---
+  if (rawText.includes('---')) {
+    const sections = rawText.split(/(?:\n\s*---\s*\n|^\s*---\s*\n|\n\s*---\s*$)/g);
+    if (sections.length > 1) {
+      return (
+        <span key={keyPrefix} className="inline-block w-full">
+          {sections.map((sec, sIdx) => (
+            <React.Fragment key={sIdx}>
+              {sIdx > 0 && <span className="my-6 block border-b border-indigo-500/25" />}
+              {renderFormattedBlock(sec, `${keyPrefix}_sec_${sIdx}`)}
+            </React.Fragment>
+          ))}
+        </span>
+      );
+    }
+  }
+
+  // Bloco de Texto de Apoio Compartilhado
+  if (rawText.trim().startsWith('📖')) {
+    const paras = rawText.trim().split('\n\n').filter(p => p.trim());
+    return (
+      <div
+        key={keyPrefix}
+        className="my-4 rounded-2xl border border-indigo-500/25 bg-gradient-to-br from-indigo-950/40 via-slate-900/60 to-slate-950/60 p-4 sm:p-5 shadow-lg shadow-indigo-950/20 backdrop-blur-sm space-y-3"
+      >
+        {paras.map((para, pIdx) => (
+          <p key={pIdx} className="leading-relaxed text-indigo-100/90 text-sm sm:text-base font-reading">
+            {renderInlineMarkdown(para)}
+          </p>
+        ))}
+      </div>
+    );
+  }
+
+  // Parágrafos regulares
+  const paragraphs = rawText.split('\n\n').filter(p => p.trim());
+  if (paragraphs.length > 1) {
+    return (
+      <span key={keyPrefix} className="inline-block w-full space-y-4">
+        {paragraphs.map((p, pIdx) => (
+          <span key={pIdx} className="block leading-relaxed">
+            {renderInlineMarkdown(p)}
+          </span>
+        ))}
+      </span>
+    );
+  }
+
+  return (
+    <span key={keyPrefix} className="whitespace-pre-wrap">
+      {renderInlineMarkdown(rawText)}
+    </span>
+  );
+};
+
 export const MathRenderer: React.FC<MathRendererProps> = ({ content, className = '' }) => {
   if (!content) return null;
 
@@ -82,7 +178,6 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content, className =
   }
 
   // 2. Separação de blocos Display $$...$$ e Inline $...$
-  // Tokeniza primeiro blocos $$...$$, depois inline $...$
   const displayParts = content.split(/(\$\$.*?\$\$)/gs);
 
   return (
@@ -133,12 +228,8 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content, className =
                 }
               }
 
-              // Texto puro com quebras de parágrafo naturais
-              return (
-                <span key={iIdx} className="whitespace-pre-wrap">
-                  {iPart}
-                </span>
-              );
+              // Texto puro com renderização enriquecida (parágrafos, negrito, divisores)
+              return renderFormattedBlock(iPart, `${dIdx}_${iIdx}`);
             })}
           </span>
         );

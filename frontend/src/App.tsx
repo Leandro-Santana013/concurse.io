@@ -40,8 +40,8 @@ export const App: React.FC = () => {
         <div className="aurora-orb-3" />
       </div>
 
-      {/* Sidebar (hidden in Zen Mode) */}
-      {!isZenMode && (
+      {/* Sidebar (hidden only when in Exam View and Zen Mode is active) */}
+      {!(currentView === 'exam' && isZenMode) && (
         <Sidebar
           currentView={currentView}
           onNavigate={(view) => navigateTo(view)}
@@ -52,7 +52,7 @@ export const App: React.FC = () => {
 
       {/* Main Content Area with Glass z-index hierarchy */}
       <div className="relative z-10 flex flex-1 flex-col overflow-x-hidden">
-        {!isZenMode && (
+        {!(currentView === 'exam' && isZenMode) && (
           <Navbar onToggleMobileSidebar={toggleMobileSidebar} />
         )}
 

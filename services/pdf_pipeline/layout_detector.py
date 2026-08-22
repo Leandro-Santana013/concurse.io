@@ -1,6 +1,6 @@
 import fitz
 import re
-from typing import List, Dict, Set, Tuple, Any
+from typing import List, Dict, Set, Tuple, Any, Optional
 
 CONTEXT_TEXT_HEADER_REGEX = re.compile(
     r'(?:^|\n|\.\s+|\s+)'
@@ -359,13 +359,14 @@ def detect_layout_and_ordered_blocks(page: fitz.Page, watermarks: Set[Tuple[int,
 
     return ordered_groups
 
-def extract_context_blocks(full_text: str) -> List[Tuple[int, int, str, int]]:
+def extract_context_blocks(full_text: str, found_positions: Optional[List[Tuple[int, int, int]]] = None) -> List[Tuple[int, int, str, int]]:
     """
     Identifica blocos de textos de apoio compartilhados ('Texto para as questões X a Y')
     e mapeia os intervalos de questões afetados. Retorna: [(q_min, q_max, text_content, banner_start_pos), ...]
     """
     context_blocks = []
     matches = list(CONTEXT_TEXT_HEADER_REGEX.finditer(full_text))
+    q_map = {item[0]: item[1] for item in (found_positions or [])}
     
     for m in matches:
         try:
@@ -376,12 +377,25 @@ def extract_context_blocks(full_text: str) -> List[Tuple[int, int, str, int]]:
                 
             banner_start = m.start()
             banner_end = m.end()
-            q_pattern = rf'(?:^|\n)[ \t]*(?:QUEST[AÃ\ufffd\?]?O\s+|ITEM\s+)?0*{q_min}\s*(?:[\.\-\–\—\:\)]|\n+|[ \t]+(?=[A-Z\u00C0-\u00DC\"“\'‘\(]))'
+
+            # 1. Se temos a posição exata da questão de início do bloco via scanner de cabeçalhos
+            q_target_start = q_map.get(q_min)
+            if q_target_start and q_target_start > banner_end:
+                text_body = full_text[banner_end:q_target_start].strip()
+                if len(text_body) >= 10:
+                    context_blocks.append((q_min, q_max, text_body, banner_start))
+                    continue
+            
+            # 2. Fallback por regex estrito de início de questão (exigindo prefixo QUESTÃO ou início de linha isolado)
+            q_pattern = rf'(?:^|\n)[ \t]*(?:QUEST[AÃ\ufffd\?]?O\s+|ITEM\s+)0*{q_min}\b'
             m_q = re.search(q_pattern, full_text[banner_end:], re.IGNORECASE)
+            if not m_q:
+                q_pattern = rf'(?:^|\n)[ \t]*0*{q_min}\s*[\.\-\–\—\:\)]'
+                m_q = re.search(q_pattern, full_text[banner_end:], re.IGNORECASE)
             
             if m_q:
                 text_body = full_text[banner_end:banner_end + m_q.start()].strip()
-                if len(text_body) >= 20:
+                if len(text_body) >= 10:
                     context_blocks.append((q_min, q_max, text_body, banner_start))
         except Exception:
             continue

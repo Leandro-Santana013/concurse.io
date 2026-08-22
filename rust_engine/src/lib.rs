@@ -16,6 +16,12 @@ use subject_classifier::{
     scan_subject_sections as rust_scan_sections
 };
 
+#[inline]
+fn byte_to_char_index(s: &str, byte_offset: usize) -> usize {
+    let bound = byte_offset.min(s.len());
+    s[..bound].chars().count()
+}
+
 /// Escaneia todo o texto e extrai os cabeçalhos válidos de questões usando DP Chain
 #[pyfunction]
 fn scan_question_headers(py: Python, full_text: &str) -> PyResult<PyObject> {
@@ -29,6 +35,26 @@ fn scan_question_headers(py: Python, full_text: &str) -> PyResult<PyObject> {
             if let Ok(q_num) = m_str.as_str().parse::<usize>() {
                 if (1..=200).contains(&q_num) {
                     let is_explicit = cap.get(1).is_some();
+                    
+                    // Se não for cabeçalho explícito (ex: 'QUESTÃO 01'), filtra falsos positivos de números em legendas/artigos
+                    if !is_explicit {
+                        let prefix_slice = &full_text[m.start().saturating_sub(40)..m.start()];
+                        let prefix_upper = prefix_slice.to_uppercase();
+                        if prefix_upper.contains("QUADRO")
+                            || prefix_upper.contains("FIGURA")
+                            || prefix_upper.contains("TABELA")
+                            || prefix_upper.contains("TEXTO")
+                            || prefix_upper.contains("PÁGINA")
+                            || prefix_upper.contains("PAGINA")
+                            || prefix_upper.contains("ART.")
+                            || prefix_upper.contains("ARTIGO")
+                            || prefix_upper.contains("QUESTÕES DE")
+                            || prefix_upper.contains("QUESTOES DE")
+                        {
+                            continue;
+                        }
+                    }
+
                     candidates.push(QuestionCandidate {
                         start: m.start(),
                         end: m.end(),
@@ -44,10 +70,12 @@ fn scan_question_headers(py: Python, full_text: &str) -> PyResult<PyObject> {
     let py_list = PyList::empty_bound(py);
 
     for item in optimal_chain {
+        let char_start = byte_to_char_index(full_text, item.start);
+        let char_end = byte_to_char_index(full_text, item.end);
         let dict = PyDict::new_bound(py);
         dict.set_item("number", item.number)?;
-        dict.set_item("start", item.start)?;
-        dict.set_item("end", item.end)?;
+        dict.set_item("start", char_start)?;
+        dict.set_item("end", char_end)?;
         dict.set_item("is_explicit", item.is_explicit)?;
         py_list.append(dict)?;
     }
@@ -64,11 +92,13 @@ fn scan_context_banners(py: Python, full_text: &str) -> PyResult<PyObject> {
         if let (Some(m_all), Some(m_q1), Some(m_q2)) = (cap.get(1), cap.get(2), cap.get(3)) {
             if let (Ok(q1), Ok(q2)) = (m_q1.as_str().parse::<usize>(), m_q2.as_str().parse::<usize>()) {
                 if q1 <= q2 && q2 - q1 <= 50 {
+                    let char_start = byte_to_char_index(full_text, m_all.start());
+                    let char_end = byte_to_char_index(full_text, m_all.end());
                     let dict = PyDict::new_bound(py);
                     dict.set_item("q_min", q1)?;
                     dict.set_item("q_max", q2)?;
-                    dict.set_item("banner_start", m_all.start())?;
-                    dict.set_item("banner_end", m_all.end())?;
+                    dict.set_item("banner_start", char_start)?;
+                    dict.set_item("banner_end", char_end)?;
                     py_list.append(dict)?;
                 }
             }
