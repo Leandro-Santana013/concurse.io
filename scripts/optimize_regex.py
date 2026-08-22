@@ -432,11 +432,12 @@ def run_pure_python_optimizer(
             scored.sort(key=lambda x: x[0], reverse=True)
             top_fit, top_f1, top_inv, top_simp, top_ind = scored[0]
 
-            improved = top_fit > best_fitness
+            # Evolução conjunta: se Fitness OU Invariância/F1 melhorarem, o algoritmo continua evoluindo
+            improved = (top_fit > best_fitness) or (top_inv > best_inv and top_f1 >= best_f1) or (top_f1 > best_f1)
             if improved:
-                best_fitness = top_fit
-                best_f1 = top_f1
-                best_inv = top_inv
+                best_fitness = max(best_fitness, top_fit)
+                best_f1 = max(best_f1, top_f1)
+                best_inv = max(best_inv, top_inv)
                 best_simp = top_simp
                 best_pattern = top_ind
                 stagnation_counter = 0
@@ -449,13 +450,10 @@ def run_pure_python_optimizer(
                 flush=True,
             )
 
-            # 3. Dupla Verificação de Early Stopping (Fitness + Invariância / F1)
-            is_perfect_accuracy = (best_f1 >= 0.999 and best_inv >= 0.999)
-            is_fitness_converged = (best_fitness >= 0.930)
-
-            if (is_perfect_accuracy or is_fitness_converged) and stagnation_counter >= patience:
+            # 3. Early Stopping: Dispara quando AMBOS (Fitness e Invariância/F1) param de evoluir juntos
+            if stagnation_counter >= patience and best_f1 >= 0.90:
                 print(
-                    f"  [⚡ EARLY STOPPING] Dupla Verificação Concluída: Fitness={best_fitness:.4f} (F1={best_f1:.4f}, Inv={best_inv:.4f}) estabilizado por {patience} épocas na geração {gen}! Encerrando suíte com sucesso.",
+                    f"  [⚡ EARLY STOPPING] Estagnação conjunta confirmada: Ambos os índices (Fitness={best_fitness:.4f}, Inv={best_inv:.4f}, F1={best_f1:.4f}) pararam de evoluir por {patience} épocas consecutivas na geração {gen}! Encerrando suíte.",
                     flush=True,
                 )
                 break
