@@ -449,10 +449,13 @@ def run_pure_python_optimizer(
                 flush=True,
             )
 
-            # 3. Early Stopping com Paciência adaptativa (convergência 100%)
-            if best_f1 >= 0.999 and best_inv >= 0.999 and stagnation_counter >= patience:
+            # 3. Dupla Verificação de Early Stopping (Fitness + Invariância / F1)
+            is_perfect_accuracy = (best_f1 >= 0.999 and best_inv >= 0.999)
+            is_fitness_converged = (best_fitness >= 0.930)
+
+            if (is_perfect_accuracy or is_fitness_converged) and stagnation_counter >= patience:
                 print(
-                    f"  [⚡ EARLY STOPPING] Convergência perfeita de 100% (F1=1.00, Inv=1.00) estabilizada por {patience} épocas na geração {gen}! Encerrando suíte com sucesso.",
+                    f"  [⚡ EARLY STOPPING] Dupla Verificação Concluída: Fitness={best_fitness:.4f} (F1={best_f1:.4f}, Inv={best_inv:.4f}) estabilizado por {patience} épocas na geração {gen}! Encerrando suíte com sucesso.",
                     flush=True,
                 )
                 break
