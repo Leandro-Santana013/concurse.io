@@ -8,10 +8,10 @@ from datetime import datetime
 from typing import Optional, Dict, Any, Tuple
 
 from models.database import Session, Exam, Folder, Question, ExamCatalog
-from services.pdf_pipeline.hybrid_extractor import parse_exam_document
-from services.pdf_inspector import inspect_pdf_document
-from services.gabarito_service import parse_gabarito_from_pdf, parse_gabarito_from_text, merge_exam_with_gabarito, format_gabarito_summary
-from services.exam_search_filter import standardize_card_title, interpret_search_query_deterministic
+from services.pdf_pipeline import parse_exam_document
+from services.diagnostics import inspect_pdf_document
+from services.gabarito import parse_gabarito_from_pdf, parse_gabarito_from_text, merge_exam_with_gabarito, format_gabarito_summary
+from services.search import standardize_card_title, interpret_search_query_deterministic
 
 def set_exam_progress(exam_id: int, status_msg: str, pct: int, error_type: Optional[str] = None):
     """Atualiza o progresso do exame no banco de dados de forma thread-safe."""
@@ -49,7 +49,7 @@ def download_pdf_file(url: str, dest_path: str, timeout: int = 30) -> bool:
         print(f"[Download Error] Falha ao baixar PDF ({url}): {e}")
     return False
 
-from services.html_exam_parser import parse_html_exam
+from services.crawlers import parse_html_exam
 
 def discover_direct_exam_and_gabarito_pdfs(url: str, title: str = ""):
     """Tenta descobrir URLs diretas de PDF da prova e gabarito em repositórios de alta fidelidade."""
@@ -67,7 +67,7 @@ def discover_direct_exam_and_gabarito_pdfs(url: str, title: str = ""):
     query_str = " ".join(keywords)
 
     try:
-        from services.scraper_service import get_ddgs_class
+        from services.crawlers import get_ddgs_class
         ddgs_cls = get_ddgs_class()
         if ddgs_cls and query_str:
             with ddgs_cls() as ddgs:

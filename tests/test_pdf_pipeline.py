@@ -4,9 +4,8 @@ import glob
 sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-from services.pdf_pipeline.hybrid_extractor import parse_exam_document
-from services.pdf_pipeline.formula_formatter import format_latex_formulas
-from services.gabarito_service import parse_gabarito_from_pdf, merge_exam_with_gabarito
+from services.pdf_pipeline import parse_exam_document, format_latex_formulas
+from services.gabarito import parse_gabarito_from_pdf, merge_exam_with_gabarito
 
 def test_latex_formatter():
     print("Testing LaTeX Formatter...")

@@ -4,26 +4,22 @@ import io
 import fitz
 from typing import List, Dict, Any, Optional, Tuple, Set
 
-from .layout_detector import (
+from .layout.layout_detector import (
     detect_watermarks,
     detect_layout_and_ordered_blocks,
     extract_context_blocks,
     is_instruction_or_cover_page,
 )
-from .diagram_cropper import (
+from .media.diagram_cropper import (
     ExamImageExtractor,
-    find_diagram_clusters,
-    extract_and_crop_diagrams,
-    IMAGE_TRIGGER_REGEX,
-    CAPTION_REGEX,
 )
-from .formula_formatter import format_latex_formulas
-from .subject_classifier import SUBJECT_REGEX, format_subject_title, _format_subject_title, rust_classify_subject
-from services.gabarito_service import extract_gabarito_from_doc, _extract_gabarito_from_doc
-from services.html_exam_parser import clean_text_artifacts
-from .rust_bridge import rust_scan_question_headers, is_rust_available
-from .banca_clusterizer import detect_banca_family, get_specialized_patterns, BancaFamily
-from .typography_restorer import restore_exam_typography
+from .formatters.formula_formatter import format_latex_formulas
+from .fallbacks.subject_classifier import SUBJECT_REGEX, format_subject_title, _format_subject_title, rust_classify_subject
+from services.gabarito.gabarito_service import extract_gabarito_from_doc, _extract_gabarito_from_doc
+from services.crawlers.html_exam_parser import clean_text_artifacts
+from .native.rust_bridge import rust_scan_question_headers, rust_process_exam_text, is_rust_available
+from .formatters.banca_clusterizer import detect_banca_family, get_specialized_patterns, BancaFamily
+from .fallbacks.typography_restorer import restore_exam_typography
 
 def extract_heuristic_options(chunk: str) -> Tuple[Optional[Dict[str, str]], str]:
     """
@@ -113,7 +109,7 @@ def parse_exam_document(
     # 2. Extração de Gabarito Embutido
     master_gabarito = {}
     if gabarito_override:
-        from services.gabarito_service import parse_gabarito_from_text
+        from services.gabarito.gabarito_service import parse_gabarito_from_text
         master_gabarito = parse_gabarito_from_text(gabarito_override)
     if not master_gabarito:
         master_gabarito = _extract_gabarito_from_doc(doc)
@@ -170,6 +166,12 @@ def parse_exam_document(
                 page_diagrams[p_idx] = clusters
 
     full_text = '\n\n'.join(raw_blocks)
+    if len(full_text.strip()) < 500 or force_ocr:
+        from .media.vision_pipeline import extract_exam_via_vision_ocr
+        ocr_text = extract_exam_via_vision_ocr(doc, dpi=200, watermarks=watermarks)
+        if len(ocr_text.strip()) > len(full_text.strip()):
+            full_text = ocr_text
+
     if len(full_text.strip()) < 50:
         doc.close()
         return []
@@ -179,8 +181,61 @@ def parse_exam_document(
     full_text = re.sub(r'(?:\b|(?<=[\s\n]))[íI!|](\d)\s*[\.\,\:\-\"\']+[ \t]*(?=[\.\,\:\'\`\~\s]*[A-Za-z\u00C0-\u00DC\"\'\(\[])', r'\n1\1. ', full_text)
     full_text = re.sub(r'(?:\b|(?<=[\s\n]))3[üuU]\s*[\.\,\:\-\"\']+[ \t]*(?=[\.\,\:\'\`\~\s]*[A-Za-z\u00C0-\u00DC\"\'\(\[])', r'\n30. ', full_text)
     full_text = re.sub(r'(?:\b|(?<=[\s\n]))[íI!|]0\s*[\.\,\:\-\"\']+[ \t]*(?=[\.\,\:\'\`\~\s]*[A-Za-z\u00C0-\u00DC\"\'\(\[])', r'\n10. ', full_text)
+    full_text = re.sub(r'(?m)^[ \t]*1\.\s+(?=A\s*pesar|A\s*rea|A\s*ssegurar|Pagou|Um\s+professor)', 'I. ', full_text)
+    full_text = re.sub(r'(?m)^([ \t]*\d{1,2}\.)([^\s\d])', r'\1 \2', full_text)
 
-    # 5. Scanner Global de Cabeçalhos de Questões (Aceleração Rust nativa + Fallback Python)
+    # 5. Execução Unificada em Rust (Zero Ping-Pong) com Fallback Resiliente
+    rust_questions = rust_process_exam_text(full_text)
+    if rust_questions and len(rust_questions) >= 3:
+        questions = []
+        for rq in rust_questions:
+            q_num = int(rq['numero_questao'])
+            formatted_enunciado = rq['enunciado']
+            formatted_enunciado, has_latex_enunciado = format_latex_formulas(formatted_enunciado)
+            formatted_enunciado = restore_exam_typography(formatted_enunciado)
+            
+            raw_options = rq.get('opcoes', {})
+            options = {}
+            for let, opt_text in raw_options.items():
+                opt_clean = restore_exam_typography(opt_text, is_option=True)
+                opt_formatted, _ = format_latex_formulas(opt_clean)
+                options[let] = opt_formatted
+
+            final_answer = master_gabarito.get(q_num) or rq.get('resposta', 'A')
+            approx_page, q_x, q_y = q_spatial_map.get(q_num, (start_page, 0.0, 0.0))
+            
+            questions.append({
+                'numero_questao': str(q_num),
+                'enunciado': formatted_enunciado,
+                'opcoes': options,
+                'resposta': final_answer,
+                'disciplina': rq.get('disciplina', 'Geral'),
+                'images': None,
+                'latex_support': 1 if has_latex_enunciado else 0,
+                '_page': approx_page,
+                '_x': q_x,
+                '_y': q_y
+            })
+        
+        # Anexamento espacial de imagens/diagramas em 2 fases
+        if extract_images and page_diagrams:
+            questions = image_extractor.attach_images_to_questions(
+                doc=doc,
+                questions=questions,
+                page_diagrams=page_diagrams,
+                exam_id=exam_id or 0
+            )
+
+        # Limpeza de atributos internos temporários
+        for q in questions:
+            q.pop('_page', None)
+            q.pop('_x', None)
+            q.pop('_y', None)
+
+        doc.close()
+        return questions
+
+    # 6. Scanner Global de Cabeçalhos de Questões (Fallback Python)
     rust_headers = rust_scan_question_headers(full_text)
     found_positions = []
 

@@ -4,7 +4,7 @@ sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
-from services.exam_search_filter import (
+from services.search import (
     interpret_search_query_deterministic,
     calculate_card_match_score,
     standardize_card_title,

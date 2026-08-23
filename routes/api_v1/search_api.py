@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 from models.database import get_db, Exam, ExamCatalog
 from schemas.exam_schemas import SearchResultItem
-from services.exam_search_filter import (
+from services.search import (
     interpret_search_query_deterministic,
     standardize_card_title,
     calculate_card_match_score,
@@ -77,7 +77,7 @@ def search_exams_api(
                 ]
 
     # 2. Scrapers Concorrentes
-    from services.scraper_service import _scrape_idcap_pdfs, _scrape_pci_pdfs, _search_pdfs_web
+    from services.crawlers import _scrape_idcap_pdfs, _scrape_pci_pdfs, _search_pdfs_web
     import concurrent.futures
 
     print(f"   ├─ 🌐 [SCRAPERS/CRAWLERS] Disparando em paralelo: {active_sources}", flush=True)

@@ -7,14 +7,14 @@ sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
-from services.pdf_pipeline.diagram_cropper import (
+from services.pdf_pipeline.media import (
     ExamImageExtractor,
     extract_images_from_pdf,
     find_diagram_clusters,
     IMAGE_TRIGGER_REGEX,
     CAPTION_REGEX,
 )
-from services.pdf_pipeline.hybrid_extractor import parse_exam_document
+from services.pdf_pipeline import parse_exam_document
 
 def test_image_trigger_regex():
     print("Testing IMAGE_TRIGGER_REGEX...")
