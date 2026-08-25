@@ -3,54 +3,54 @@
     "pattern": "(?i)(?im)^[ \\t]*(?:(?:NO[ÇC\\?][ÕO\\?]?ES\\s+DE\\s+|CONHECIMENTOS\\s+(?:B[ÁA\\?]?SICOS|ESPEC[ÍI\\?]?FICOS|GERAIS|REGIONAIS)\\s*[-–—:]*\\s*|CRIMINOLOGIA))(?:[ \\t]*[-–—:][^\\n]*)?$",
     "fitness": 0.5685236206953639,
     "f1_score": 0.4620362728689696,
-    "updated_at": "2026-08-22 02:44:24"
+    "updated_at": "2026-08-25 00:26:24"
   },
   "header": {
-    "pattern": "(?i)(?:^|(?=\\s+[A-Z\\u00C0-\\u00DC\\d\\n]))",
-    "fitness": 0.9083,
+    "pattern": "(?i)(?:^|\\n)\\s*(?:(?:QUEST[ÃA]?O|ITEM|Quest[ãa]o|Q\\.)\\s*|)(\\d{1,3})(?:[\\.\\-\\–\\)]|\\s*–\\s*|\\s*:\\s*|\\s*-\\s*|(?=\\s+[A-Z\\u00C0-\\u00DC\\d\\n]))",
+    "fitness": 0.8795000000000001,
     "f1_score": 1.0,
-    "updated_at": "2026-08-22 02:05:29"
+    "updated_at": "2026-08-25 00:03:06"
   },
   "options": {
-    "pattern": "(?i)(?:^|\\n|\\[([A-E])\\])\\s*",
-    "fitness": 0.9919,
+    "pattern": "(?i)(?:^|\\n|\\s{2,})(?:[\\(\\[]?([A-Ea-e])(?:\\s*[-–]\\s*|[\\)\\]\\.])|(CERTO|ERRADO))\\s*",
+    "fitness": 0.9756999999999999,
     "f1_score": 1.0,
-    "updated_at": "2026-08-22 02:05:30"
+    "updated_at": "2026-08-25 00:03:07"
   },
   "context": {
-    "pattern": "(?i)(?:^|\\n|\\.\\s+|\\s+)((?:Instru[çc][ãa\\?]?o\\s*[:.\\-]?\\s*|\\be\\b|,|\\-)\\s*(?:a\\s+)?(0*\\d{1,3})[.:–—]?)",
-    "fitness": 0.9606547665807407,
-    "f1_score": 0.9937297996121526,
-    "updated_at": "2026-08-22 02:05:32"
+    "pattern": "(?i)(?:^|\\n|\\.\\s+|\\s+)((?:Instru[çc][ãa\\?]?o\\s*[:.\\-]?\\s*|[Oo]\\s+texto\\s+(?:a\\s+seguir|abaixo|seguinte|1|2|I|II)?\\s*(?:servir[aá\\?]?\\s+de\\s+base\\s+para\\s+responder|refere-se|para\\s+responder|para)?|[Pp]ara\\s+(?:responder\\s+(?:[àa\\?]?s\\s+)?|as\\s+)?quest[oõa\\?]?es|[Ll]eia\\s+o\\s+texto(?:\\s+\\d+)?\\s*(?:para\\s+responder|(?:a\\s+seguir|abaixo))?|[Aa]s\\s+quest[oõa\\?]?es(?:\\s+de)?|[Cc]onsidere\\s+(?:o\\s+texto|a\\s+situa[cç][aã\\?]?o\\s+hipot[eé\\?]?tica|o\\s+caso)\\s*(?:(?:a\\s+seguir|abaixo))?|[Cc]om\\s+base\\s+no\\s+texto\\s*(?:(?:abaixo|a\\s+seguir))?\\s*,\\s*responda|[Tt]exto\\s+(?:I|II|III|1|2|3)?\\s*(?:\\(?[^)]*\\))?\\s*[-–—:]?\\s*(?:para\\s+(?:as\\s+)?quest[oõa\\ufffd\\?]?es|base\\s+para\\s+as\\s+quest[oõa\\ufffd\\?]?es))[^\\.:]{0,100}?quest[oõa\\ufffd\\?]?es?\\s*(?:de\\s+n[úu]meros?\\s+|de\\s+)?(0*\\d{1,3})\\s*(?:a|e|ao?|at[eé\\ufffd\\?]?|\\be\\b|,|\\-)\\s*(?:a\\s+)?(0*\\d{1,3})[.:–—]?)",
+    "fitness": 0.8710460264114367,
+    "f1_score": 0.9940410352175058,
+    "updated_at": "2026-08-25 00:03:08"
   },
   "cleaner": {
-    "pattern": "(?:^|\\d{2})\\s{2,}",
-    "fitness": 0.9903165412770772,
+    "pattern": "(?:^|\\n)\\s*(?:0\\d|\\d{2})\\s{2,}",
+    "fitness": 0.9864165412770772,
     "f1_score": 0.9982174688057041,
-    "updated_at": "2026-08-22 02:05:33"
+    "updated_at": "2026-08-25 00:03:08"
   },
   "diagram": {
-    "pattern": "(?i)\\b(?:figura|gr[áa]fico|quadro|tabela|mapa|imagem|histograma)\\b",
-    "fitness": 0.8168621474107022,
-    "f1_score": 0.8767832644609376,
-    "updated_at": "2026-08-22 02:38:55"
+    "pattern": "(?i)\\b(?:figura|gr[áa]fico|grafico|quadro|tabela|diagrama|circuito|desenho|ilustra[çc][ãa\\?]?o|mapa|esquema|imagem|paqu[íi]metro|circunfer[êe]ncia|tetraedro|planta|fluxograma|fotografia|foto|tira|tirinha|charge|cartum|organograma|cronograma|histograma)\\b",
+    "fitness": 0.751685623413837,
+    "f1_score": 0.8536456751308619,
+    "updated_at": "2026-08-25 00:20:19"
   },
   "typography_item": {
-    "pattern": "(?i)(?:^|\\n|(?<=\\.|\\:|\\))\\s*|III|IV|\\d{1,2})\\s*[\\.\\-\\–\\—\\)]\\s*(?=[A-Za-z\\u00C0-\\u00DC0-9\\\"])",
-    "fitness": 0.7416015440271639,
-    "f1_score": 0.8198990685298698,
-    "updated_at": "2026-08-22 03:54:47"
+    "pattern": "(?:^|\\n|(?<=\\.|\\;|\\:|\\))\\s*|\\s{2,})([A-E])\\s*[\\.\\)]\\s*(?=[A-Z\\u00C0-\\u00DC\\\"])",
+    "fitness": 0.9766,
+    "f1_score": 1.0,
+    "updated_at": "2026-08-25 00:26:24"
   },
   "typography_command": {
     "pattern": "(?i)(?:^|Julgue\\s+os\\s+itens)[^\\n\\.\\:\\?]*[:\\.]?",
-    "fitness": 0.7485991076892549,
-    "f1_score": 0.797876675777972,
-    "updated_at": "2026-08-22 03:55:10"
+    "fitness": 0.9859,
+    "f1_score": 1.0,
+    "updated_at": "2026-08-25 00:26:25"
   },
   "typography_column": {
     "pattern": "(?i)(?:^|\\n|(?:Coluna|Column)\\s+(?:0*\\d+|[A-E]))\\s*[:.\\-]?\\s*",
-    "fitness": 0.9010567744214473,
-    "f1_score": 0.9994516884376918,
-    "updated_at": "2026-08-22 03:55:51"
+    "fitness": 0.9816999999999999,
+    "f1_score": 1.0,
+    "updated_at": "2026-08-25 00:26:25"
   }
 }

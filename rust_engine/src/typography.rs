@@ -65,13 +65,20 @@ static MERGE_REPLACEMENTS: Lazy<Vec<(Regex, &'static str)>> = Lazy::new(|| {
     ]
 });
 
-static OCR_BULLET_CORRUPT_B: Lazy<Regex> = Lazy::new(|| Regex::new(r##"(?i)(?:^|\n|\s*)(?:!P|\(p|\[p)\s*"##).unwrap());
-static OCR_BULLET_CORRUPT_C: Lazy<Regex> = Lazy::new(|| Regex::new(r##"(?i)(?:^|\n|\s*)(?:lO|LO|\(o|\[o|\(g)\s*"##).unwrap());
-static OCR_BULLET_CORRUPT_D: Lazy<Regex> = Lazy::new(|| Regex::new(r##"(?i)(?:^|\n|\s*)(?:/-d|-d|\(d)\s*"##).unwrap());
+static OCR_BULLET_CORRUPT_B: Lazy<Regex> = Lazy::new(|| Regex::new(r##"(?m)^[ \t]*(?:\!P|\(p|\[p)\s+(?=[A-Za-z\u{00C0}-\u{00DC}0-9"])"##).unwrap());
+static OCR_BULLET_CORRUPT_C: Lazy<Regex> = Lazy::new(|| Regex::new(r##"(?m)^[ \t]*(?:lO|LO|\(o|\[o|\(g)\s+(?=[A-Za-z\u{00C0}-\u{00DC}0-9"])"##).unwrap());
+static OCR_BULLET_CORRUPT_D: Lazy<Regex> = Lazy::new(|| Regex::new(r##"(?m)^[ \t]*(?:/\-d|\(d)\s+(?=[A-Za-z\u{00C0}-\u{00DC}0-9"])"##).unwrap());
 
 static MULTI_OPT_INLINE_PAREN: Lazy<Regex> = Lazy::new(|| Regex::new(r##"(\S)[ \t]+([b-eB-E]\))\s+"##).unwrap());
 static MULTI_OPT_INLINE_ENCLOSED: Lazy<Regex> = Lazy::new(|| Regex::new(r##"(\S)[ \t]+(\([b-eB-E]\))\s+"##).unwrap());
 static MULTI_OPT_INLINE_DOT: Lazy<Regex> = Lazy::new(|| Regex::new(r##"(\S)[ \t]+([b-eB-E]\.)\s+([A-Za-z\u{00C0}-\u{00DC}0-9"])"##).unwrap());
+
+static URL_RAW_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r##"(?i)(?:\(?[Ff]onte\s*:\s*)?https?://[^\s\)"]+(?:\s*(?:\n|\r\n)?\s*(?:%[0-9A-Fa-f]{2}|[a-zA-Z0-9\-_./?&=#])[^\s\)"]*)*\)?"##).unwrap()
+});
+static URL_EXTRACT_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r##"(?i)https?://[^\s\)"]+(?:\s*(?:\n|\r\n)?\s*(?:%[0-9A-Fa-f]{2}|[a-zA-Z0-9\-_./?&=#])[^\s\)"]*)*"##).unwrap()
+});
 
 static MULTI_SPACE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r##"[ \t]{2,}"##).unwrap());
 static HYPHEN_BREAK_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r##"([A-Za-z\u{00C0}-\u{00DC}]+)-\s*\n\s*([a-z\u{00E0}-\u{00FC}]+)"##).unwrap());
@@ -92,7 +99,7 @@ static ORPHAN_PUNCT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r##"(?m)^\s*[.,
 static DIALOGUE_DASH_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r##"(?:^|\n)\s*([—–]\s+[A-Z\u{00C0}-\u{00DC}])"##).unwrap());
 static DIVIDER_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r##"(?:^|\n)\s*---+\s*(?:$|\n)"##).unwrap());
 static DIVIDER_INLINE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r##"(?:^|\n)\s*---+\s+([^\n]+)"##).unwrap());
-static ASTERISKS_ONLY_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r##"(?m)^\s*\*{2,}\s*$"##).unwrap());
+static ASTERISKS_ONLY_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r##"(?m)^\s*\*+\s*$"##).unwrap());
 static MULTI_NEWLINES_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r##"\n{3,}"##).unwrap());
 
 static COMMAND_PATTERNS: Lazy<Vec<Regex>> = Lazy::new(|| {
@@ -145,10 +152,10 @@ pub fn restore_ocr_lexical_spacing_native(text: &str) -> String {
         t = pat.replace_all(&t, *repl).into_owned();
     }
 
-    // 3. Bullets corrompidos
-    t = OCR_BULLET_CORRUPT_B.replace_all(&t, "\n\nB) ").into_owned();
-    t = OCR_BULLET_CORRUPT_C.replace_all(&t, "\n\nC) ").into_owned();
-    t = OCR_BULLET_CORRUPT_D.replace_all(&t, "\n\nD) ").into_owned();
+    // 3. Bullets corrompidos estritamente em início de linha
+    t = OCR_BULLET_CORRUPT_B.replace_all(&t, "B) ").into_owned();
+    t = OCR_BULLET_CORRUPT_C.replace_all(&t, "C) ").into_owned();
+    t = OCR_BULLET_CORRUPT_D.replace_all(&t, "D) ").into_owned();
 
     // 4. Múltiplas opções na mesma linha
     t = MULTI_OPT_INLINE_PAREN.replace_all(&t, "$1\n\n$2 ").into_owned();
@@ -217,8 +224,43 @@ pub fn restore_exam_typography_native(text: &str, is_option: bool) -> String {
     // 11. Artigos de lei
     t = LEGAL_ARTICLES_REGEX.replace_all(&t, "\n\n$1 - ").into_owned();
 
-    // 12. Pontuação órfã
-    t = ORPHAN_PUNCT_REGEX.replace_all(&t, "").into_owned();
+fn percent_decode_utf8(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut decoded_bytes = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let (Some(h1), Some(h2)) = (s[i + 1..i + 3].chars().next(), s[i + 1..i + 3].chars().nth(1)) {
+                if h1.is_ascii_hexdigit() && h2.is_ascii_hexdigit() {
+                    if let Ok(val) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
+                        decoded_bytes.push(val);
+                        i += 3;
+                        continue;
+                    }
+                }
+            }
+        }
+        decoded_bytes.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8(decoded_bytes).unwrap_or_else(|_| s.to_string())
+}
+
+    // 12.1 Limpeza e Isolamento de Links e Fontes Bibliográficas
+    t = URL_RAW_REGEX.replace_all(&t, |caps: &regex::Captures| {
+        let full = caps.get(0).unwrap().as_str();
+        if let Some(m_url) = URL_EXTRACT_REGEX.find(full) {
+            let mut raw_url = m_url.as_str().to_string();
+            raw_url = raw_url.trim_matches(|c| c == '.' || c == ',' || c == ')' || c == '(' || c == ' ' || c == '\n' || c == '\r').to_string();
+            raw_url = raw_url.split_whitespace().collect::<Vec<_>>().join("");
+            if raw_url.contains('%') {
+                raw_url = percent_decode_utf8(&raw_url);
+            }
+            format!("\n\n*(Fonte: {})*\n\n", raw_url)
+        } else {
+            full.to_string()
+        }
+    }).into_owned();
 
     // 13. Travessões de diálogo
     t = DIALOGUE_DASH_REGEX.replace_all(&t, "\n\n$1").into_owned();

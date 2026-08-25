@@ -236,7 +236,9 @@ fn scan_question_headers(py: Python, full_text: &str) -> PyResult<PyObject> {
                     let is_explicit = cap.get(1).is_some();
                     if !is_explicit {
                         let prefix_slice = safe_prefix_slice(full_text, m.start(), 40);
-                        let prefix_upper = prefix_slice.to_uppercase();
+                        let last_nl = prefix_slice.rfind('\n').map(|idx| idx + 1).unwrap_or(0);
+                        let same_line_prefix = &prefix_slice[last_nl..];
+                        let prefix_upper = same_line_prefix.to_uppercase();
                         if prefix_upper.contains("QUADRO")
                             || prefix_upper.contains("FIGURA")
                             || prefix_upper.contains("TABELA")

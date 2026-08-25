@@ -27,6 +27,8 @@ def clean_text_artifacts(text: str) -> str:
         r'(?:^|\n)\s*PROVA\s+(?:OBJETIVA|ESCRITA|DISCURSIVA|DE\s+CONHECIMENTOS)[^\n]*',
         r'(?:^|\n)\s*EDITAL\s+(?:N[º°\.]?\s*)?\d+[^\n]*',
         r'(?:^|\n)\s*CADERNO\s+DE\s+(?:PROVAS?|QUEST[ÕO]ES)[^\n]*',
+        r'(?:^|\n)\s*\d+º?\s+SIMULADO[^\n]*',
+        r'(?:^|\n)\s*\d+\s+AGENTE\s+COMERCIAL[^\n]*',
         r'(?:^|\n)\s*(?:CARGO|FUN[ÇC][ÃA]O)\s*:\s*[^\n]*',
         r'(?:^|\n)\s*N[ÍI]VEL\s+(?:SUPERIOR|M[ÉE]DIO|FUNDAMENTAL)[^\n]*',
         r'(?:^|\n)\s*CONHECIMENTOS\s+(?:ESPEC[ÍI]FICOS|B[ÁA]SICOS|GERAIS)\s*(?=\n|$)',

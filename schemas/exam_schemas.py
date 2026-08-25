@@ -54,10 +54,11 @@ class SearchResultItem(BaseModel):
     title: str
     url: str
     gabarito_url: Optional[str] = None
-    has_gabarito_link: bool = False
-    match_score: int = 0
-    source: str = "web"
+    has_gabarito_link: Optional[bool] = False
+    match_score: Optional[int] = 0
+    source: Optional[str] = "web"
     status: Optional[str] = "Pendente"
+
 
 class ProgressEventSchema(BaseModel):
     exam_id: int

@@ -132,10 +132,10 @@ def restore_ocr_lexical_spacing(text: str) -> str:
     for pattern, repl in merges:
         t = re.sub(pattern, repl, t, flags=re.IGNORECASE)
 
-    # 3. Limpeza de bullets OCR corrompidos em alternativas (!P, lO, /-d, @, etc.)
-    t = re.sub(r"(?:^|\n|\s*)(?:\!P|\(p|\[p)\s*", r"\n\nB) ", t)
-    t = re.sub(r"(?:^|\n|\s*)(?:lO|LO|\(o|\[o|\(g)\s*", r"\n\nC) ", t)
-    t = re.sub(r"(?:^|\n|\s*)(?:\/\-d|\-d|\(d)\s*", r"\n\nD) ", t)
+    # 3. Limpeza de bullets OCR corrompidos em alternativas (!P, lO, /-d, @, etc.) estritamente em início de linha
+    t = re.sub(r"(?m)^[ \t]*(?:\!P|\(p|\[p)\s+(?=[A-Za-z\u00C0-\u00DC0-9\"])", r"B) ", t)
+    t = re.sub(r"(?m)^[ \t]*(?:lO|LO|\(o|\[o|\(g)\s+(?=[A-Za-z\u00C0-\u00DC0-9\"])", r"C) ", t)
+    t = re.sub(r"(?m)^[ \t]*(?:\/\-d|\(d)\s+(?=[A-Za-z\u00C0-\u00DC0-9\"])", r"D) ", t)
 
     # 4. Desacoplamento de múltiplas alternativas impressas/lidas na mesma linha (ex: "c) opc1 d) opc2")
     t = re.sub(r"(?<=\S)[ \t]+([b-eB-E]\))\s+", r"\n\n\1 ", t)
@@ -300,15 +300,24 @@ def restore_exam_typography(text: str, is_option: bool = False) -> str:
 
     # 13. Limpeza e Isolamento de Links e Fontes Bibliográficas (ex: "https://... %C3%ADvel...")
     def clean_url_match(m):
-        raw_url = re.sub(r"[\.\,\s]+$", "", m.group(0).strip())
-        sanitized_url = re.sub(r"\s+", "", raw_url)
+        full_match = m.group(0).strip()
+        url_match = re.search(r"https?://[^\s\)\"]+(?:\s*(?:\n|\r\n)?\s*(?:%[0-9A-Fa-f]{2}|[a-zA-Z0-9\-\_\.\/\?\&\=\#])[^\s\)\"]*)*", full_match)
+        if not url_match:
+            return full_match
+        raw_url = url_match.group(0).strip()
+        sanitized_url = re.sub(r"[\.\,\s\(\)]+$", "", raw_url)
+        sanitized_url = re.sub(r"\s+", "", sanitized_url)
         try:
             sanitized_url = urllib.parse.unquote(sanitized_url)
         except Exception:
             pass
         return f"\n\n*(Fonte: {sanitized_url})*\n\n"
 
-    t = re.sub(r"(?<!\(Fonte: )https?://[^\s\)\"]+(?:\s+%[0-9A-Fa-f]{2}[^\s\)\"]*)*\s*[\.\,]?", clean_url_match, t)
+    t = re.sub(
+        r"(?:\(?[Ff]onte\s*:\s*)?https?://[^\s\)\"]+(?:\s*(?:\n|\r\n)?\s*(?:%[0-9A-Fa-f]{2}|[a-zA-Z0-9\-\_\.\/\?\&\=\#])[^\s\)\"]*)*\)?",
+        clean_url_match,
+        t
+    )
 
     # 13.1 Eliminação de pontuação órfã em linhas isoladas (ex: "\n\n.\n\n")
     t = re.sub(r"(?:^|\n)\s*[\.\,\;\:]\s*(?=\n|$)", "", t)
@@ -321,7 +330,7 @@ def restore_exam_typography(text: str, is_option: bool = False) -> str:
     t = re.sub(r"(?:^|\n)\s*---+\s+([^\n]+)", r"\n\n---\n\n\1", t)
 
     # 15.1 Limpeza de marcações markdown corrompidas (apenas linhas contendo somente asteriscos)
-    t = re.sub(r"(?:^|\n)\s*\*{2,}\s*(?=\n|$)", "\n", t)
+    t = re.sub(r"(?m)^\s*\*+\s*$", "", t)
 
     # 16. Reconstrução de Parágrafos Naturais e Junção de Continuações entre Páginas:
     raw_blocks = [b.strip() for b in t.split("\n\n") if b.strip()]

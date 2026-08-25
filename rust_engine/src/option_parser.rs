@@ -80,7 +80,7 @@ pub fn parse_question_body_native(raw_chunk: &str) -> ParsedQuestionBody {
                 }
             }
 
-            if seq.len() >= 3 {
+            if seq.len() >= 2 {
                 let score = (seq.len() as f64) * 1000.0 + (seq[0].0 as f64 / chunk_len.max(1) as f64) * 100.0;
                 if score > best_score {
                     best_score = score;
@@ -90,10 +90,10 @@ pub fn parse_question_body_native(raw_chunk: &str) -> ParsedQuestionBody {
         }
     }
 
-    // 4. Se encontrou sequência A..E válida (3 a 5 opções)
+    // 4. Se encontrou sequência A..E válida (2 a 5 opções)
     if !best_seq.is_empty() {
         let first_start = best_seq[0].0;
-        let mut enunciado_raw = clean_chunk[..first_start].trim().to_string();
+        let enunciado_raw = clean_chunk[..first_start].trim().to_string();
 
         let mut opcoes = HashMap::new();
         for i in 0..best_seq.len() {
@@ -139,29 +139,31 @@ pub fn parse_question_body_native(raw_chunk: &str) -> ParsedQuestionBody {
         };
     }
 
-    // 6. Heurística de fallback: divide linhas finais se parecerem opções
+    // 6. Heurística de fallback: divide as 4 ou 5 últimas linhas ou blocos se parecerem opções
     let lines: Vec<&str> = clean_chunk.split('\n').map(|l| l.trim()).filter(|l| !l.is_empty()).collect();
-    if lines.len() >= 5 {
-        let n_lines = lines.len();
-        let candidate_opts = &lines[n_lines - 4..];
-        let all_short = candidate_opts.iter().all(|l| l.len() < 120);
-        let statement_lines = &lines[..n_lines - 4];
+    for num_opts in [5, 4] {
+        if lines.len() >= num_opts + 1 {
+            let candidate_opts = &lines[lines.len() - num_opts..];
+            let statement_lines = &lines[..lines.len() - num_opts];
+            let all_valid = candidate_opts.iter().all(|l| !l.is_empty() && l.len() < 300);
 
-        if all_short && !statement_lines.is_empty() {
-            let mut opcoes = HashMap::new();
-            let letters = ["A", "B", "C", "D"];
-            for (idx, opt_line) in candidate_opts.iter().enumerate() {
-                opcoes.insert(letters[idx].to_string(), restore_exam_typography_native(opt_line, true));
+            if all_valid && !statement_lines.is_empty() {
+                let mut opcoes = HashMap::new();
+                let letters = ["A", "B", "C", "D", "E"];
+                for (idx, opt_line) in candidate_opts.iter().enumerate() {
+                    let clean_opt = opt_line.trim_start_matches(|c: char| c.is_ascii_punctuation() || c.is_whitespace() || c == '•');
+                    opcoes.insert(letters[idx].to_string(), restore_exam_typography_native(clean_opt, true));
+                }
+                let enunciado_raw = statement_lines.join("\n");
+                let enunciado_formatted = restore_exam_typography_native(&enunciado_raw, false);
+
+                return ParsedQuestionBody {
+                    enunciado: enunciado_formatted,
+                    opcoes,
+                    embedded_answer,
+                    is_certo_errado: false,
+                };
             }
-            let enunciado_raw = statement_lines.join("\n");
-            let enunciado_formatted = restore_exam_typography_native(&enunciado_raw, false);
-
-            return ParsedQuestionBody {
-                enunciado: enunciado_formatted,
-                opcoes,
-                embedded_answer,
-                is_certo_errado: false,
-            };
         }
     }
 

@@ -22,6 +22,7 @@ BANCAS_MAP = [
     ("FCC", r"\b(?:fcc|funda[çc][ãa]o\s+carlos\s+chagas)\b"),
     ("VUNESP", r"\b(?:vunesp|funda[çc][ãa]o\s+vunesp)\b"),
     ("CESGRANRIO", r"\b(?:cesgranrio|funda[çc][ãa]o\s+cesgranrio)\b"),
+    ("IBAM", r"\b(?:ibam|instituto\s+brasileiro\s+de\s+administra[çc][ãa]o\s+municipal)\b"),
     ("IDCAP", r"\b(?:idcap|id\s*cap)\b"),
     ("IDECAN", r"\b(?:idecan|instituto\s+idecan)\b"),
     ("AOCP", r"\b(?:instituto\s+aocp|aocp|assessoria\s+aocp)\b"),

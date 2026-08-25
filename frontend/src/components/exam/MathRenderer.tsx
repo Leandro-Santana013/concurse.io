@@ -209,9 +209,9 @@ const renderFormattedBlock = (rawText: string, keyPrefix: string | number) => {
         className="my-4 rounded-2xl border border-indigo-500/25 bg-gradient-to-br from-indigo-950/40 via-slate-900/60 to-slate-950/60 p-4 sm:p-5 shadow-lg shadow-indigo-950/20 backdrop-blur-sm space-y-3"
       >
         {paras.map((para, pIdx) => (
-          <p key={pIdx} className="leading-relaxed text-indigo-100/90 text-sm sm:text-base font-reading">
+          <div key={pIdx} className="leading-relaxed text-indigo-100/90 text-sm sm:text-base font-reading">
             {renderInlineMarkdown(para)}
-          </p>
+          </div>
         ))}
       </div>
     );

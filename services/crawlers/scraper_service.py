@@ -23,7 +23,60 @@ from services.search.exam_search_filter import (
     filter_and_rank_exam_cards,
 )
 
-KNOWN_EXAMS_DB = []
+import os
+
+def _load_known_exams_catalog():
+    """Carrega dinamicamente o catálogo de provas locais conhecidas a partir dos repositórios de bancas."""
+    known = []
+    base_dirs = [
+        os.path.abspath('provas_bancas'),
+        os.path.abspath(r'c:\Users\nicky\Downloads\provas_bancas\provas_bancas'),
+        os.path.abspath(r'..\..\Downloads\provas_bancas\provas_bancas'),
+    ]
+    seen_files = set()
+    for b_dir in base_dirs:
+        if not os.path.exists(b_dir):
+            continue
+        try:
+            for banca in os.listdir(b_dir):
+                b_path = os.path.join(b_dir, banca)
+                if not os.path.isdir(b_path):
+                    continue
+                for fname in os.listdir(b_path):
+                    if not fname.lower().endswith('.pdf'):
+                        continue
+                    full_path = os.path.abspath(os.path.join(b_path, fname))
+                    if full_path in seen_files:
+                        continue
+                    seen_files.add(full_path)
+                    
+                    m_ano = re.search(r'\b(19\d{2}|20\d{2})\b', fname)
+                    ano_str = f'[{m_ano.group(1)}] ' if m_ano else ''
+                    
+                    name_clean = fname[:-4]
+                    name_clean = re.sub(r'^\[.*?\]\s*', '', name_clean)
+                    name_clean = re.sub(r'[_—–]', ' ', name_clean)
+                    name_clean = re.sub(r'\s+', ' ', name_clean).strip()
+                    
+                    display_title = f"{ano_str}{banca.upper()} - {name_clean}".upper()
+                    
+                    raw_tokens = set(re.findall(r'\b[\w\-]+\b', f"{banca} {fname}".lower()))
+                    keywords = [t for t in raw_tokens if len(t) > 2]
+                    
+                    known.append({
+                        "title": display_title,
+                        "url": full_path,
+                        "gabarito_url": None,
+                        "keywords": keywords,
+                        "banca": banca.upper(),
+                        "source": "local_repository",
+                        "match_score": 85
+                    })
+        except Exception:
+            pass
+    return known
+
+KNOWN_EXAMS_DB = _load_known_exams_catalog()
 
 
 DISCARD_TERMS = [
@@ -53,24 +106,67 @@ def is_caderno_or_gabarito(text_or_url):
     keywords = ['prova', 'caderno', 'quest', 'gabarito', 'folha de resposta']
     return any(k in lower for k in keywords)
 
-def _search_known_exams(query):
-    """Busca no banco interno de provas conhecidas."""
+def _search_known_exams(query, nlp_data=None):
+    """Busca no banco interno de provas conhecidas com NLP e ponderação refinada."""
+    if not KNOWN_EXAMS_DB:
+        return []
+    
     query_lower = query.lower()
+    stop_words = {'prova', 'provas', 'concurso', 'concursos', 'de', 'da', 'do', 'para', 'em', 'pdf', 'caderno'}
+    query_tokens = [w for w in re.findall(r'\b[\w\-]+\b', query_lower) if len(w) > 2 and w not in stop_words]
+    
+    banca_filter = (nlp_data.get('banca', '') if nlp_data else '').upper()
+    cargo_filter = (nlp_data.get('cargo', '') if nlp_data else '').lower()
+    orgao_filter = (nlp_data.get('orgao', '') if nlp_data else '').lower()
+    ano_filter = (nlp_data.get('ano', '') if nlp_data else '')
+    
     results = []
     for exam in KNOWN_EXAMS_DB:
         keywords = exam.get("keywords", [])
-        score = sum(1 for kw in keywords if kw in query_lower)
-        if score > 0:
+        title_lower = exam.get("title", "").lower()
+        exam_banca = exam.get("banca", "")
+        score = 0
+        
+        # Banca match (+35)
+        if banca_filter:
+            if banca_filter in exam_banca or banca_filter.lower() in title_lower:
+                score += 35
+        elif any(b in title_lower for b in ['cebraspe', 'fgv', 'fcc', 'vunesp', 'cesgranrio', 'ibam', 'idcap', 'idecan']):
+            for tok in query_tokens:
+                if tok.upper() == exam_banca:
+                    score += 35
+        
+        # Cargo match (+30)
+        if cargo_filter and cargo_filter not in ['n/a', 'none', '']:
+            if cargo_filter in title_lower:
+                score += 30
+                
+        # Órgão match (+25)
+        if orgao_filter and orgao_filter not in ['n/a', 'none', '']:
+            if orgao_filter in title_lower:
+                score += 25
+                
+        # Ano match (+15)
+        if ano_filter and ano_filter in title_lower:
+            score += 15
+            
+        # Individual tokens match (+40 max)
+        if query_tokens:
+            matches = sum(1 for kw in query_tokens if kw in keywords or kw in title_lower)
+            if matches > 0:
+                score += int((matches / len(query_tokens)) * 40)
+            
+        if score >= 25 or (not query_tokens and score > 0):
             results.append((score, exam))
-    
+            
     results.sort(key=lambda x: x[0], reverse=True)
     return [{
         "title": r["title"],
         "url": r["url"],
         "gabarito_url": r.get("gabarito_url"),
-        "match_score": 90,
-        "source": "known_db"
-    } for _, r in results[:5]]
+        "match_score": min(99, max(50, s)),
+        "source": "local_repository"
+    } for s, r in results[:15]]
 
 def _search_qc_provas(query):
     results = []
@@ -82,23 +178,24 @@ def _search_qc_provas(query):
             for attempt in range(2):
                 try:
                     with ddgs_cls() as ddgs:
-                        ddgs_results = list(ddgs.text(q, max_results=3))
+                        ddgs_results = list(ddgs.text(q, max_results=4))
                     break
                 except Exception:
-                    time.sleep(0.5)
-
+                    time.sleep(0.3)
                     
             for r in ddgs_results:
-                if "qconcursos.com" in r['href']:
+                href = r.get('href', '')
+                title = r.get('title', '')
+                if "qconcursos.com" in href and not is_administrative_document(title):
                     results.append({
-                        "title": "[QC] " + r['title'][:60],
-                        "url": r['href'],
+                        "title": f"QC - {title[:80]}",
+                        "url": href,
                         "gabarito_url": None,
                         "source": "qconcursos",
-                        "match_score": 70
+                        "match_score": 75
                     })
     except Exception as e:
-        print(f"Erro busca QC: {e}")
+        pass
     return results
 
 def _scrape_pci_pdfs(query, nlp_data=None):
@@ -332,7 +429,7 @@ def _scrape_idcap_pdfs(query, nlp_data=None):
 
     return results
 
-def _search_pdfs_web(query, api_key_val=None):
+def _search_pdfs_web(query, nlp_data=None):
     """
     Busca web concorrente rápida para identificar cadernos de questões em PDF.
     """
@@ -346,8 +443,8 @@ def _search_pdfs_web(query, api_key_val=None):
                 seen_urls.add(url)
                 results.append(r)
 
-    # 1. Banco interno de provas
-    known = _search_known_exams(query)
+    # 1. Banco interno e repositório local de provas
+    known = _search_known_exams(query, nlp_data)
     _add_results(known)
 
     # 2. DuckDuckGo Search
@@ -386,3 +483,4 @@ def _search_pdfs_web(query, api_key_val=None):
             print(f"   │  [Web Search] Aviso: {e}", flush=True)
 
     return results
+

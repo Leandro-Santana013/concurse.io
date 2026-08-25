@@ -130,8 +130,8 @@ def is_instruction_or_cover_page(page_text: str) -> bool:
     ))
     
     if has_instruction_title and has_admin_terms:
-        if 'QUESTAO 01' in clean_norm or 'QUESTAO 1' in clean_norm:
-            if re.search(r'\b[A-E]\)\s+[A-Z\u00C0-\u00DC]', clean):
+        if 'QUESTAO 01' in clean_norm or 'QUESTAO 1' in clean_norm or '01.' in clean_norm or '01 ' in clean_norm:
+            if re.search(r'\b[A-Ea-e][\.\)\:\-]\s+[A-Z\u00C0-\u00DC0-9]|\([A-Ea-e]\)|\[[A-Ea-e]\]', clean):
                 return False
         return True
 
@@ -339,6 +339,16 @@ def detect_layout_and_ordered_blocks(page: fitz.Page, watermarks: Set[Tuple[int,
                 if 'PROVA' in line_text.upper() and len(line_text) < 25 and any(f'PROVA {k}' in line_text.upper() for k in range(10)):
                     continue
 
+                # Filtra números de linha marginais de textos de apoio (ex: 5, 10, 15, 20... 70 com largura estreita)
+                txt_strip = line_text.strip()
+                if txt_strip.isdigit():
+                    try:
+                        val_d = int(txt_strip)
+                        if (val_d % 5 == 0 or (val_d == 1 and lx1 - lx0 < 8)) and (lx1 - lx0 < 15):
+                            continue
+                    except ValueError:
+                        pass
+
                 cleaned = clean_marginal_line_numbers(line_text)
                 if not cleaned.strip():
                     continue
@@ -372,31 +382,32 @@ def detect_layout_and_ordered_blocks(page: fitz.Page, watermarks: Set[Tuple[int,
             if ocr_lines:
                 lines_extracted = ocr_lines
 
-    # 2.2 Costura horizontal de caixas de cabeçalho e números isolados na mesma linha Y (ex: '16.' ou '1.' com texto adjacente)
-    if lines_extracted and not force_ocr:
-        lines_extracted.sort(key=lambda l: (round(l['y0'] / 6.0) * 6.0, l['x0']))
+    if not lines_extracted:
+        return []
+
+    def stitch_lines_within_group(group_lines: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        if not group_lines:
+            return []
+        group_lines.sort(key=lambda l: (round(l['y0'] / 5.0) * 5.0, l['x0']))
         stitched = []
         skip_idx = set()
-        for i in range(len(lines_extracted)):
+        for i in range(len(group_lines)):
             if i in skip_idx:
                 continue
-            cur = lines_extracted[i]
-            for j in range(i + 1, min(i + 5, len(lines_extracted))):
+            cur = group_lines[i]
+            for j in range(i + 1, min(i + 5, len(group_lines))):
                 if j in skip_idx:
                     continue
-                nxt = lines_extracted[j]
-                if abs(cur['y0'] - nxt['y0']) < 8 and nxt['x0'] >= cur['x0'] and (nxt['x0'] - cur['x1']) < 90:
-                    if len(cur['text'].strip()) < 12 or cur['text'].strip().endswith(('.', '-', ':', 'Afi', 'fi', 'fl', 'Obs')):
+                nxt = group_lines[j]
+                if abs(cur['y0'] - nxt['y0']) < 6 and nxt['x0'] >= cur['x0'] and (nxt['x0'] - cur['x1']) < 25:
+                    if len(cur['text'].strip()) < 15 or cur['text'].strip().endswith(('-', ':', 'Afi', 'fi', 'fl', 'Obs', '(')):
                         cur['text'] = cur['text'].strip() + ' ' + nxt['text'].strip()
                         cur['x1'] = max(cur['x1'], nxt['x1'])
                         cur['width'] = cur['x1'] - cur['x0']
                         cur['mid_x'] = (cur['x0'] + cur['x1']) / 2.0
                         skip_idx.add(j)
             stitched.append(cur)
-        lines_extracted = stitched
-
-    if not lines_extracted:
-        return []
+        return stitched
 
     # Extrai linhas de texto (excluindo tabelas Markdown)
     text_only_lines = [l for l in lines_extracted if not l['text'].startswith('\n|')]
@@ -414,8 +425,9 @@ def detect_layout_and_ordered_blocks(page: fitz.Page, watermarks: Set[Tuple[int,
     has_columns = overlapping_y_pairs >= 3 and len(left_lines) >= 3 and len(right_lines) >= 3
 
     if not has_columns:
-        lines_extracted.sort(key=lambda l: (round(l['y0'], -1), l['x0']))
-        raw_full = '\n'.join(l['text'] for l in lines_extracted)
+        stitched_all = stitch_lines_within_group(lines_extracted) if not force_ocr else lines_extracted
+        stitched_all.sort(key=lambda l: (round(l['y0'], -1), l['x0']))
+        raw_full = '\n'.join(l['text'] for l in stitched_all)
         norm_text = normalize_paragraph_flow(raw_full)
         return [{'page': page.number, 'x0': 0, 'y0': 0, 'x1': width, 'y1': height, 'text': norm_text}]
 
@@ -449,6 +461,13 @@ def detect_layout_and_ordered_blocks(page: fitz.Page, watermarks: Set[Tuple[int,
             col_left.append(l)
         else:
             col_right.append(l)
+
+    # Costura horizontal estritamente DENTRO de cada grupo de coluna
+    if not force_ocr:
+        top_headers = stitch_lines_within_group(top_headers)
+        col_left = stitch_lines_within_group(col_left)
+        col_right = stitch_lines_within_group(col_right)
+        footers = stitch_lines_within_group(footers)
 
     top_headers.sort(key=lambda l: (round(l['y0'], -1), l['x0']))
     col_left.sort(key=lambda l: (round(l['y0'], -1), l['x0']))

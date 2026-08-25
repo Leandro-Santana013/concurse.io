@@ -240,7 +240,7 @@ def parse_exam_document(
     found_positions = []
 
     header_pat = re.compile(
-        r'(?i)(?:^|\n|\.\s+|\s{2,})(?:(?:QUEST[AÃ\?]?O\s+|ITEM\s+)(0*\d{1,3})[ \t]*(?:[\.\-–—:\)]|\n+|[ \t]+)|(0*\d{1,3})[ \t]*[\.\-–—:\)][ \t]*(?=[\.\,\:\'\`\~]*[A-Za-z\u00C0-\u00DC\"\'\(\[])|\((0*\d{1,3})\)[ \t]+)'
+        r'(?i)(?:^|\n|\.\s+|\s{2,})(?:(?:QUEST[AÃ\?]?O\s+|ITEM\s+)(0*\d{1,3})[ \t]*(?:[\.\-–—:\)]|\n+|[ \t]+)|(0*\d{1,3})[ \t]*(?:[\.\-–—:\)]|\n+|\t+|[ \t]+(?=[A-Za-z\u00C0-\u00DC\"\'\(\[]))[ \t]*|\((0*\d{1,3})\)[ \t]+|(?<=\n)\s*(0*\d{1,3})\s*(?=\n|\t))'
     )
 
     py_found_positions = []
@@ -273,8 +273,11 @@ def parse_exam_document(
         is_explicit = bool(m.group(1))
 
         if not is_explicit:
-            prefix_slice = full_text[max(0, m.start() - 40):m.start()].upper()
-            if any(bad in prefix_slice for bad in ['QUADRO', 'FIGURA', 'TABELA', 'TEXTO', 'PÁGINA', 'PAGINA', 'ART.', 'ARTIGO', 'QUESTÕES DE', 'QUESTOES DE']):
+            prefix_slice = full_text[max(0, m.start() - 40):m.start()]
+            last_nl = prefix_slice.rfind('\n')
+            same_line_prefix = prefix_slice[last_nl + 1:] if last_nl != -1 else prefix_slice
+            same_line_upper = same_line_prefix.upper()
+            if any(bad in same_line_upper for bad in ['QUADRO', 'FIGURA', 'TABELA', 'TEXTO', 'PÁGINA', 'PAGINA', 'ART.', 'ARTIGO', 'QUESTÕES DE', 'QUESTOES DE']):
                 continue
 
         candidates.append((m.start(), m.end(), q_num, is_explicit))
@@ -286,15 +289,16 @@ def parse_exam_document(
         prev = [-1] * n
 
         for i in range(n):
-            for j in range(i):
+            min_j = max(0, i - 100)
+            for j in range(min_j, i):
                 diff = candidates[i][2] - candidates[j][2]
                 dist = max(0, candidates[i][0] - candidates[j][1])
-                dist_penalty = 15 if dist > 10000 else (5 if dist > 5000 else 0)
+                dist_penalty = 30 if dist > 20000 else (15 if dist > 10000 else (5 if dist > 5000 else 0))
 
                 if diff == 1:
                     step_score = 1000 + (200 if candidates[i][3] else 0) + (200 if candidates[j][3] else 0) - dist_penalty
-                elif 2 <= diff <= 4:
-                    step_score = (200 - diff * 30) + (50 if candidates[i][3] else 0) - dist_penalty
+                elif 2 <= diff <= 10:
+                    step_score = (200 - diff * 15) + (50 if candidates[i][3] else 0) - dist_penalty
                 else:
                     continue
 
@@ -321,15 +325,17 @@ def parse_exam_document(
 
     all_header_spans.sort(key=lambda x: x[0])
 
-    if len(unique_candidates_by_num) >= max(len(py_found_positions) + 2, 10):
+    if len(py_found_positions) >= 5:
+        found_positions = py_found_positions
+    elif rust_headers and len(rust_headers) >= 5:
+        found_positions = [(item['number'], item['start'], item['end']) for item in rust_headers]
+    elif unique_candidates_by_num:
         found_positions = []
         max_q = max(unique_candidates_by_num.keys())
         for q_idx in range(1, max_q + 1):
             if q_idx in unique_candidates_by_num:
                 s_p, e_p = unique_candidates_by_num[q_idx]
                 found_positions.append((q_idx, s_p, e_p))
-    elif rust_headers and len(rust_headers) > len(py_found_positions):
-        found_positions = [(item['number'], item['start'], item['end']) for item in rust_headers]
     else:
         found_positions = py_found_positions
 
@@ -348,8 +354,7 @@ def parse_exam_document(
     current_subject = 'Geral'
 
     for i, (q_num, start_pos, end_pos) in enumerate(found_positions):
-        next_headers = [h for h in all_header_spans if h[0] > start_pos]
-        next_start = next_headers[0][0] if next_headers else len(full_text)
+        next_start = found_positions[i+1][1] if i + 1 < len(found_positions) else len(full_text)
         
         # Trunca o chunk se houver um banner de texto de apoio antes da próxima questão
         for _, _, _, banner_start in context_blocks:
@@ -421,8 +426,8 @@ def parse_exam_document(
                             break
                     elif ord(letter) < expected_ord:
                         continue
-                if len(seq) >= 3:
-                    # Pontuação: 5 opções > 4 opções > 3 opções; e posições finais no chunk têm preferência sobre subitens iniciais
+                if len(seq) >= 2:
+                    # Pontuação: 5 opções > 4 opções > 3 opções > 2 opções; e posições finais no chunk têm preferência sobre subitens iniciais
                     score = len(seq) * 1000 + (seq[0].start() / max(1, chunk_length)) * 100
                     valid_sequences.append((score, seq))
             if not valid_sequences:

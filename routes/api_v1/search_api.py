@@ -55,7 +55,7 @@ def search_exams_api(
                 "url": c.source_url,
                 "gabarito_url": c.gabarito_url,
                 "source": c.source or "catalog_cache",
-                "match_score": c.match_score
+                "match_score": c.match_score if c.match_score is not None else 50
             } for c in cached_entries]
             
             ranked_cached = filter_and_rank_exam_cards(raw_cached_cards, q, min_score=25, limit=15)
@@ -66,34 +66,45 @@ def search_exams_api(
                 return [
                     SearchResultItem(
                         id=None,
-                        title=c["title"],
-                        url=c["url"],
+                        title=str(c.get("title", "Prova de Concurso")),
+                        url=str(c.get("url", "")),
                         gabarito_url=c.get("gabarito_url"),
                         has_gabarito_link=bool(c.get("gabarito_url")),
-                        match_score=c["match_score"],
-                        source=c.get("source", "catalog_cache"),
+                        match_score=int(c.get("match_score") or 0),
+                        source=str(c.get("source") or "catalog_cache"),
                         status="Pendente"
                     ) for c in ranked_cached
                 ]
 
     # 2. Scrapers Concorrentes
-    from services.crawlers import _scrape_idcap_pdfs, _scrape_pci_pdfs, _search_pdfs_web
+    from services.crawlers import _scrape_idcap_pdfs, _scrape_pci_pdfs, _search_pdfs_web, _search_known_exams, _search_qc_provas
     import concurrent.futures
 
     print(f"   ├─ 🌐 [SCRAPERS/CRAWLERS] Disparando em paralelo: {active_sources}", flush=True)
     raw_results = []
     
+    # Adiciona sempre provas conhecidas/locais relevantes imediatamente
+    try:
+        known_local = _search_known_exams(q, nlp_data)
+        if known_local:
+            print(f"   │  ├─ [Acervo Local/Bancas]: {len(known_local)} PDFs encontrados", flush=True)
+            raw_results.extend(known_local)
+    except Exception as ex:
+        print(f"   │  ├─ [Acervo Local] Aviso: {ex}", flush=True)
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
         futures = {}
         if 'idcap' in active_sources:
             futures[executor.submit(_scrape_idcap_pdfs, q, nlp_data)] = 'IDCAP (Crawler)'
         if 'pci' in active_sources:
             futures[executor.submit(_scrape_pci_pdfs, q, nlp_data)] = 'PCI Concursos'
+        if 'qconcursos' in active_sources:
+            futures[executor.submit(_search_qc_provas, q)] = 'QConcursos'
         if 'web' in active_sources:
-            futures[executor.submit(_search_pdfs_web, q)] = 'DuckDuckGo Web'
+            futures[executor.submit(_search_pdfs_web, q, nlp_data)] = 'DuckDuckGo Web'
 
         try:
-            for fut in concurrent.futures.as_completed(futures, timeout=12.0):
+            for fut in concurrent.futures.as_completed(futures, timeout=8.0):
                 src_name = futures[fut]
                 try:
                     res = fut.result()
@@ -108,7 +119,7 @@ def search_exams_api(
 
     # 3. Filtragem Estrita de Fontes, Padronização Canônica e Ranqueamento
     if sources:
-        raw_results = [r for r in raw_results if str(r.get('source', '')).lower() in active_sources]
+        raw_results = [r for r in raw_results if str(r.get('source', '')).lower() in active_sources or r.get('source') == 'local_repository']
 
     ranked_cards = filter_and_rank_exam_cards(raw_results, q, min_score=20, limit=15)
     
@@ -122,7 +133,7 @@ def search_exams_api(
                     title=c['title'],
                     source_url=c['url'],
                     gabarito_url=c.get('gabarito_url'),
-                    match_score=c.get('match_score', 50),
+                    match_score=int(c.get('match_score') or 50),
                     source=c.get('source', 'web'),
                     created_at=str(int(time.time()))
                 ))
@@ -134,19 +145,19 @@ def search_exams_api(
     print(f"   ├─ 🎯 [RANQUEAMENTO] Total Bruto: {len(raw_results)} | Filtrados e Qualificados: {len(ranked_cards)}", flush=True)
     if ranked_cards:
         top1 = ranked_cards[0]
-        print(f"   │  └─ Top #1: \"{top1['title']}\" (Score: {top1['match_score']}%)", flush=True)
+        print(f"   │  └─ Top #1: \"{top1['title']}\" (Score: {top1.get('match_score', 0)}%)", flush=True)
     print(f"   └─ ⏱️ Tempo total da busca: {total_time}s", flush=True)
     print(f"{'='*70}\n", flush=True)
 
     return [
         SearchResultItem(
             id=None,
-            title=c['title'],
-            url=c['url'],
+            title=str(c.get('title', 'Prova de Concurso')),
+            url=str(c.get('url', '')),
             gabarito_url=c.get('gabarito_url'),
             has_gabarito_link=bool(c.get('gabarito_url')),
-            match_score=c['match_score'],
-            source=c.get('source', 'web'),
+            match_score=int(c.get('match_score') or 0),
+            source=str(c.get('source') or 'web'),
             status="Pendente"
         )
         for c in ranked_cards
