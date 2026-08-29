@@ -132,7 +132,8 @@ def parse_exam_document(
     page_diagrams = {}
     q_spatial_map: Dict[int, Tuple[int, float, float]] = {}
 
-    # Mapeia coordenadas físicas dos cabeçalhos na página para anexamento espacial exato (dois passos: explícito e fallback)
+    # Mapeia coordenadas físicas dos cabeçalhos na página para anexamento espacial exato
+    # Passo 1: Cabeçalhos com palavra-chave explícita (QUESTÃO 10, ITEM 15)
     for p_idx in range(start_page, total_pages):
         page = doc[p_idx]
         for b in page.get_text('blocks'):
@@ -140,16 +141,30 @@ def parse_exam_document(
             for hm in re.finditer(r'(?:^|\n)\s*(?:QUEST[AÃ\ufffd\?]?O|ITEM)\s*(0*\d{1,3})\b', b_text, re.IGNORECASE):
                 try:
                     num_val = int(hm.group(1))
-                    if 1 <= num_val <= 200:
+                    if 1 <= num_val <= 200 and num_val not in q_spatial_map:
                         q_spatial_map[num_val] = (p_idx, bx0, by0)
                 except ValueError:
                     pass
 
+    # Passo 2: Cabeçalhos com pontuação (ex: "10. ", "10) ", "10 - ") no início de bloco ou linha
     for p_idx in range(start_page, total_pages):
         page = doc[p_idx]
         for b in page.get_text('blocks'):
             bx0, by0, bx1, by1, b_text = b[:5]
-            for hm in re.finditer(r'(?:^|\n)\s*(0*\d{1,3})\s*[\.\)]\s+(?=[A-Z\u00C0-\u00DC"\'\(])', b_text):
+            for hm in re.finditer(r'(?:^|\n)\s*(0*\d{1,3})\s*[\.\-\–\—\)]\s+(?=[A-Z\u00C0-\u00DC"\'\(])', b_text):
+                try:
+                    num_val = int(hm.group(1))
+                    if 1 <= num_val <= 200 and num_val not in q_spatial_map:
+                        q_spatial_map[num_val] = (p_idx, bx0, by0)
+                except ValueError:
+                    pass
+
+    # Passo 3: Padrão FGV e outras bancas com número isolado seguido de quebra de linha ou múltiplos espaços
+    for p_idx in range(start_page, total_pages):
+        page = doc[p_idx]
+        for b in page.get_text('blocks'):
+            bx0, by0, bx1, by1, b_text = b[:5]
+            for hm in re.finditer(r'(?:^|\n)\s*(0*\d{1,3})\s*(?:\n|\s{2,})(?=[A-Z\u00C0-\u00DC"\'\(\«\“\‘])', b_text):
                 try:
                     num_val = int(hm.group(1))
                     if 1 <= num_val <= 200 and num_val not in q_spatial_map:

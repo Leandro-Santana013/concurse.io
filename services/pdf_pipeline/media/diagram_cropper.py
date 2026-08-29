@@ -388,7 +388,8 @@ class ExamImageExtractor:
             page_qs = [(i, q) for i, q in enumerate(questions) if q.get('_page') == p_idx]
             page_qs.sort(key=lambda x: x[1].get('_y', 0))
 
-            prev_qs = [(i, q) for i, q in enumerate(questions) if q.get('_page', -1) < p_idx]
+            # Apenas a página imediatamente anterior (p_idx - 1) se houver questão iniciada lá e a imagem estiver no topo da página
+            prev_page_qs = [(i, q) for i, q in enumerate(questions) if q.get('_page') == p_idx - 1]
 
             for c_idx, cluster in enumerate(clusters):
                 diag_key = (p_idx, c_idx)
@@ -446,10 +447,11 @@ class ExamImageExtractor:
                         trigger_qs = [pq for pq in page_qs if pq[1].get('_has_trigger')]
                         if trigger_qs:
                             best_q_idx = min(trigger_qs, key=lambda pq: abs(pq[1].get('_y', 0) - cluster_center_y))[0]
-                        elif prev_qs:
-                            prev_trigger_qs = [pq for pq in prev_qs if pq[1].get('_has_trigger')]
+                        elif prev_page_qs and cluster.y0 < 220:
+                            # Apenas a última questão da página imediatamente anterior se tiver gatilho
+                            prev_trigger_qs = [pq for pq in prev_page_qs if pq[1].get('_has_trigger')]
                             if prev_trigger_qs:
-                                best_q_idx = max(prev_trigger_qs, key=lambda x: (x[1].get('_page', 0), x[1].get('_y', 0)))[0]
+                                best_q_idx = max(prev_trigger_qs, key=lambda x: x[1].get('_y', 0))[0]
 
                 if best_q_idx != -1:
                     target_q = questions[best_q_idx]
