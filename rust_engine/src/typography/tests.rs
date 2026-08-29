@@ -79,3 +79,10 @@ fn test_idempotence() {
     let second_pass = restore_exam_typography_native(&first_pass, false);
     assert_eq!(first_pass, second_pass, "O motor de tipografia deve ser estritamente idempotente");
 }
+
+#[test]
+fn test_option_newline_collapse() {
+    let opt_raw = "Acelerar a operação\npara terminar logo antes que a pessoa se machuque";
+    let opt_clean = restore_exam_typography_native(opt_raw, true);
+    assert_eq!(opt_clean, "Acelerar a operação para terminar logo antes que a pessoa se machuque");
+}

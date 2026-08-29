@@ -43,10 +43,10 @@ pub fn restore_exam_typography_native(raw_text: &str, is_option: bool) -> String
     // 1. Correção lexical e artefatos de quebra de OCR
     t = cleaners::preprocess_lexical_flow(&t);
 
-    // Se for uma alternativa individual curta, normaliza e finaliza
+    // Se for uma alternativa individual curta, normaliza quebras de linha em espaços fluidos e finaliza
     if is_option {
+        t = Regex::new(r##"[\r\n]+"##).unwrap().replace_all(&t, " ").into_owned();
         t = MULTI_SPACE_REGEX.replace_all(&t, " ").into_owned();
-        t = MULTI_NEWLINES_REGEX.replace_all(&t, "\n\n").into_owned();
         return t.trim().to_string();
     }
 
