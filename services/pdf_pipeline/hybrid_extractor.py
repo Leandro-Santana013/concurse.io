@@ -159,18 +159,27 @@ def parse_exam_document(
                 except ValueError:
                     pass
 
-    # Passo 3: Padrão FGV e outras bancas com número isolado seguido de quebra de linha ou múltiplos espaços
+    # Passo 3: Padrão FGV e bancas com bloco numérico isolado (ex: b_text == "29") ou número isolado seguido de quebra de linha
     for p_idx in range(start_page, total_pages):
         page = doc[p_idx]
         for b in page.get_text('blocks'):
             bx0, by0, bx1, by1, b_text = b[:5]
-            for hm in re.finditer(r'(?:^|\n)\s*(0*\d{1,3})\s*(?:\n|\s{2,})(?=[A-Z\u00C0-\u00DC"\'\(\«\“\‘])', b_text):
+            clean_bt = b_text.strip()
+            if clean_bt.isdigit():
                 try:
-                    num_val = int(hm.group(1))
+                    num_val = int(clean_bt)
                     if 1 <= num_val <= 200 and num_val not in q_spatial_map:
                         q_spatial_map[num_val] = (p_idx, bx0, by0)
                 except ValueError:
                     pass
+            else:
+                for hm in re.finditer(r'(?:^|\n)\s*(0*\d{1,3})\s*(?:\n|\s{2,})(?=[A-Z\u00C0-\u00DC"\'\(\«\“\‘]|$)', b_text):
+                    try:
+                        num_val = int(hm.group(1))
+                        if 1 <= num_val <= 200 and num_val not in q_spatial_map:
+                            q_spatial_map[num_val] = (p_idx, bx0, by0)
+                    except ValueError:
+                        pass
 
     for p_idx in range(start_page, total_pages):
         page = doc[p_idx]
