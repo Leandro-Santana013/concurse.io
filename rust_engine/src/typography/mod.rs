@@ -152,15 +152,7 @@ fn reconstruct_paragraph_flow(text: &str) -> String {
             lines_owned.drain(..1);
         }
 
-        let lines_refs: Vec<&str> = lines_owned.iter().map(|s| s.as_str()).collect();
-
-        // Se o bloco inteiro é uma estrofe
-        if poetry::is_poem_stanza_block(&lines_refs, has_local_poetic_context) {
-            final_paras.push(poetry::format_poem_stanza(&lines_refs));
-            continue;
-        }
-
-        // Se o bloco contém uma estrofe seguida de prosa/comentário
+        // Se o bloco contém uma estrofe seguida de prosa/comentário (ex: versos seguidos de "Nos versos de Luiz Gonzaga...")
         if has_local_poetic_context && lines_owned.len() >= 3 {
             for split_idx in 2..lines_owned.len() {
                 let verse_refs: Vec<&str> = lines_owned[..split_idx].iter().map(|s| s.as_str()).collect();
@@ -173,6 +165,14 @@ fn reconstruct_paragraph_flow(text: &str) -> String {
                     }
                 }
             }
+        }
+
+        let lines_refs: Vec<&str> = lines_owned.iter().map(|s| s.as_str()).collect();
+
+        // Se o bloco inteiro restante é uma estrofe
+        if poetry::is_poem_stanza_block(&lines_refs, has_local_poetic_context) {
+            final_paras.push(poetry::format_poem_stanza(&lines_refs));
+            continue;
         }
 
         let mut current_sub: Vec<String> = Vec::new();

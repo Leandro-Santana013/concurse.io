@@ -86,3 +86,16 @@ fn test_option_newline_collapse() {
     let opt_clean = restore_exam_typography_native(opt_raw, true);
     assert_eq!(opt_clean, "Acelerar a operação para terminar logo antes que a pessoa se machuque");
 }
+
+#[test]
+fn test_q12_luiz_gonzaga_poem_and_prose() {
+    let raw = "*Quando oiei a terra ardendo*\n*Qual fogueira de São João*\n*Eu preguntei a Deus do céu, uai*\n*Por que tamanha judiação*?\nNos versos de Luiz Gonzaga, o eu poético narra, em primeira\npessoa, suas impressões sobre um determinado assunto.\nPara isso, ele utiliza construções linguísticas próprias, constatadas\npelo uso";
+    let res = restore_exam_typography_native(raw, false);
+    assert!(res.contains("> *Quando oiei a terra ardendo*"));
+    assert!(res.contains("> *Por que tamanha judiação*?"));
+    assert!(!res.contains("> Nos versos de Luiz Gonzaga"));
+    assert!(!res.contains("> pessoa"));
+    assert!(!res.contains("> Para isso"));
+    assert!(res.contains("Nos versos de Luiz Gonzaga, o eu poético narra, em primeira pessoa, suas impressões sobre um determinado assunto."));
+    assert!(res.contains("Para isso, ele utiliza construções linguísticas próprias, constatadas pelo uso"));
+}

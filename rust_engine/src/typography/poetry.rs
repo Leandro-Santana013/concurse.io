@@ -75,13 +75,20 @@ pub fn is_verse_line(line: &str) -> bool {
     if l.is_empty() {
         return false;
     }
-    if OPTION_PREFIX_REGEX.is_match(l) {
+    let clean = l.trim_matches(|c| c == '*' || c == '_' || c == '`' || c == '"');
+    if clean.is_empty() {
         return false;
     }
-    if COMMAND_START_REGEX.is_match(l) {
+    if OPTION_PREFIX_REGEX.is_match(clean) {
         return false;
     }
-    if ROMAN_START_LONG_REGEX.is_match(l) && l.chars().count() > 60 {
+    if COMMAND_START_REGEX.is_match(clean) {
+        return false;
+    }
+    if PROSE_PROMPT_REGEX.is_match(clean) {
+        return false;
+    }
+    if ROMAN_START_LONG_REGEX.is_match(clean) && clean.chars().count() > 60 {
         return false;
     }
     if l.starts_with("---") || l.starts_with("###") || l.starts_with("📖") || l.starts_with("**") {
