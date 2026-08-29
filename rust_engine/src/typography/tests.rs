@@ -112,3 +112,12 @@ fn test_q10_ibam_url_and_roman_items() {
     assert!(res.contains("II. É um convite ao leitor"));
     assert!(res.contains("III. É uma poesia por sua linguagem criativa"));
 }
+
+#[test]
+fn test_q1_hagar_broken_url_with_percent_encoding() {
+    let raw = "Texto da tirinha.\nhttps://deposito-de-tirinhas.tumblr.com/post/67951484818/hagar-o-horr\n%C3%ADvel-por-dik-browne-e-chris-browne\nQuestão 01\n(Correta: C)\nNo segundo quadrinho...";
+    let res = restore_exam_typography_native(raw, false);
+    assert!(res.contains("*(Fonte: https://deposito-de-tirinhas.tumblr.com/post/67951484818/hagar-o-horrível-por-dik-browne-e-chris-browne)*"));
+    assert!(!res.contains("%C3%ADvel"));
+    assert!(res.contains("Questão 01"));
+}

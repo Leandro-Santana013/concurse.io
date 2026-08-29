@@ -241,7 +241,26 @@ def restore_exam_typography(text: str, is_option: bool = False) -> str:
     # 0. Recomposição de URLs e codificação percentual quebradas entre linhas
     t = re.sub(r'%\s*\n\s*([0-9A-Fa-f]{2})', r'%\1', t)
     t = re.sub(r'%\s+([0-9A-Fa-f]{2})', r'%\1', t)
-    t = re.sub(r'(https?://[^\s\n\)]+[-_&])\s*\n\s*([a-zA-Z0-9\-_./?&=#@:+]{2,})', r'\1\2', t)
+    t = re.sub(r'((?:https?://|://)[^\s\n\)]+)[ \t]+(%[0-9A-Fa-f]{2}[a-zA-Z0-9\-_./%?&=#@:+~]*)', r'\1\2', t)
+    t = re.sub(r'((?:https?://|://)[^\s\n\)]+[-_/])[ \t]+([a-zA-Z0-9\-_./?&=#@:+~]{2,}(?:\.[a-zA-Z0-9]+)?)(?=\s|$|\n)', r'\1\2', t)
+
+    def _stitch_url(m):
+        u1 = m.group(1).rstrip()
+        u2 = m.group(2).strip()
+        if len(u2) < 2 and not u2.startswith(('%', '-', '_', '/', '.')):
+            return m.group(0)
+        if re.match(r'(?i)^(?:Quest[ãa]o|\d+[\.\-\)]|\([a-eA-E]\)|[a-eA-E][\.\)]|Leia|Considere|Observe|Veja|Analise|Dispon[íi]vel|Acesso|Adaptado)\b', u2):
+            return m.group(0)
+        if u1.endswith('/'):
+            if not (u2.startswith('%') or '/' in u2 or u2.endswith(('.pdf', '.htm', '.html', '.php', '.aspx')) or '-' in u2 or '_' in u2 or '%' in u2):
+                return m.group(0)
+        elif not u1.endswith(('-', '_', '&', '=', '?', '%', '.')):
+            if not (u2.startswith(('%', '-', '/', '.')) or '%' in u2 or '/' in u2 or '-' in u2 or u2.endswith(('.pdf', '.htm', '.html', '.php'))):
+                return m.group(0)
+        return f"{u1}{u2}"
+
+    for _ in range(3):
+        t = re.sub(r'((?:https?://|://)[^\s\n\)]+)\s*\n\s*([a-zA-Z0-9\-_./%?&=#@:+~]+(?:\([^\)]+\)[a-zA-Z0-9\-_./%?&=#@:+~]*)*\)?)(?=\s|$|\n)', _stitch_url, t)
 
     # 2.1 Costura de referências de Leis e Normas quebradas (ex: "Norma Regulamentadora\n29:" -> "Norma Regulamentadora 29:")
     t = re.sub(
@@ -417,7 +436,7 @@ def restore_exam_typography(text: str, is_option: bool = False) -> str:
     # 13. Links e referências web: isola a URL e preserva metadados
     def clean_url_match(m):
         full_match = m.group(0)
-        url_match = re.search(r"(?:https?://|://)[a-zA-Z0-9\-_./%?&=#@:+~]+(?:\([a-zA-Z0-9\-_\s./%?&=#@:+~]+\)[a-zA-Z0-9\-_./%?&=#@:+~]*)*(?:\.pdf|\.html|\.php|[a-zA-Z0-9/])", full_match, re.IGNORECASE)
+        url_match = re.search(r"(?:https?://|://)[a-zA-Z0-9\-_./%?&=#@:+~\u00C0-\u00FC]+(?:\([a-zA-Z0-9\-_\s./%?&=#@:+~\u00C0-\u00FC]+\)[a-zA-Z0-9\-_./%?&=#@:+~\u00C0-\u00FC]*)*(?:\.pdf|\.html|\.php|[a-zA-Z0-9/\u00C0-\u00FC])", full_match, re.IGNORECASE)
         if not url_match:
             return full_match
         raw_url = url_match.group(0).strip()
@@ -429,10 +448,13 @@ def restore_exam_typography(text: str, is_option: bool = False) -> str:
         return f"\n\n*(Fonte: {sanitized_url})*\n\n"
 
     t = re.sub(
-        r"(?i)(?:\*\([Ff]onte:\s*|\(?[Ff]onte\s*:\s*|\(?[Aa]cesso\s+em\s*:\s*)?(?:https?://|://)[a-zA-Z0-9\-_./%?&=#@:+~]+(?:\([a-zA-Z0-9\-_\s./%?&=#@:+~]+\)[a-zA-Z0-9\-_./%?&=#@:+~]*)*(?:\.pdf|\.html|\.php|[a-zA-Z0-9/])(?:\)\*|\))?",
+        r"(?i)(?:\*\([Ff]onte:\s*|\(?[Ff]onte\s*:\s*|\(?[Aa]cesso\s+em\s*:\s*)?(?:https?://|://)[a-zA-Z0-9\-_./%?&=#@:+~\u00C0-\u00FC]+(?:\([a-zA-Z0-9\-_\s./%?&=#@:+~\u00C0-\u00FC]+\)[a-zA-Z0-9\-_./%?&=#@:+~\u00C0-\u00FC]*)*(?:\.pdf|\.html|\.php|[a-zA-Z0-9/\u00C0-\u00FC])(?:\)\*|\))?",
         clean_url_match,
         t
     )
+
+    t = re.sub(r"(?i)\*\)\s*\n+\s*[\.,;:]\s*(?=Acesso\s+em\b)", "*)\n\n", t)
+    t = re.sub(r"(?m)^\s*[\.,;:]\s*", "", t)
 
     # 13.1 Eliminação de pontuação órfã em linhas isoladas (ex: "\n\n.\n\n")
     t = re.sub(r"(?:^|\n)\s*[\.\,\;\:]\s*(?=\n|$)", "", t)

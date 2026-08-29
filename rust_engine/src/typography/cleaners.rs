@@ -76,7 +76,22 @@ static MULTI_OPT_INLINE_DOT: Lazy<Regex> = Lazy::new(|| Regex::new(r##"(\S)[ \t]
 static HYPHEN_BREAK_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r##"([A-Za-z\u{00C0}-\u{00DC}]+)-\s*\n\s*([a-z\u{00E0}-\u{00FC}]+)"##).unwrap());
 static PERCENT_ENCODING_BREAK_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r##"%\s*\n\s*([0-9A-Fa-f]{2})"##).unwrap());
 static PERCENT_ENCODING_SPACE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r##"%\s+([0-9A-Fa-f]{2})"##).unwrap());
-static URL_LINE_BREAK_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r##"(https?://[^\s\n\)]+[-_&])\s*\n\s*([a-zA-Z0-9\-_./?&=#@:+]{2,})"##).unwrap());
+static URL_BREAK_REJECT_PREFIX_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r##"(?i)^(?:Quest[ãa]o|\d+[\.\-\)]|\([a-eA-E]\)|[a-eA-E][\.\)]|Leia|Considere|Observe|Veja|Analise|Dispon[íi]vel|Acesso|Adaptado)\b"##).unwrap()
+});
+
+static URL_LINE_BREAK_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r##"((?:https?://|://)[^\s\n\)]+)\s*\n\s*([a-zA-Z0-9\-_./%?&=#@:+~]+(?:\([^\)]+\)[a-zA-Z0-9\-_./%?&=#@:+~]*)*\)?)"##).unwrap()
+});
+
+static URL_SPACE_PERCENT_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r##"((?:https?://|://)[^\s\n\)]+)[ \t]+(%[0-9A-Fa-f]{2}[a-zA-Z0-9\-_./%?&=#@:+~]*)"##).unwrap()
+});
+
+static URL_SPACE_HYPHEN_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r##"((?:https?://|://)[^\s\n\)]+[-_/])[ \t]+([a-zA-Z0-9\-_./?&=#@:+~]{2,}(?:\.[a-zA-Z0-9]+)?)"##).unwrap()
+});
+
 static LAW_REF_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r##"(?i)\b(Norma\s+Regulamentadora|Norma|Lei|Decreto|Portaria|NR|Resolu[çc][ãa]o)\s*(?:n[º°o]?\.?)?\s*\n*\s*(\d+)\s*(:?)"##).unwrap());
 static SEQ_DOS_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r##"(?i)\bsequ[êe]nciaos\b"##).unwrap());
 static QUESTION_MARKS_GLITCH: Lazy<Regex> = Lazy::new(|| Regex::new(r##"\s*\?\?\s*"##).unwrap());
@@ -130,14 +145,54 @@ pub fn restore_ocr_lexical_spacing_native(text: &str) -> String {
     t
 }
 
+/// Costura URLs e codificações percentuais quebradas por quebras de linha em colunas de PDF
+pub fn stitch_broken_urls_native(text: &str) -> String {
+    let mut t = text.to_string();
+    t = PERCENT_ENCODING_BREAK_REGEX.replace_all(&t, "%$1").into_owned();
+    t = PERCENT_ENCODING_SPACE_REGEX.replace_all(&t, "%$1").into_owned();
+    t = URL_SPACE_PERCENT_REGEX.replace_all(&t, "$1$2").into_owned();
+    t = URL_SPACE_HYPHEN_REGEX.replace_all(&t, "$1$2").into_owned();
+
+    for _ in 0..3 {
+        let prev = t.clone();
+        t = URL_LINE_BREAK_REGEX.replace_all(&t, |caps: &regex::Captures| {
+            let u1 = caps.get(1).unwrap().as_str().trim_end();
+            let u2 = caps.get(2).unwrap().as_str().trim();
+
+            if u2.chars().count() < 2 && !u2.starts_with('%') && !u2.starts_with('-') && !u2.starts_with('_') && !u2.starts_with('/') && !u2.starts_with('.') {
+                return caps.get(0).unwrap().as_str().to_string();
+            }
+
+            if URL_BREAK_REJECT_PREFIX_REGEX.is_match(u2) {
+                return caps.get(0).unwrap().as_str().to_string();
+            }
+
+            if u1.ends_with('/') {
+                if !u2.starts_with('%') && !u2.contains('/') && !u2.ends_with(".pdf") && !u2.ends_with(".htm") && !u2.ends_with(".html") && !u2.ends_with(".php") && !u2.ends_with(".aspx") && !u2.contains('-') && !u2.contains('_') && !u2.contains('%') {
+                    return caps.get(0).unwrap().as_str().to_string();
+                }
+            } else if !u1.ends_with('-') && !u1.ends_with('_') && !u1.ends_with('&') && !u1.ends_with('=') && !u1.ends_with('?') && !u1.ends_with('%') && !u1.ends_with('.') {
+                if !u2.starts_with('%') && !u2.starts_with('-') && !u2.starts_with('/') && !u2.starts_with('.') && !u2.contains('%') && !u2.contains('/') && !u2.contains('-') && !u2.ends_with(".pdf") && !u2.ends_with(".htm") && !u2.ends_with(".html") && !u2.ends_with(".php") {
+                    return caps.get(0).unwrap().as_str().to_string();
+                }
+            }
+
+            format!("{}{}", u1, u2)
+        }).into_owned();
+
+        if t == prev {
+            break;
+        }
+    }
+    t
+}
+
 /// Executa a primeira etapa de normalização lexical e desaglutinação de elementos estruturais
 pub fn preprocess_lexical_flow(text: &str) -> String {
     let mut t = text.to_string();
 
     t = HYPHEN_BREAK_REGEX.replace_all(&t, "$1$2").into_owned();
-    t = PERCENT_ENCODING_BREAK_REGEX.replace_all(&t, "%$1").into_owned();
-    t = PERCENT_ENCODING_SPACE_REGEX.replace_all(&t, "%$1").into_owned();
-    t = URL_LINE_BREAK_REGEX.replace_all(&t, "$1$2").into_owned();
+    t = stitch_broken_urls_native(&t);
 
     t = LAW_REF_REGEX.replace_all(&t, "$1 $2$3").into_owned();
     t = SEQ_DOS_REGEX.replace_all(&t, "sequência dos").into_owned();
