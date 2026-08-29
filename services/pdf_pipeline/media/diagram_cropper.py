@@ -99,10 +99,11 @@ class ExamImageExtractor:
     def detect_watermarks_and_headers(self, doc: fitz.Document) -> Set[Tuple[int, int, int, int]]:
         """
         Analisa todas as páginas do PDF e identifica retângulos de imagens ou cabeçalhos
-        que se repetem em 3 ou mais páginas (marcas d'água, rodapés e cabeçalhos institucionais).
+        que se repetem em 3 ou mais páginas distintas (marcas d'água, rodapés e cabeçalhos institucionais).
         """
-        bbox_freq = collections.defaultdict(int)
-        for page in doc:
+        bbox_pages = collections.defaultdict(set)
+        for p_idx, page in enumerate(doc):
+            page_seen = set()
             # Blocos de imagem do dicionário da página
             try:
                 dict_page = page.get_text('dict')
@@ -110,24 +111,32 @@ class ExamImageExtractor:
                     if b.get('type') == 1:
                         bbox = b['bbox']
                         rounded = (round(bbox[0]/10), round(bbox[1]/10), round(bbox[2]/10), round(bbox[3]/10))
-                        bbox_freq[rounded] += 1
+                        page_seen.add(rounded)
             except Exception:
                 pass
 
-            # Imagens diretas
+            # Imagens diretas (evitando duplicar xrefs dentro da mesma página)
+            seen_xrefs = set()
             for img_info in page.get_images():
-                for r in page.get_image_rects(img_info[0]):
+                xref = img_info[0]
+                if xref in seen_xrefs:
+                    continue
+                seen_xrefs.add(xref)
+                for r in page.get_image_rects(xref):
                     rounded = (round(r.x0/10), round(r.y0/10), round(r.x1/10), round(r.y1/10))
-                    bbox_freq[rounded] += 1
+                    page_seen.add(rounded)
 
             # Desenhos e molduras repetidas
             for d in page.get_drawings():
                 r = d['rect']
                 if r.width >= 5 and r.height >= 5:
                     rounded = (round(r.x0/10), round(r.y0/10), round(r.x1/10), round(r.y1/10))
-                    bbox_freq[rounded] += 1
+                    page_seen.add(rounded)
 
-        return {k for k, v in bbox_freq.items() if v >= self.watermark_page_threshold}
+            for rounded in page_seen:
+                bbox_pages[rounded].add(p_idx)
+
+        return {k for k, pages in bbox_pages.items() if len(pages) >= self.watermark_page_threshold}
 
     def find_diagram_clusters(
         self,
@@ -400,8 +409,10 @@ class ExamImageExtractor:
                 best_q_idx = -1
                 best_score = float('inf')
 
-                # Questões na mesma coluna (diferença X < 200px)
-                same_col_qs = [pq for pq in page_qs if abs(pq[1].get('_x', 0) - cluster_center_x) < 200]
+                # Agrupa questões estritamente pela mesma coluna (metade da página)
+                mid_x = page_w / 2.0
+                is_col_left = cluster_center_x < mid_x
+                same_col_qs = [pq for pq in page_qs if (pq[1].get('_x', 0) < mid_x) == is_col_left]
                 candidates = same_col_qs if same_col_qs else page_qs
 
                 # Avalia cada questão candidata
@@ -409,19 +420,19 @@ class ExamImageExtractor:
                     q_y = q.get('_y', 0)
                     has_trigger = q.get('_has_trigger', False)
 
-                    # A questão começa acima ou muito próxima da imagem
-                    if q_y <= cluster_center_y + 40:
+                    # A questão começa acima ou muito próxima da imagem (tolerância de 20px)
+                    if q_y <= cluster_center_y + 20:
                         vertical_dist = cluster_center_y - q_y
-                        
-                        # Se tem palavra-gatilho explícita na vizinhança (distância razoável), dá prioridade máxima
-                        if has_trigger and vertical_dist <= 350:
-                            score = vertical_dist * 0.1 # Altíssima prioridade
-                        else:
-                            score = vertical_dist
+                        if vertical_dist >= 0:
+                            # Se tem palavra-gatilho explícita na vizinhança (distância razoável), dá prioridade máxima
+                            if has_trigger and vertical_dist <= 350:
+                                score = vertical_dist * 0.1
+                            else:
+                                score = vertical_dist
 
-                        if score < best_score:
-                            best_score = score
-                            best_q_idx = q_idx
+                            if score < best_score:
+                                best_score = score
+                                best_q_idx = q_idx
 
                 # Se nenhuma questão foi encontrada acima na mesma coluna/página:
                 if best_q_idx == -1:
@@ -436,7 +447,6 @@ class ExamImageExtractor:
                         if trigger_qs:
                             best_q_idx = min(trigger_qs, key=lambda pq: abs(pq[1].get('_y', 0) - cluster_center_y))[0]
                         elif prev_qs:
-                            # Apenas se a questão anterior tiver gatilho explícito de imagem
                             prev_trigger_qs = [pq for pq in prev_qs if pq[1].get('_has_trigger')]
                             if prev_trigger_qs:
                                 best_q_idx = max(prev_trigger_qs, key=lambda x: (x[1].get('_page', 0), x[1].get('_y', 0)))[0]
@@ -445,7 +455,7 @@ class ExamImageExtractor:
                     target_q = questions[best_q_idx]
                     has_trigger = target_q.get('_has_trigger', False)
                     # Evita anexar linhas isoladas de tabela a questões sem gatilho
-                    if not has_trigger and best_score > 220:
+                    if not has_trigger and best_score > 350:
                         continue
                     q_images = target_q.get('images') or []
                     q_num = target_q.get('numero_questao', '0')

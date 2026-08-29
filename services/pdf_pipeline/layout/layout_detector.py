@@ -85,24 +85,30 @@ def extract_ocr_lines_from_page(page: fitz.Page, dpi: int = 150) -> List[Dict[st
 
 def detect_watermarks(doc: fitz.Document) -> Set[Tuple[int, int, int, int]]:
     """
-    Identifica elementos que se repetem na mesma posição em 3 ou mais páginas
+    Identifica elementos que se repetem na mesma posição em 3 ou mais páginas distintas
     (marcas d'água, rodapés de sites de concursos e cabeçalhos fixos).
     """
-    rect_counts = {}
-    for page in doc:
+    import collections
+    rect_pages = collections.defaultdict(set)
+    for p_idx, page in enumerate(doc):
         for d in page.get_drawings():
             r = d['rect']
             if r.width < 5 or r.height < 5:
                 continue
             key = (round(r.x0, -1), round(r.y0, -1), round(r.x1, -1), round(r.y1, -1))
-            rect_counts[key] = rect_counts.get(key, 0) + 1
+            rect_pages[key].add(p_idx)
             
+        seen_xrefs = set()
         for img_info in page.get_images():
-            for r in page.get_image_rects(img_info[0]):
+            xref = img_info[0]
+            if xref in seen_xrefs:
+                continue
+            seen_xrefs.add(xref)
+            for r in page.get_image_rects(xref):
                 key = (round(r.x0, -1), round(r.y0, -1), round(r.x1, -1), round(r.y1, -1))
-                rect_counts[key] = rect_counts.get(key, 0) + 1
+                rect_pages[key].add(p_idx)
 
-    return {k for k, v in rect_counts.items() if v >= 3}
+    return {k for k, pages in rect_pages.items() if len(pages) >= 3}
 
 def clean_marginal_line_numbers(text_str: str) -> str:
     """

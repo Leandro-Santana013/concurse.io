@@ -132,10 +132,30 @@ def parse_exam_document(
     page_diagrams = {}
     q_spatial_map: Dict[int, Tuple[int, float, float]] = {}
 
-    header_search_pat = re.compile(
-        r'(?:^|\n)\s*(?:QUEST[AÃ\ufffd\?]?O\s+|ITEM\s+)?(0*\d{1,3})\s*(?:[\.\-\–\—\:\)]|\s+)',
-        re.IGNORECASE
-    )
+    # Mapeia coordenadas físicas dos cabeçalhos na página para anexamento espacial exato (dois passos: explícito e fallback)
+    for p_idx in range(start_page, total_pages):
+        page = doc[p_idx]
+        for b in page.get_text('blocks'):
+            bx0, by0, bx1, by1, b_text = b[:5]
+            for hm in re.finditer(r'(?:^|\n)\s*(?:QUEST[AÃ\ufffd\?]?O|ITEM)\s*(0*\d{1,3})\b', b_text, re.IGNORECASE):
+                try:
+                    num_val = int(hm.group(1))
+                    if 1 <= num_val <= 200:
+                        q_spatial_map[num_val] = (p_idx, bx0, by0)
+                except ValueError:
+                    pass
+
+    for p_idx in range(start_page, total_pages):
+        page = doc[p_idx]
+        for b in page.get_text('blocks'):
+            bx0, by0, bx1, by1, b_text = b[:5]
+            for hm in re.finditer(r'(?:^|\n)\s*(0*\d{1,3})\s*[\.\)]\s+(?=[A-Z\u00C0-\u00DC"\'\(])', b_text):
+                try:
+                    num_val = int(hm.group(1))
+                    if 1 <= num_val <= 200 and num_val not in q_spatial_map:
+                        q_spatial_map[num_val] = (p_idx, bx0, by0)
+                except ValueError:
+                    pass
 
     for p_idx in range(start_page, total_pages):
         page = doc[p_idx]
@@ -146,17 +166,7 @@ def parse_exam_document(
             if not re.search(r'\b[A-E]\)\s+[A-Z\u00C0-\u00DC]', p_text):
                 continue
 
-        # Mapeia coordenadas físicas dos cabeçalhos na página para anexamento espacial exato
         page_raw_blocks = page.get_text('blocks')
-        for b in page_raw_blocks:
-            bx0, by0, bx1, by1, b_text = b[:5]
-            for hm in header_search_pat.finditer(b_text):
-                try:
-                    num_val = int(hm.group(1))
-                    if 1 <= num_val <= 200 and num_val not in q_spatial_map:
-                        q_spatial_map[num_val] = (p_idx, bx0, by0)
-                except ValueError:
-                    pass
 
         ordered_blocks = detect_layout_and_ordered_blocks(page, watermarks, force_ocr=force_ocr, config=layout_config)
         for b in ordered_blocks:
