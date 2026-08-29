@@ -92,30 +92,32 @@ def search_exams_api(
     except Exception as ex:
         print(f"   │  ├─ [Acervo Local] Aviso: {ex}", flush=True)
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-        futures = {}
-        if 'idcap' in active_sources:
-            futures[executor.submit(_scrape_idcap_pdfs, q, nlp_data)] = 'IDCAP (Crawler)'
-        if 'pci' in active_sources:
-            futures[executor.submit(_scrape_pci_pdfs, q, nlp_data)] = 'PCI Concursos'
-        if 'qconcursos' in active_sources:
-            futures[executor.submit(_search_qc_provas, q)] = 'QConcursos'
-        if 'web' in active_sources:
-            futures[executor.submit(_search_pdfs_web, q, nlp_data)] = 'DuckDuckGo Web'
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
+    futures = {}
+    if 'idcap' in active_sources:
+        futures[executor.submit(_scrape_idcap_pdfs, q, nlp_data)] = 'IDCAP (Crawler)'
+    if 'pci' in active_sources:
+        futures[executor.submit(_scrape_pci_pdfs, q, nlp_data)] = 'PCI Concursos'
+    if 'qconcursos' in active_sources:
+        futures[executor.submit(_search_qc_provas, q)] = 'QConcursos'
+    if 'web' in active_sources:
+        futures[executor.submit(_search_pdfs_web, q, nlp_data)] = 'DuckDuckGo Web'
 
-        try:
-            for fut in concurrent.futures.as_completed(futures, timeout=8.0):
-                src_name = futures[fut]
-                try:
-                    res = fut.result()
-                    count = len(res) if res else 0
-                    print(f"   │  ├─ [{src_name}]: {count} PDFs encontrados", flush=True)
-                    if res:
-                        raw_results.extend(res)
-                except Exception as ex:
-                    print(f"   │  ├─ [{src_name}] Erro: {ex}", flush=True)
-        except concurrent.futures.TimeoutError:
-            print("   │  ├─ [Aviso] Timeout parcial em scrapers mais lentos. Retornando resultados capturados até o momento.", flush=True)
+    try:
+        for fut in concurrent.futures.as_completed(futures, timeout=4.5):
+            src_name = futures[fut]
+            try:
+                res = fut.result()
+                count = len(res) if res else 0
+                print(f"   │  ├─ [{src_name}]: {count} PDFs encontrados", flush=True)
+                if res:
+                    raw_results.extend(res)
+            except Exception as ex:
+                print(f"   │  ├─ [{src_name}] Erro: {ex}", flush=True)
+    except concurrent.futures.TimeoutError:
+        print("   │  ├─ [Aviso] Timeout parcial em scrapers mais lentos. Retornando resultados capturados até o momento.", flush=True)
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
 
     # 3. Filtragem Estrita de Fontes, Padronização Canônica e Ranqueamento
     if sources:

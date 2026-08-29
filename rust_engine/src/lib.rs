@@ -10,7 +10,8 @@ mod option_parser;
 
 use patterns::{
     HEADER_REGEX, OPTION_PRIMARY_REGEX, OPTION_NEWLINE_REGEX,
-    CONTEXT_TEXT_BANNER_REGEX, IMAGE_TRIGGER_REGEX, CAPTION_REGEX
+    CONTEXT_TEXT_BANNER_REGEX, RELATIVE_CONTEXT_BANNER_REGEX,
+    IMAGE_TRIGGER_REGEX, CAPTION_REGEX
 };
 use dp_chain::{QuestionCandidate, solve_dp_chain};
 use subject_classifier::{
@@ -23,6 +24,27 @@ use typography::{
     clean_text_artifacts_native
 };
 use option_parser::parse_question_body_native;
+
+#[inline]
+fn safe_slice<'a>(s: &'a str, start_byte: usize, end_byte: usize) -> &'a str {
+    let len = s.len();
+    if len == 0 || start_byte >= len {
+        return "";
+    }
+    let mut start = start_byte;
+    while start < len && !s.is_char_boundary(start) {
+        start += 1;
+    }
+    let mut end = end_byte.min(len);
+    while end > start && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    if start <= end && end <= len {
+        &s[start..end]
+    } else {
+        ""
+    }
+}
 
 #[inline]
 fn safe_prefix_slice<'a>(s: &'a str, end_byte: usize, max_lookback_bytes: usize) -> &'a str {
@@ -49,6 +71,22 @@ fn byte_to_char_index(s: &str, byte_offset: usize) -> usize {
     s[..bound].chars().count()
 }
 
+fn parse_number_or_word(s: &str) -> usize {
+    match s.trim().to_lowercase().as_str() {
+        "uma" | "um" | "one" | "1" => 1,
+        "duas" | "dois" | "two" | "2" => 2,
+        "três" | "tres" | "three" | "3" => 3,
+        "quatro" | "four" | "4" => 4,
+        "cinco" | "five" | "5" => 5,
+        "seis" | "six" | "6" => 6,
+        "sete" | "seven" | "7" => 7,
+        "oito" | "eight" | "8" => 8,
+        "nove" | "nine" | "9" => 9,
+        "dez" | "ten" | "10" => 10,
+        other => other.parse::<usize>().unwrap_or(2),
+    }
+}
+
 /// Executa o pipeline de texto completo em Rust (zero ping-pong FFI)
 #[pyfunction]
 fn process_exam_text(py: Python, full_text: &str) -> PyResult<PyObject> {
@@ -60,7 +98,7 @@ fn process_exam_text(py: Python, full_text: &str) -> PyResult<PyObject> {
     // 1. Escaneia seções e títulos de disciplinas
     let sections = rust_scan_sections(full_text);
 
-    // 2. Escaneia banners de textos de apoio (Context Banners)
+    // 2. Escaneia banners de textos de apoio (Context Banners) explícitos
     let mut context_blocks = Vec::new();
     for cap in CONTEXT_TEXT_BANNER_REGEX.captures_iter(full_text) {
         if let (Some(m_all), Some(m_q1), Some(m_q2)) = (cap.get(1), cap.get(2), cap.get(3)) {
@@ -81,28 +119,9 @@ fn process_exam_text(py: Python, full_text: &str) -> PyResult<PyObject> {
             if let Ok(q_num) = m_str.as_str().parse::<usize>() {
                 if (1..=200).contains(&q_num) {
                     let is_explicit = cap.get(1).is_some();
-                    if !is_explicit {
-                        let prefix_slice = safe_prefix_slice(full_text, m.start(), 40);
-                        let last_nl = prefix_slice.rfind('\n').map(|idx| idx + 1).unwrap_or(0);
-                        let same_line_prefix = &prefix_slice[last_nl..];
-                        let prefix_upper = same_line_prefix.to_uppercase();
-                        if prefix_upper.contains("QUADRO")
-                            || prefix_upper.contains("FIGURA")
-                            || prefix_upper.contains("TABELA")
-                            || prefix_upper.contains("TEXTO")
-                            || prefix_upper.contains("PÁGINA")
-                            || prefix_upper.contains("PAGINA")
-                            || prefix_upper.contains("ART.")
-                            || prefix_upper.contains("ARTIGO")
-                            || prefix_upper.contains("QUESTÕES DE")
-                            || prefix_upper.contains("QUESTOES DE")
-                        {
-                            continue;
-                        }
-                    }
                     candidates.push(QuestionCandidate {
                         start: m.start(),
-                        end: m.end(),
+                        end: m_str.end(),
                         number: q_num,
                         is_explicit,
                     });
@@ -115,6 +134,43 @@ fn process_exam_text(py: Python, full_text: &str) -> PyResult<PyObject> {
     let py_list = PyList::empty_bound(py);
     let n = optimal_chain.len();
 
+    // 3.1 Escaneia banners de textos de apoio em inglês ou com contagem relativa
+    for cap in RELATIVE_CONTEXT_BANNER_REGEX.captures_iter(full_text) {
+        if let Some(m_all) = cap.get(1) {
+            let b_start = m_all.start();
+            let b_end = m_all.end();
+
+            // Se houver especificação explícita de questões (ex: questions 19 and 20)
+            if let (Some(m_q3), Some(m_q4)) = (cap.get(4), cap.get(5)) {
+                if let (Ok(q1), Ok(q2)) = (m_q3.as_str().parse::<usize>(), m_q4.as_str().parse::<usize>()) {
+                    if q1 <= q2 && q2 - q1 <= 50 {
+                        context_blocks.push((q1, q2, b_start, b_end));
+                        continue;
+                    }
+                }
+            }
+
+            // Se houver contagem relativa (ex: the next two questions / próximas 4 questões)
+            let count_str = cap.get(2).or_else(|| cap.get(3));
+            if let Some(m_cnt) = count_str {
+                let count = parse_number_or_word(m_cnt.as_str());
+                let mut prev_q_num = None;
+                for item in &optimal_chain {
+                    if item.end <= b_start + 10 {
+                        prev_q_num = Some(item.number);
+                    } else {
+                        break;
+                    }
+                }
+                if let Some(prev_num) = prev_q_num {
+                    let q1 = prev_num + 1;
+                    let q2 = q1 + count - 1;
+                    context_blocks.push((q1, q2, b_start, b_end));
+                }
+            }
+        }
+    }
+
     // 4. Mapeia e formata os textos de apoio compartilhados
     let mut resolved_contexts = Vec::new();
     for (q_min, q_max, _b_start, b_end) in &context_blocks {
@@ -126,7 +182,7 @@ fn process_exam_text(py: Python, full_text: &str) -> PyResult<PyObject> {
             }
         }
         if *b_end < ctx_end {
-            let ctx_raw = &full_text[*b_end..ctx_end];
+            let ctx_raw = safe_slice(full_text, *b_end, ctx_end);
             let ctx_clean = restore_exam_typography_native(ctx_raw, false);
             if !ctx_clean.trim().is_empty() {
                 resolved_contexts.push((*q_min, *q_max, ctx_clean));
@@ -139,10 +195,24 @@ fn process_exam_text(py: Python, full_text: &str) -> PyResult<PyObject> {
         let q_num = item.number;
         let start_byte = item.start;
         let end_byte = item.end;
-        let next_start = if i + 1 < n { optimal_chain[i + 1].start } else { text_len };
+        let mut next_start = if i + 1 < n { optimal_chain[i + 1].start } else { text_len };
+
+        // Clampa next_start se houver um banner de texto de apoio intermediário entre questões
+        for (_q_min, _q_max, b_start, _b_end) in &context_blocks {
+            if *b_start > end_byte && *b_start < next_start {
+                next_start = *b_start;
+            }
+        }
+
+        // Clampa next_start se houver uma quebra/banner de disciplina intermediária
+        for sec in &sections {
+            if sec.start > end_byte && sec.start < next_start {
+                next_start = sec.start;
+            }
+        }
 
         let chunk_raw = if end_byte <= next_start && next_start <= text_len {
-            &full_text[end_byte..next_start]
+            safe_slice(full_text, end_byte, next_start)
         } else {
             ""
         };
@@ -170,8 +240,8 @@ fn process_exam_text(py: Python, full_text: &str) -> PyResult<PyObject> {
         let mut final_enunciado = parsed.enunciado;
         for (q_min, q_max, ctx_text) in &resolved_contexts {
             if *q_min <= q_num && q_num <= *q_max {
-                let check_len = ctx_text.len().min(30);
-                if !final_enunciado.contains(&ctx_text[..check_len]) {
+                let check_snippet = safe_slice(ctx_text, 0, 30);
+                if !check_snippet.is_empty() && !final_enunciado.contains(check_snippet) {
                     final_enunciado = format!("📖 **Texto de Apoio (Questões {} a {}):**\n\n{}\n\n---\n\n{}", q_min, q_max, ctx_text, final_enunciado);
                 }
                 break;
@@ -184,9 +254,19 @@ fn process_exam_text(py: Python, full_text: &str) -> PyResult<PyObject> {
         dict.set_item("numero_questao", q_num.to_string())?;
         dict.set_item("enunciado", final_enunciado)?;
 
+        // Ordenação canônica das alternativas A, B, C, D, E (evita desordem do HashMap)
         let opts_dict = PyDict::new_bound(py);
-        for (k, v) in parsed.opcoes {
-            opts_dict.set_item(k, v)?;
+        for letter in ["A", "B", "C", "D", "E"] {
+            if let Some(opt_val) = parsed.opcoes.get(letter) {
+                opts_dict.set_item(letter, opt_val)?;
+            }
+        }
+        if parsed.is_certo_errado {
+            for letter in ["C", "E"] {
+                if let Some(opt_val) = parsed.opcoes.get(letter) {
+                    opts_dict.set_item(letter, opt_val)?;
+                }
+            }
         }
         dict.set_item("opcoes", opts_dict)?;
 
@@ -205,6 +285,7 @@ fn process_exam_text(py: Python, full_text: &str) -> PyResult<PyObject> {
 
 /// Restauração tipográfica exportada para o Python
 #[pyfunction]
+#[pyo3(signature = (text, is_option=None))]
 fn restore_exam_typography(_py: Python, text: &str, is_option: Option<bool>) -> PyResult<String> {
     Ok(restore_exam_typography_native(text, is_option.unwrap_or(false)))
 }
@@ -234,29 +315,9 @@ fn scan_question_headers(py: Python, full_text: &str) -> PyResult<PyObject> {
             if let Ok(q_num) = m_str.as_str().parse::<usize>() {
                 if (1..=200).contains(&q_num) {
                     let is_explicit = cap.get(1).is_some();
-                    if !is_explicit {
-                        let prefix_slice = safe_prefix_slice(full_text, m.start(), 40);
-                        let last_nl = prefix_slice.rfind('\n').map(|idx| idx + 1).unwrap_or(0);
-                        let same_line_prefix = &prefix_slice[last_nl..];
-                        let prefix_upper = same_line_prefix.to_uppercase();
-                        if prefix_upper.contains("QUADRO")
-                            || prefix_upper.contains("FIGURA")
-                            || prefix_upper.contains("TABELA")
-                            || prefix_upper.contains("TEXTO")
-                            || prefix_upper.contains("PÁGINA")
-                            || prefix_upper.contains("PAGINA")
-                            || prefix_upper.contains("ART.")
-                            || prefix_upper.contains("ARTIGO")
-                            || prefix_upper.contains("QUESTÕES DE")
-                            || prefix_upper.contains("QUESTOES DE")
-                        {
-                            continue;
-                        }
-                    }
-
                     candidates.push(QuestionCandidate {
                         start: m.start(),
-                        end: m.end(),
+                        end: m_str.end(),
                         number: q_num,
                         is_explicit,
                     });
@@ -294,6 +355,23 @@ fn scan_context_banners(py: Python, full_text: &str) -> PyResult<PyObject> {
                     let char_start = byte_to_char_index(full_text, m_all.start());
                     let char_end = byte_to_char_index(full_text, m_all.end());
                     let dict = PyDict::new_bound(py);
+                    dict.set_item("q_min", q1)?;
+                    dict.set_item("q_max", q2)?;
+                    dict.set_item("banner_start", char_start)?;
+                    dict.set_item("banner_end", char_end)?;
+                    py_list.append(dict)?;
+                }
+            }
+        }
+    }
+
+    for cap in RELATIVE_CONTEXT_BANNER_REGEX.captures_iter(full_text) {
+        if let Some(m_all) = cap.get(1) {
+            let char_start = byte_to_char_index(full_text, m_all.start());
+            let char_end = byte_to_char_index(full_text, m_all.end());
+            let dict = PyDict::new_bound(py);
+            if let (Some(m_q3), Some(m_q4)) = (cap.get(4), cap.get(5)) {
+                if let (Ok(q1), Ok(q2)) = (m_q3.as_str().parse::<usize>(), m_q4.as_str().parse::<usize>()) {
                     dict.set_item("q_min", q1)?;
                     dict.set_item("q_max", q2)?;
                     dict.set_item("banner_start", char_start)?;
@@ -363,14 +441,14 @@ fn parse_options_fast(py: Python, chunk: &str) -> PyResult<PyObject> {
     let result = PyDict::new_bound(py);
     if best_seq.len() >= 2 {
         let first_start = best_seq[0].0;
-        let enunciado = &chunk[..first_start];
+        let enunciado = safe_slice(chunk, 0, first_start);
         result.set_item("enunciado", enunciado)?;
 
         let options_dict = PyDict::new_bound(py);
         for (idx, opt) in best_seq.iter().enumerate() {
             let s_val = opt.1;
             let e_val = if idx + 1 < best_seq.len() { best_seq[idx + 1].0 } else { chunk_len };
-            let opt_text = chunk[s_val..e_val].trim();
+            let opt_text = safe_slice(chunk, s_val, e_val).trim();
             options_dict.set_item(&opt.2, opt_text)?;
         }
         result.set_item("options", options_dict)?;

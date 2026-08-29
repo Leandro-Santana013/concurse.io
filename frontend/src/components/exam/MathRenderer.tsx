@@ -115,7 +115,123 @@ const renderKaTeX = (formula: string, displayMode: boolean, key: string | number
   }
 };
 
-// Renderiza Markdown inline (**negrito**, *itálico*, links e KaTeX inline)
+// Sanitiza e normaliza tags HTML antes da renderização
+const normalizeInlineTags = (str: string): string => {
+  if (!str) return '';
+  // Corrige tags malformadas sem fechamento '>' coladas em palavras (ex: </uafirmar -> </u> afirmar)
+  let s = str.replace(/<\/([uib])(?=[A-Za-z\u00C0-\u00DC])/gi, '</$1> ');
+  s = s.replace(/<([uib])(?=[A-Za-z\u00C0-\u00DC])/gi, '<$1> ');
+  s = s.replace(/<\/([uib])(?=[\s\.,;:!\?\)\(\]\[])/gi, '</$1>');
+  return s;
+};
+
+// Renderiza recursivamente tags HTML (<u>, <b>, <i>, <strong>, <em>) e Markdown (***, **, *)
+const renderInlineFormatting = (raw: string, keyPrefix: string): React.ReactNode => {
+  if (!raw) return null;
+
+  const normalized = normalizeInlineTags(raw);
+
+  // Tokeniza tags HTML e Markdown mantendo delimitadores
+  const tokenRegex = /(<u>[\s\S]*?<\/u>|<b>[\s\S]*?<\/b>|<strong>[\s\S]*?<\/strong>|<i>[\s\S]*?<\/i>|<em>[\s\S]*?<\/em>|\*\*\*[\s\S]*?\*\*\*|\*\*[\s\S]*?\*\*|\*[\s\S]*?\*)/gi;
+  const parts = normalized.split(tokenRegex);
+
+  if (parts.length === 1) {
+    // Limpa eventuais tags órfãs (ex: <u> ou </u> soltas ou sem '>')
+    const cleaned = normalized.replace(/<\/?(?:u|b|i|strong|em)>?/gi, '');
+    return <span className="whitespace-pre-wrap">{cleaned}</span>;
+  }
+
+  return (
+    <>
+      {parts.map((part, idx) => {
+        if (!part) return null;
+        const subKey = `${keyPrefix}_${idx}`;
+
+        // 1. Sublinhado <u>...</u>
+        if (/^<u>[\s\S]*<\/u>$/i.test(part)) {
+          const inner = part.slice(3, -4);
+          return (
+            <u key={subKey} className="underline decoration-indigo-400 decoration-1.5 underline-offset-2">
+              {renderInlineFormatting(inner, `${subKey}_u`)}
+            </u>
+          );
+        }
+
+        // 2. Negrito + Itálico ***...***
+        if (part.startsWith('***') && part.endsWith('***') && part.length >= 6) {
+          const inner = part.slice(3, -3);
+          return (
+            <strong key={subKey} className="font-bold italic text-white">
+              {renderInlineFormatting(inner, `${subKey}_bi`)}
+            </strong>
+          );
+        }
+
+        // 3. Negrito <b>, <strong>, **...**
+        if (/^<b>[\s\S]*<\/b>$/i.test(part)) {
+          const inner = part.slice(3, -4);
+          return (
+            <strong key={subKey} className="font-bold text-white">
+              {renderInlineFormatting(inner, `${subKey}_b`)}
+            </strong>
+          );
+        }
+        if (/^<strong>[\s\S]*<\/strong>$/i.test(part)) {
+          const inner = part.slice(8, -9);
+          return (
+            <strong key={subKey} className="font-bold text-white">
+              {renderInlineFormatting(inner, `${subKey}_str`)}
+            </strong>
+          );
+        }
+        if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
+          const inner = part.slice(2, -2);
+          return (
+            <strong key={subKey} className="font-bold text-white">
+              {renderInlineFormatting(inner, `${subKey}_bmd`)}
+            </strong>
+          );
+        }
+
+        // 4. Itálico <i>, <em>, *...*
+        if (/^<i>[\s\S]*<\/i>$/i.test(part)) {
+          const inner = part.slice(3, -4);
+          return (
+            <em key={subKey} className="italic text-slate-300">
+              {renderInlineFormatting(inner, `${subKey}_i`)}
+            </em>
+          );
+        }
+        if (/^<em>[\s\S]*<\/em>$/i.test(part)) {
+          const inner = part.slice(4, -5);
+          return (
+            <em key={subKey} className="italic text-slate-300">
+              {renderInlineFormatting(inner, `${subKey}_em`)}
+            </em>
+          );
+        }
+        if (part.startsWith('*') && part.endsWith('*') && part.length >= 2) {
+          const inner = part.slice(1, -1);
+          return (
+            <em key={subKey} className="italic text-slate-300">
+              {renderInlineFormatting(inner, `${subKey}_imd`)}
+            </em>
+          );
+        }
+
+        // Texto plano com limpeza de tags órfãs
+        const cleaned = part.replace(/<\/?(?:u|b|i|strong|em)>?/gi, '');
+        return (
+          <span key={subKey} className="whitespace-pre-wrap">
+            {cleaned}
+          </span>
+        );
+      })}
+    </>
+  );
+};
+
+// Renderiza Markdown inline (**negrito**, *itálico*, <u>sublinhado</u>, links e KaTeX inline)
 const renderInlineMarkdown = (text: string) => {
   if (!text) return null;
 
@@ -129,7 +245,6 @@ const renderInlineMarkdown = (text: string) => {
   }
 
   // 1. Processamento de KaTeX Display ($$...$$) e Inline ($...$)
-  // Dividimos por delimitadores matemáticos
   const mathTokens = text.split(/(\$\$.*?\$\$|\$[^\$\n]+?\$)/gs);
 
   return mathTokens.map((mToken, mIdx) => {
@@ -145,35 +260,12 @@ const renderInlineMarkdown = (text: string) => {
       if (isRealLatexFormula(inner)) {
         return renderKaTeX(inner, false, `inl_${mIdx}`);
       }
-      // Se não for fórmula LaTeX real, renderiza o texto original normalmente
-      mToken = mToken;
     }
 
-    // 2. Formatação padrão de Markdown (**negrito**, *itálico*)
-    const formatTokens = mToken.split(/(\*\*.*?\*\*|\*.*?\*)/g);
+    // 2. Formatação rica (HTML <u>, <b>, <i> e Markdown **, *)
     return (
       <React.Fragment key={`fmt_${mIdx}`}>
-        {formatTokens.map((fToken, fIdx) => {
-          if (fToken.startsWith('**') && fToken.endsWith('**') && fToken.length >= 4) {
-            return (
-              <strong key={fIdx} className="font-bold text-white">
-                {fToken.slice(2, -2)}
-              </strong>
-            );
-          }
-          if (fToken.startsWith('*') && fToken.endsWith('*') && fToken.length >= 2) {
-            return (
-              <em key={fIdx} className="italic text-slate-300">
-                {fToken.slice(1, -1)}
-              </em>
-            );
-          }
-          return (
-            <span key={fIdx} className="whitespace-pre-wrap">
-              {fToken}
-            </span>
-          );
-        })}
+        {renderInlineFormatting(mToken, `fmt_${mIdx}`)}
       </React.Fragment>
     );
   });
@@ -217,17 +309,50 @@ const renderFormattedBlock = (rawText: string, keyPrefix: string | number) => {
     );
   }
 
-  // Parágrafos regulares
+  // Parágrafos regulares e Estrofes de Poema
   const paragraphs = rawText.split('\n\n').filter(p => p.trim());
   if (paragraphs.length > 1) {
     return (
       <span key={keyPrefix} className="inline-block w-full space-y-4">
-        {paragraphs.map((p, pIdx) => (
-          <span key={pIdx} className="block leading-relaxed">
-            {renderInlineMarkdown(p)}
+        {paragraphs.map((p, pIdx) => {
+          if (p.trim().startsWith('>')) {
+            const lines = p.trim().split('\n').map(l => l.replace(/^>\s?/, ''));
+            return (
+              <blockquote
+                key={pIdx}
+                className="my-3 border-l-4 border-indigo-400/70 bg-gradient-to-r from-indigo-950/40 via-indigo-900/10 to-transparent py-3 px-4 rounded-r-xl italic text-indigo-100 font-serif text-sm sm:text-base leading-relaxed tracking-wide space-y-1 shadow-sm backdrop-blur-xs"
+              >
+                {lines.map((line, lIdx) => (
+                  <span key={lIdx} className="block whitespace-pre-wrap">
+                    {renderInlineMarkdown(line)}
+                  </span>
+                ))}
+              </blockquote>
+            );
+          }
+          return (
+            <span key={pIdx} className="block leading-relaxed">
+              {renderInlineMarkdown(p)}
+            </span>
+          );
+        })}
+      </span>
+    );
+  }
+
+  if (rawText.trim().startsWith('>')) {
+    const lines = rawText.trim().split('\n').map(l => l.replace(/^>\s?/, ''));
+    return (
+      <blockquote
+        key={keyPrefix}
+        className="my-3 border-l-4 border-indigo-400/70 bg-gradient-to-r from-indigo-950/40 via-indigo-900/10 to-transparent py-3 px-4 rounded-r-xl italic text-indigo-100 font-serif text-sm sm:text-base leading-relaxed tracking-wide space-y-1 shadow-sm backdrop-blur-xs"
+      >
+        {lines.map((line, lIdx) => (
+          <span key={lIdx} className="block whitespace-pre-wrap">
+            {renderInlineMarkdown(line)}
           </span>
         ))}
-      </span>
+      </blockquote>
     );
   }
 
@@ -237,6 +362,7 @@ const renderFormattedBlock = (rawText: string, keyPrefix: string | number) => {
     </span>
   );
 };
+
 
 export const MathRenderer: React.FC<MathRendererProps> = ({ content, className = '' }) => {
   if (!content) return null;

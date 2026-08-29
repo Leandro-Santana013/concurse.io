@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import json
 import asyncio
@@ -14,28 +15,33 @@ from services.gabarito import parse_gabarito_from_pdf, parse_gabarito_from_text,
 from services.search import standardize_card_title, interpret_search_query_deterministic
 
 def set_exam_progress(exam_id: int, status_msg: str, pct: int, error_type: Optional[str] = None):
-    """Atualiza o progresso do exame no banco de dados de forma thread-safe com retentativas."""
+    """Atualiza o progresso do exame no banco de dados de forma thread-safe com retentativas e garantias de integridade."""
+    safe_msg = (status_msg[:285] + '...') if len(status_msg) > 290 else status_msg
+    safe_error = (error_type[:45] + '...') if error_type and len(error_type) > 48 else error_type
     max_retries = 5
     for attempt in range(max_retries):
+        session = Session()
         try:
-            with Session() as session:
-                exam = session.query(Exam).filter_by(id=exam_id).first()
-                if exam:
-                    exam.progress = pct
-                    exam.progress_message = status_msg
-                    if error_type is not None:
-                        exam.error_type = error_type
-                    if pct == 100:
-                        exam.status = 'Aprovada'
-                    elif pct == -1:
-                        exam.status = 'Erro'
-                    session.commit()
-                    return
+            exam = session.query(Exam).filter_by(id=exam_id).first()
+            if exam:
+                exam.progress = pct
+                exam.progress_message = safe_msg
+                if safe_error is not None:
+                    exam.error_type = safe_error
+                if pct == 100:
+                    exam.status = 'Aprovada'
+                elif pct == -1:
+                    exam.status = 'Erro'
+                session.commit()
+                return
         except Exception as e:
+            session.rollback()
             if attempt < max_retries - 1:
                 time.sleep(0.2 * (attempt + 1))
             else:
                 print(f"[Progress Error] Falha ao atualizar progresso do exame {exam_id}: {e}", flush=True)
+        finally:
+            session.close()
 
 def download_pdf_file(url: str, dest_path: str, timeout: int = 30) -> bool:
     """Faz o download de um arquivo PDF com headers de navegador ou copia se for arquivo local."""
@@ -69,72 +75,12 @@ def download_pdf_file(url: str, dest_path: str, timeout: int = 30) -> bool:
     return False
 
 
-from services.crawlers import parse_html_exam
-
-def discover_direct_exam_and_gabarito_pdfs(url: str, title: str = ""):
-    """Tenta descobrir URLs diretas de PDF da prova e gabarito em repositórios de alta fidelidade."""
-    import re
-    # Extrai tokens do slug da URL (ex: enfermeiro-psf-prefeitura-icatu-ma-instituto-jk-2024)
-    slug = url.split('/')[-1].split('?')[0] if '/' in url else ''
-    slug_parts = [p.lower() for p in slug.split('-') if len(p) > 1 and not p.isdigit()]
-    
-    title_clean = re.sub(r'PCI\s*-\s*|Provas?\s+para\s+Download\s*-\s*|Caderno\s+de\s+provas?\s*-\s*|\[\d{4}\]\s*', '', title, flags=re.IGNORECASE)
-    title_parts = [p.lower() for p in re.split(r'[\s\-/]+', title_clean) if len(p) > 2]
-    
-    combined = list(dict.fromkeys(slug_parts + title_parts))
-    stop_words = {'prova', 'provas', 'pdf', 'download', 'para', 'com', 'sem', 'web', 'pci', 'pref', 'prefeitura'}
-    keywords = [k for k in combined if k not in stop_words]
-    query_str = " ".join(keywords)
-
-    try:
-        from services.crawlers import get_ddgs_class
-        ddgs_cls = get_ddgs_class()
-        if ddgs_cls and query_str:
-            with ddgs_cls() as ddgs:
-                results = list(ddgs.text(f"site:arquivos.qconcursos.com {query_str}", max_results=8))
-                
-                # Encontra o resultado com maior sobreposição de palavras-chave
-                scored_provas = []
-                scored_gabs = []
-                
-                for r in results:
-                    href = r.get('href', '')
-                    href_lower = href.lower()
-                    score = sum(1 for kw in keywords if kw in href_lower)
-                    
-                    if 'arquivo_prova' in href:
-                        scored_provas.append((score, href))
-                    elif 'arquivo_gabarito' in href:
-                        scored_gabs.append((score, href))
-                        
-                scored_provas.sort(key=lambda x: x[0], reverse=True)
-                scored_gabs.sort(key=lambda x: x[0], reverse=True)
-                
-                prova_pdf = scored_provas[0][1] if scored_provas and scored_provas[0][0] >= 2 else None
-                gab_pdf = scored_gabs[0][1] if scored_gabs and scored_gabs[0][0] >= 2 else None
-                
-                # Se achou prova mas não gabarito, deriva o link do gabarito padrão
-                if prova_pdf and not gab_pdf and 'arquivo_prova' in prova_pdf:
-                    derived_gab = prova_pdf.replace('arquivo_prova', 'arquivo_gabarito').replace('-prova.pdf', '-gabarito.pdf')
-                    try:
-                        r_chk = requests.head(derived_gab, timeout=5, verify=False)
-                        if r_chk.status_code == 200:
-                            gab_pdf = derived_gab
-                    except Exception:
-                        pass
-                        
-                if prova_pdf:
-                    print(f"[PDF Discovery] Prova identificada: {prova_pdf} | Gabarito: {gab_pdf}")
-                    return prova_pdf, gab_pdf
-    except Exception as e:
-        print(f"[PDF Discovery Error] {e}")
-
-    return None, None
+from services.crawlers import parse_html_exam, extract_pci_page_pdfs
 
 def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
     """
     Worker completo de ingestão e processamento assíncrono com tolerância a falhas:
-    1. Download do PDF da Prova ou Descoberta de PDF Direto (0-20%)
+    1. Download do PDF da Prova ou Resolução Determinística de PCI Concursos (0-20%)
     2. Triagem rápida com PDF Inspector (20-35%)
     3. Extração das Questões e Recorte de Diagramas (35-70%)
     4. Download e Extração do Gabarito Oficial (70-85%)
@@ -159,18 +105,25 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
         ts = int(time.time())
         pdf_path = os.path.join('pdfs', f"{exam_id}_{ts}.pdf")
 
-        # 1. Download ou Descoberta do Arquivo
+        # 1. Resolução Determinística e Download do Arquivo Exato
         is_html_source = False
         html_data = None
-        
-        # Se a URL for página de aterrissagem (PCI Concursos, etc.), tenta descobrir PDF direto
-        if source_url and ('pciconcursos.com.br/provas/download/' in source_url or 'download' in source_url):
-            set_exam_progress(exam_id, "Buscando caderno matriz de alta resolução...", 15)
-            direct_prova, direct_gab = discover_direct_exam_and_gabarito_pdfs(source_url, clean_title)
-            if direct_prova:
-                source_url = direct_prova
-                if direct_gab and not gabarito_url:
-                    gabarito_url = direct_gab
+
+        # Se a URL for página do PCI Concursos, extrai diretamente os PDFs oficiais daquela página
+        if source_url and ('pciconcursos.com.br' in source_url) and not source_url.lower().endswith('.pdf') and ('arquivo.pciconcursos.com.br' not in source_url):
+            set_exam_progress(exam_id, "Obtendo PDF oficial direto do PCI Concursos...", 15)
+            pci_prova, pci_gab, pci_title = extract_pci_page_pdfs(source_url)
+            if pci_prova:
+                source_url = pci_prova
+            if pci_gab and not gabarito_url:
+                gabarito_url = pci_gab
+            if pci_title and (not exam.title or exam.title.startswith("Nova Prova") or exam.title.startswith("PCI -")):
+                with Session() as session:
+                    ex_update = session.query(Exam).filter_by(id=exam_id).first()
+                    if ex_update:
+                        ex_update.title = standardize_card_title(pci_title, url=source_url)
+                        clean_title = ex_update.title
+                        session.commit()
 
         if source_url and source_url.startswith('http'):
             headers = {
@@ -271,7 +224,7 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
                         return
 
                     # Criação ou associação de pasta
-                    folder_name = clean_title if clean_title else f"Pasta Prova {exam.id}"
+                    folder_name = (clean_title if clean_title else f"Pasta Prova {exam.id}")[:95].strip()
                     folder = session.query(Folder).filter_by(name=folder_name).first()
                     if not folder:
                         folder = Folder(name=folder_name, user_id=user_id)
@@ -287,41 +240,91 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
                     # Remove questões antigas se houver
                     session.query(Question).filter_by(exam_id=exam.id).delete()
 
-                    # Insere novas questões
-                    for q_data in updated_questions:
+                    def _q_sort_key(q):
+                        raw = str(q.get('numero_questao', '')).strip()
+                        if raw.isdigit():
+                            return (0, int(raw))
+                        m = re.match(r'^(\d+)', raw)
+                        if m:
+                            return (0, int(m.group(1)))
+                        return (1, 99999)
+
+                    sorted_questions = sorted(updated_questions, key=_q_sort_key)
+
+                    # Insere novas questões ordenadas com sanitização completa
+                    for idx, q_data in enumerate(sorted_questions, start=1):
+                        raw_enunciado = q_data.get('enunciado') or f"Questão {idx}"
+                        statement_clean = str(raw_enunciado).replace('\x00', '').strip()
+                        if not statement_clean:
+                            statement_clean = f"Questão {idx}"
+
+                        raw_resposta = q_data.get('resposta')
+                        if not raw_resposta or not str(raw_resposta).strip():
+                            correct_ans = 'A'
+                        else:
+                            correct_ans = str(raw_resposta).replace('\x00', '').strip().upper()[:10]
+
+                        raw_opcoes = q_data.get('opcoes')
+                        if isinstance(raw_opcoes, (dict, list)):
+                            try:
+                                options_json = json.dumps(raw_opcoes, ensure_ascii=False, default=str)
+                            except Exception:
+                                options_json = json.dumps({})
+                        else:
+                            options_json = json.dumps({})
+                        options_json = options_json.replace('\x00', '')
+
+                        raw_subject = q_data.get('disciplina') or 'Geral'
+                        subject_clean = str(raw_subject).replace('\x00', '').strip()[:100] or 'Geral'
+
+                        raw_images = q_data.get('images')
+                        if raw_images:
+                            try:
+                                images_json = json.dumps(raw_images, ensure_ascii=False, default=str).replace('\x00', '')
+                            except Exception:
+                                images_json = None
+                        else:
+                            images_json = None
+
+                        num_q = str(q_data.get('numero_questao') or idx).replace('\x00', '').strip()[:50]
+
                         new_q = Question(
                             exam_id=exam.id,
-                            statement=q_data['enunciado'],
-                            options=json.dumps(q_data['opcoes']),
-                            correct_answer=q_data['resposta'],
-                            subject=q_data.get('disciplina', 'Geral'),
-                            images=json.dumps(q_data['images']) if q_data.get('images') else None,
-                            numero_questao=str(q_data['numero_questao']),
-                            latex_support=q_data.get('latex_support', 0)
+                            statement=statement_clean,
+                            options=options_json,
+                            correct_answer=correct_ans,
+                            subject=subject_clean,
+                            images=images_json,
+                            numero_questao=num_q,
+                            latex_support=int(q_data.get('latex_support', 0) or 0)
                         )
                         session.add(new_q)
 
-                    # Salva defensivamente no catálogo de busca para respostas instantâneas futuras
-                    if source_url:
-                        try:
-                            cat_entry = session.query(ExamCatalog).filter_by(source_url=source_url).first()
-                            if not cat_entry:
-                                session.add(ExamCatalog(
-                                    query_key=clean_title.lower(),
-                                    title=exam.title,
-                                    source_url=source_url,
-                                    gabarito_url=gabarito_url,
-                                    match_score=95,
-                                    source="ingested",
-                                    created_at=datetime.now().isoformat()
-                                ))
-                        except Exception as cat_err:
-                            print(f"[ExamCatalog Save Warning] {cat_err}")
-
                     session.commit()
                     db_save_success = True
+
+                    # Salva no catálogo de busca em sessão isolada (evita falhar o commit principal se houver chave duplicada)
+                    if source_url:
+                        try:
+                            with Session() as cat_session:
+                                cat_entry = cat_session.query(ExamCatalog).filter_by(source_url=source_url).first()
+                                if not cat_entry:
+                                    cat_session.add(ExamCatalog(
+                                        query_key=clean_title.lower()[:100],
+                                        title=exam.title[:300],
+                                        source_url=source_url[:500],
+                                        gabarito_url=gabarito_url[:500] if gabarito_url else None,
+                                        match_score=95,
+                                        source="ingested",
+                                        created_at=datetime.now().isoformat()
+                                    ))
+                                    cat_session.commit()
+                        except Exception as cat_err:
+                            print(f"[ExamCatalog Save Warning] {cat_err}", flush=True)
+
                     break
             except Exception as db_err:
+                print(f"[DB Save Attempt {attempt+1}/{max_save_retries} Error] {db_err}", flush=True)
                 if attempt < max_save_retries - 1:
                     time.sleep(0.3 * (attempt + 1))
                 else:
@@ -339,7 +342,7 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
     except Exception as unexpected_err:
         import traceback
         traceback.print_exc()
-        set_exam_progress(exam_id, f"Erro inesperado: {str(unexpected_err)}", -1, "INTERNAL_ERROR")
+        set_exam_progress(exam_id, f"Erro inesperado: {str(unexpected_err)[:200]}", -1, "INTERNAL_ERROR")
 
 def dispatch_async_exam_task(exam_id: int, gabarito_override: Optional[str] = None):
     """Inicia a execução da tarefa em uma thread dedicada não-bloqueante."""

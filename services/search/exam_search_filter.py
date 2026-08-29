@@ -175,8 +175,23 @@ def interpret_search_query_deterministic(query: str) -> Dict[str, str]:
     - Local / UF (ex: SP, RJ, DF)
     - Query Otimizada para Scrapers
     """
-    query_clean = query.strip()
-    query_lower = query_clean.lower()
+    query_clean = query.strip() if query else ""
+    # Normalização de erros de digitação comuns em concursos (ex: potuario -> portuario)
+    typos = [
+        (r'\bpotuari[oa]s?\b', 'portuario'),
+        (r'\bpotuaria\b', 'portuaria'),
+        (r'\benfermegem\b', 'enfermagem'),
+        (r'\bengenhara\b', 'engenharia'),
+        (r'\badminstrativ[oa]\b', 'administrativo'),
+        (r'\bpolcia\b', 'policia'),
+        (r'\bagene\b', 'agente'),
+        (r'\bconcurs\b', 'concurso'),
+    ]
+    query_corrected = query_clean
+    for pat, repl in typos:
+        query_corrected = re.sub(pat, repl, query_corrected, flags=re.IGNORECASE)
+
+    query_lower = query_corrected.lower()
     
     data = {
         "orgao": "",
@@ -185,7 +200,7 @@ def interpret_search_query_deterministic(query: str) -> Dict[str, str]:
         "cargo": "",
         "escolaridade": "",
         "local": "",
-        "query_otimizada": query_clean
+        "query_otimizada": query_corrected
     }
     
     # 1. Identificar Ano (1990 - 2035)

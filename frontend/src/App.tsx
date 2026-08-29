@@ -7,11 +7,21 @@ import { ExamSimulator } from './components/exam/ExamSimulator';
 import { AnalyticsView } from './components/stats/AnalyticsView';
 import { ErrorNotebookView } from './components/stats/ErrorNotebookView';
 import { RankingView } from './components/stats/RankingView';
+import { DirectIngestModal } from './components/dashboard/DirectIngestModal';
 import { useUI } from './context/UIContext';
 import { useExam } from './context/ExamContext';
 
 export const App: React.FC = () => {
-  const { currentView, navigateTo, isMobileSidebarOpen, toggleMobileSidebar, setMobileSidebarOpen } = useUI();
+  const {
+    currentView,
+    navigateTo,
+    isMobileSidebarOpen,
+    toggleMobileSidebar,
+    setMobileSidebarOpen,
+    isDirectIngestModalOpen,
+    directIngestData,
+    closeDirectIngestModal,
+  } = useUI();
   const { isZenMode, loadAndStartExam } = useExam();
 
   const handleExamReady = async (examId: number) => {
@@ -70,6 +80,18 @@ export const App: React.FC = () => {
           )}
         </main>
       </div>
+
+      {/* Direct Ingest Modal (PCI Concursos / Direct PDFs) */}
+      <DirectIngestModal
+        isOpen={isDirectIngestModalOpen}
+        onClose={closeDirectIngestModal}
+        onExamReady={handleExamReady}
+        initialExamUrl={directIngestData.examUrl}
+        initialGabaritoUrl={directIngestData.gabaritoUrl}
+        initialTitle={directIngestData.title}
+      />
     </div>
   );
 };
+
+

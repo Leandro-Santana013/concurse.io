@@ -65,7 +65,7 @@ class User(Base):
 class Folder(Base):
     __tablename__ = 'folders'
     id = Column(Integer, primary_key=True)
-    name = Column(String(100), nullable=False)
+    name = Column(String(300), nullable=False)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=True, index=True)
     
     exams = relationship("Exam", back_populates="folder", cascade="all, delete-orphan")
@@ -74,7 +74,7 @@ class Folder(Base):
 class Exam(Base):
     __tablename__ = 'exams'
     id = Column(Integer, primary_key=True)
-    title = Column(String(200), nullable=False)
+    title = Column(String(300), nullable=False)
     status = Column(String(20), default='Pendente', index=True)
     folder_id = Column(Integer, ForeignKey('folders.id'), nullable=True, index=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=True, index=True)

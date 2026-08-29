@@ -12,6 +12,12 @@ export interface ToastMessage {
   message?: string;
 }
 
+export interface DirectIngestInitialData {
+  examUrl?: string;
+  gabaritoUrl?: string;
+  title?: string;
+}
+
 interface UIContextType {
   // Navigation & Layout
   currentView: ViewType;
@@ -32,13 +38,21 @@ interface UIContextType {
   activeDownloadsCount: number;
   refreshDownloads: () => Promise<void>;
 
+  // Direct Ingest Modal
+  isDirectIngestModalOpen: boolean;
+  directIngestData: DirectIngestInitialData;
+  openDirectIngestModal: (data?: DirectIngestInitialData) => void;
+  closeDirectIngestModal: () => void;
+
   // Toast Notifications
   toasts: ToastMessage[];
   showToast: (type: ToastMessage['type'], title: string, message?: string) => void;
   removeToast: (id: string) => void;
 }
 
+
 const UIContext = createContext<UIContextType | undefined>(undefined);
+
 
 const PREFS_STORAGE_KEY = 'concurse_ui_preferences_v1';
 
@@ -142,6 +156,20 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     setEnableEliminationMode((prev) => !prev);
   };
 
+  // Direct Ingest Modal state
+  const [isDirectIngestModalOpen, setIsDirectIngestModalOpen] = useState(false);
+  const [directIngestData, setDirectIngestData] = useState<DirectIngestInitialData>({});
+
+  const openDirectIngestModal = (data?: DirectIngestInitialData) => {
+    setDirectIngestData(data || {});
+    setIsDirectIngestModalOpen(true);
+  };
+
+  const closeDirectIngestModal = () => {
+    setIsDirectIngestModalOpen(false);
+    setDirectIngestData({});
+  };
+
   const showToast = (type: ToastMessage['type'], title: string, message?: string) => {
     const id = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     setToasts((prev) => [...prev, { id, type, title, message }]);
@@ -170,6 +198,10 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         toggleEliminationMode,
         activeDownloadsCount,
         refreshDownloads,
+        isDirectIngestModalOpen,
+        directIngestData,
+        openDirectIngestModal,
+        closeDirectIngestModal,
         toasts,
         showToast,
         removeToast,

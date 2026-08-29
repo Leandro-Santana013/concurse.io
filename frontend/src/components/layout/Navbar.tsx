@@ -8,9 +8,10 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
-  const { toggleMobileSidebar: uiToggle, activeDownloadsCount, navigateTo } = useUI();
+  const { toggleMobileSidebar: uiToggle, activeDownloadsCount, navigateTo, openDirectIngestModal } = useUI();
   const { activeExam } = useExam();
   const handleToggle = onToggleMobileSidebar || uiToggle;
+
 
   return (
     <header className="sticky top-0 z-30 flex h-20 items-center justify-between glass-navbar px-4 sm:px-8">
@@ -39,7 +40,19 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
         )}
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3 sm:gap-4">
+        {/* Direct Link Ingestion Button */}
+        <button
+          onClick={() => openDirectIngestModal()}
+          className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600/80 via-violet-600/80 to-cyan-600/80 hover:from-indigo-500 hover:to-cyan-500 px-3.5 sm:px-4 py-2 text-xs font-bold text-white shadow-lg shadow-indigo-500/20 border border-white/20 transition hover:scale-[1.02] active:scale-95"
+          title="Colar link direto do PCI Concursos ou PDF da Prova e Gabarito"
+        >
+
+          <Sparkles className="h-3.5 w-3.5 text-cyan-300" />
+          <span className="hidden sm:inline">Importar por Link / PCI</span>
+          <span className="sm:hidden">Colar Link</span>
+        </button>
+
         {/* Active Downloads SSE Indicator */}
         {activeDownloadsCount > 0 && (
           <div className="flex items-center gap-2 rounded-2xl glass-pill-cyan px-3.5 py-1.5 text-xs font-bold animate-pulse">
@@ -47,6 +60,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
             <span>{activeDownloadsCount} processando PDF</span>
           </div>
         )}
+
 
         {/* User Profile Bento Pill */}
         <div className="flex items-center gap-3 border-l border-white/10 pl-4">

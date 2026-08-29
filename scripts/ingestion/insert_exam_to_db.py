@@ -4,6 +4,7 @@ if _repo_root not in sys.path:
     sys.path.insert(0, _repo_root)
 
 import os
+import re
 import sys
 import json
 
@@ -82,9 +83,19 @@ def insert_exam():
             db.commit()
             db.refresh(exam)
 
-        print(f"💾 Inserindo {len(questions_data)} questões associadas ao Exam ID: {exam.id}...")
+        def _q_sort_key(q):
+            raw = str(q.get('numero_questao', '')).strip()
+            if raw.isdigit():
+                return (0, int(raw))
+            m = re.match(r'^(\d+)', raw)
+            if m:
+                return (0, int(m.group(1)))
+            return (1, 99999)
+
+        sorted_questions = sorted(questions_data, key=_q_sort_key)
+        print(f"💾 Inserindo {len(sorted_questions)} questões associadas ao Exam ID: {exam.id}...")
         
-        for q in questions_data:
+        for q in sorted_questions:
             q_num = str(q.get('numero_questao', ''))
             statement = q.get('enunciado', '').strip()
             options = q.get('opcoes', {})

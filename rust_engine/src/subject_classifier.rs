@@ -9,7 +9,7 @@ pub static SUBJECT_RULES: Lazy<Vec<(Regex, &'static str)>> = Lazy::new(|| {
         (Regex::new(r"(?i)\b(?:L[ÍI\?]?NGUA\s+PORTUGUESA|PORTUGU[ÊE\?]?S|INTERPRETA[ÇC\?][ÃA\?]?O\s+DE\s+TEXTO|GRAM[ÁA\?]?TICA|REDA[ÇC\?][ÃA\?]?O\s+OFICIAL)\b").unwrap(), "Língua Portuguesa"),
         
         // Raciocínio Lógico & Matemática
-        (Regex::new(r"(?i)\b(?:RACIOC[ÍI\?]?NIO\s+L[ÓO\?]?GICO-MATEM[ÁA\?]?TICO|RACIOCINIO\s+LOGICO-MATEMATICO)\b").unwrap(), "Raciocínio Lógico-Matemático"),
+        (Regex::new(r"(?i)\b(?:RACIOC[ÍI\?]?NIO\s+L[ÓO\?]?GICO-MATEM[ÁA\?]?TICO|RACIOCINIO\s+LOGICO-MATEMATICO|RACIOC[ÍI\?]?NIO\s+L[ÓO\?]?GICO\s+MATEM[ÁA\?]?TICO|RACIOCINIO\s+LOGICO\s+MATEMATICO)\b").unwrap(), "Raciocínio Lógico-Matemático"),
         (Regex::new(r"(?i)\b(?:MATEM[ÁA\?]?TICA\s+E\s+RACIOC[ÍI\?]?NIO\s+L[ÓO\?]?GICO|MATEMATICA\s+E\s+RACIOCINIO\s+LOGICO)\b").unwrap(), "Matemática e Raciocínio Lógico"),
         (Regex::new(r"(?i)\b(?:RACIOC[ÍI\?]?NIO\s+L[ÓO\?]?GICO|RACIOCINIO\s+LOGICO)\b").unwrap(), "Raciocínio Lógico"),
         (Regex::new(r"(?i)\b(?:MATEM[ÁA\?]?TICA\s+FINANCEIRA|MATEMATICA\s+FINANCEIRA)\b").unwrap(), "Matemática Financeira"),
@@ -19,6 +19,9 @@ pub static SUBJECT_RULES: Lazy<Vec<(Regex, &'static str)>> = Lazy::new(|| {
         (Regex::new(r"(?i)\b(?:NO[ÇC\?][ÕO\?]?ES\s+DE\s+INFORM[ÁA\?]?TICA|NOCOES\s+DE\s+INFORMATICA)\b").unwrap(), "Noções de Informática"),
         (Regex::new(r"(?i)\b(?:INFORM[ÁA\?]?TICA|INFORMATICA|TECNOLOGIA\s+DA\s+INFORM[AÃ\?]?O|CI[ÊE\?]?NCIA\s+DE\s+DADOS|SEGURAN[ÇC\?]?A\s+DA\s+INFORM[AÃ\?]?O|BANCO\s+DE\s+DADOS|REDES\s+DE\s+COMPUTADORES|ENGENHARIA\s+DE\s+SOFTWARE)\b").unwrap(), "Informática"),
         
+        // Atualidades
+        (Regex::new(r"(?i)\b(?:ATUALIDADES)\b").unwrap(), "Atualidades"),
+
         // Direito
         (Regex::new(r"(?i)\b(?:DIREITO\s+CONSTITUCIONAL)\b").unwrap(), "Direito Constitucional"),
         (Regex::new(r"(?i)\b(?:DIREITO\s+ADMINISTRATIVO)\b").unwrap(), "Direito Administrativo"),
@@ -39,10 +42,7 @@ pub static SUBJECT_RULES: Lazy<Vec<(Regex, &'static str)>> = Lazy::new(|| {
         (Regex::new(r"(?i)\b(?:DIREITOS\s+HUMANOS)\b").unwrap(), "Direitos Humanos"),
         
         // Legislação e Normas
-        (Regex::new(r"(?i)\b(?:LEGISLA[ÇC\?][ÃA\?]?O\s+ESPEC[ÍI\?]?FICA|LEGISLACAO\s+ESPECIFICA)\b").unwrap(), "Legislação Específica"),
-        (Regex::new(r"(?i)\b(?:LEGISLA[ÇC\?][ÃA\?]?O\s+APLICADA|LEGISLACAO\s+APLICADA)\b").unwrap(), "Legislação Aplicada"),
-        (Regex::new(r"(?i)\b(?:LEGISLA[ÇC\?][ÃA\?]?O\s+INSTITUCIONAL|LEGISLACAO\s+INSTITUCIONAL)\b").unwrap(), "Legislação Institucional"),
-        (Regex::new(r"(?i)\b(?:LEGISLA[ÇC\?][ÃA\?]?O|LEGISLACAO)\b").unwrap(), "Legislação"),
+        (Regex::new(r"(?i)\b(?:LEGISLA[ÇC\?][ÃA\?]?O\s+(?:ACERCA\s+DE\s+[^\n]+|DE\s+SEGURAN[ÇC\?]?A\s+[^\n]+|E\s+PROTE[ÇC\?][ÃA\?]?O\s+DE\s+DADOS|ESPEC[ÍI\?]?FICA|APLICADA|INSTITUCIONAL|DO\s+SUS)|LEGISLA[ÇC\?][ÃA\?]?O|LEGISLACAO)\b").unwrap(), "Legislação"),
         (Regex::new(r"(?i)\b(?:[ÉE\?]?TICA\s+NO\s+SERVI[ÇC\?]?O\s+P[ÚU\?]?BLICO|[ÉE\?]?TICA)\b").unwrap(), "Ética no Serviço Público"),
         (Regex::new(r"(?i)\b(?:REGIMENTO\s+INTERNO|ESTATUTO\s+DOS\s+SERVIDORES|ESTATUTO)\b").unwrap(), "Regimento Interno e Estatuto"),
         
@@ -68,7 +68,7 @@ pub static SUBJECT_RULES: Lazy<Vec<(Regex, &'static str)>> = Lazy::new(|| {
         (Regex::new(r"(?i)\b(?:CONHECIMENTOS\s+B[ÁA\?]?SICOS|CONHECIMENTOS\s+BASICOS)\b").unwrap(), "Conhecimentos Básicos"),
         (Regex::new(r"(?i)\b(?:CONHECIMENTOS\s+ESPEC[ÍI\?]?FICOS|CONHECIMENTOS\s+ESPECIFICOS)\b").unwrap(), "Conhecimentos Específicos"),
         (Regex::new(r"(?i)\b(?:CONHECIMENTOS\s+REGIONAIS|HIST[ÓO\?]?RIA\s+E\s+GEOGRAFIA|GEOGRAFIA|HIST[ÓO\?]?RIA)\b").unwrap(), "Conhecimentos Gerais e Regionais"),
-        (Regex::new(r"(?i)\b(?:CONHECIMENTOS\s+GERAIS|ATUALIDADES)\b").unwrap(), "Conhecimentos Gerais"),
+        (Regex::new(r"(?i)\b(?:CONHECIMENTOS\s+GERAIS)\b").unwrap(), "Conhecimentos Gerais"),
         
         // Saúde & Biológicas
         (Regex::new(r"(?i)\b(?:ENFERMAGEM)\b").unwrap(), "Enfermagem"),
@@ -108,6 +108,30 @@ pub fn classify_subject_canonical(raw_text: &str) -> &'static str {
     let text = raw_text.trim();
     if text.is_empty() {
         return "Geral";
+    }
+
+    static HTML_TAG_CLEANER: Lazy<Regex> = Lazy::new(|| {
+        Regex::new(r"<[^>]+>|\*{1,3}|_{1,3}").unwrap()
+    });
+    let without_html = HTML_TAG_CLEANER.replace_all(text, " ");
+
+    // Remove prefixos comuns de bancas antes de casar a matéria
+    static BANCA_PREFIX_CLEANER: Lazy<Regex> = Lazy::new(|| {
+        Regex::new(r"(?i)^(?:FGV\s+CONHECIMENTO\s+|CEBRASPE\s*[-–—:]*\s*|VUNESP\s*[-–—:]*\s*|IBAM\s*[-–—:]*\s*|FCC\s*[-–—:]*\s*|CESGRANRIO\s*[-–—:]*\s*)").unwrap()
+    });
+    let cleaned = BANCA_PREFIX_CLEANER.replace(&without_html, "");
+    let test_str = cleaned.trim();
+
+    for (regex, canonical) in SUBJECT_RULES.iter() {
+        if regex.is_match(test_str) {
+            return canonical;
+        }
+    }
+
+    for (regex, canonical) in SUBJECT_RULES.iter() {
+        if regex.is_match(&without_html) {
+            return canonical;
+        }
     }
 
     for (regex, canonical) in SUBJECT_RULES.iter() {

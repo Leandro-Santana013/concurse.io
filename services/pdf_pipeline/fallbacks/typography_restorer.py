@@ -38,6 +38,78 @@ except (ImportError, ValueError):
         rust_restore_typography = None
         rust_restore_ocr_lexical_spacing = None
 
+POEM_CUES_REGEX = re.compile(
+    r'(?i)\b(?:poema|poesias?|versos?|estrofes?|soneto|trovas?|cantiga|can[çc][ãa]o|l[íi]ric[ao]|ode|quadras?|tercetos?|oitavas?|d[ée]cimas?|poeta|poetisa|haicai|haikai)\b'
+)
+
+FAMOUS_POETS_REGEX = re.compile(
+    r'(?i)\b(?:Fernando\s+Pessoa|Drummond|Manuel\s+Bandeira|Vinicius\s+de\s+Moraes|Cec[íi]lia\s+Meireles|Castro\s+Alves|Gon[çc]alves\s+Dias|Olavo\s+Bilac|Machado\s+de\s+Assis|Greg[óo]rio\s+de\s+Matos|Florbela\s+Espanca|Lu[íi]s\s+de\s+Cam[õo]es|Cam[õo]es|Cruz\s+e\s+Sousa|Augusto\s+dos\s+Anjos|M[áa]rio\s+de\s+Andrade|Oswald\s+de\s+Andrade|Cora\s+Coralina|Ad[ée]lia\s+Prado|Ferreira\s+Gullar|Jo[ãa]o\s+Cabral|Luiz\s+Gonzaga)\b'
+)
+
+PROSE_PROMPT_REGEX = re.compile(
+    r'(?i)^(?:Nos?\s+versos?|Nas?\s+estrofes?|No\s+poema|No\s+soneto|No\s+trecho|No\s+texto|No\s+fragmento|O\s+eu\s+(?:po[ée]tico|l[íi]rico)|O\s+autor|O\s+poeta\s+(?:narra|afirma|expressa|utiliza|reitera|sugere|cria)|A\s+partir|Com\s+base|Sobre\s+(?:o|a|os|as)|Em\s+rela[çc][ãa]o|De\s+acordo|Para\s+isso|Nesse\s+sentido|Considerando\s+o|Tendo\s+em\s+vista)\b'
+)
+
+def unsquash_poem_lines(block: str) -> str:
+    """
+    Desmembra versos que foram aglutinados na mesma linha por OCR ou formatação de estilos (*verso 1* *verso 2*).
+    """
+    b = block
+    b = re.sub(r'\*\s+\*(?=[A-Za-z\u00C0-\u00DC0-9\"\'\-])', '*\n*', b)
+    b = re.sub(r'</i>\s*<i>(?=[A-Za-z\u00C0-\u00DC0-9\"\'\-])', '</i>\n<i>', b, flags=re.IGNORECASE)
+    b = re.sub(r'</u>\s*<u>(?=[A-Za-z\u00C0-\u00DC0-9\"\'\-])', '</u>\n<u>', b, flags=re.IGNORECASE)
+    return b
+
+def is_verse_line(line: str) -> bool:
+    """Verifica se uma linha individual tem formato e limites característicos de verso."""
+    l = line.strip().strip('*_`')
+    if not l or len(l) > 85:
+        return False
+    # Não pode ser opção de múltipla escolha
+    if re.match(r'^(?:\([a-eA-E]\)|[a-eA-E][\.\)])\s+', l):
+        return False
+    # Não pode ser comando de questão ou comentário discursivo
+    if re.match(r'(?i)^(?:Assinale|Marque|Indique|Identifique|A\s+respeito|Considerando|Com\s+base|De\s+acordo|Julgue|Analise|O\s+texto|Em\s+rela[çc][ãa]o)\b', l):
+        return False
+    if PROSE_PROMPT_REGEX.match(l):
+        return False
+
+    # Não pode ser item romano com texto longo
+    if re.match(r'^(?:I|II|III|IV|V|VI|VII|VIII|IX|X)\.\s+', l) and len(l) > 60:
+        return False
+    # Não pode ser cabeçalho ou divisor
+    if l.startswith(('---', '###', '📖', '**')):
+        return False
+    return True
+
+def is_poem_stanza_block(lines: list[str], has_poetic_context: bool = False) -> bool:
+    """
+    Determina se uma sequência de linhas constitui uma estrofe de poema.
+    Exige contexto poético explícito para evitar falsos positivos em parágrafos de prosa em 2 colunas.
+    """
+    if not has_poetic_context:
+        return False
+
+    valid_lines = [l.strip() for l in lines if l.strip()]
+    if len(valid_lines) < 2:
+        return False
+
+    if not all(is_verse_line(l) for l in valid_lines):
+        return False
+
+    char_counts = [len(l.strip().strip('*_`')) for l in valid_lines]
+    avg_len = sum(char_counts) / len(valid_lines)
+    max_len = max(char_counts)
+
+    return avg_len <= 75 and max_len <= 85
+
+
+def format_poem_stanza(lines: list[str]) -> str:
+    """Formata uma estrofe de poema como bloco de citação Markdown (>) preservando os versos."""
+    return "\n".join(f"> {l.strip()}" for l in lines if l.strip())
+
+
+
 
 def restore_ocr_lexical_spacing(text: str) -> str:
     """
@@ -166,6 +238,12 @@ def restore_exam_typography(text: str, is_option: bool = False) -> str:
     # 2. Recomposição de hifenização de quebra de linha (ex: "admi-\nnistrativo" -> "administrativo")
     t = re.sub(r"([A-Za-z\u00C0-\u00DC]+)-\s*\n\s*([a-z\u00E0-\u00FC]+)", r"\1\2", t)
 
+    # 0. Recomposição de URLs e codificação percentual quebradas entre linhas
+    t = re.sub(r'%\s*\n\s*([0-9A-Fa-f]{2})', r'%\1', t)
+    t = re.sub(r'%\s+([0-9A-Fa-f]{2})', r'%\1', t)
+    t = re.sub(r'(https?://[^\s\n\)]+)\s*\n\s*(%[0-9A-Fa-f]{2}|[a-zA-Z0-9\-_./?&=#@:+]+|\([^\)]+\))', r'\1\2', t)
+    t = re.sub(r'(https?://[^\s\n\)]+)\s*\n\s*(%[0-9A-Fa-f]{2}|[a-zA-Z0-9\-_./?&=#@:+]+|\([^\)]+\))', r'\1\2', t)
+
     # 2.1 Costura de referências de Leis e Normas quebradas (ex: "Norma Regulamentadora\n29:" -> "Norma Regulamentadora 29:")
     t = re.sub(
         r"\b(Norma\s+Regulamentadora|Norma|Lei|Decreto|Portaria|NR|Resolu[çc][ãa]o)\s*(?:n[º°o]?\.?)?\s*\n*\s*(\d+)\s*(:?)",
@@ -211,31 +289,38 @@ def restore_exam_typography(text: str, is_option: bool = False) -> str:
         flags=re.IGNORECASE
     )
 
-    # 4.2 Remove rótulos de tabela redundantes colados antes de itens (ex: "Word (1) Deck.", "Meaning (__) The floor...")
-    t = re.sub(r"(?:^|\n|\s+)(?:Word|Meaning|Palavra|Significado|Termo|Defini[çc][ãa]o)\s*[:.\-]?\s*(?=\(\d+\)|\(\s*_{1,4}\s*\))", "\n\n", t, flags=re.IGNORECASE)
+    # 4.2 Preserva numeração de itens após rótulos de tabela (ex: "Word (1) Deck." -> "\n\n(1) Deck.")
+    t = re.sub(r"(?:^|\n|\s+)(?:Word|Meaning|Palavra|Significado|Termo|Defini[çc][ãa]o)\s*[:.\-]?\s*(\(\d+\)|\(\s*_{1,4}\s*\))", r"\n\n\1 ", t, flags=re.IGNORECASE)
+    t = re.sub(r"(\b\d+|[A-Za-z\u00C0-\u00DC])\s*(\(\d+\))", r"\1\n\n\2", t)
+    t = re.sub(r"(\(\d+\))\s*([A-Za-z\u00C0-\u00DC])", r"\1 \2", t)
+
+    # 4.3 Desaglutinação de itens com marcadores/hífen/traço (ex: "resultados: - 6 pessoas...", "Caribe. - 24 pessoas...")
+    t = re.sub(r"(?:^|\n|(?<=[:.;])\s*|\s{2,}|\.\s+)([—–\-•])\s+([0-9A-Za-z\u00C0-\u00DC])", r"\n\n\1 \2", t)
 
     # 5. Formatação e Desaglutinação de Quadros, Colunas e Painéis (Português e Inglês)
-    HEADING_ORDINAL = r"(?:1[ªaºo]|2[ªaºo]|3[ªaºo]|4[ªaºo]|Primeir[ao]|Segund[ao]|Terceir[ao]|Quart[ao])\s+(?:Coluna|Column|Tabela|Quadro|Bloco)\b"
-    HEADING_COL = r"(?:Coluna|Column|Quadro|Painel|Tira|Bloco|Tabela)\s+(?:0*\d+|I{1,3}|IV|V|VI|VII|VIII|IX|X|[A-E]\b)(?:\s*[-–—:]\s*(?:Word|Meaning|Palavra|Significado|Termo|Defini[çc][ãa]o|Conceito|Descri[çc][ãa]o))?"
-    HEADING_PREFIXES = r"(?:QUADRO|PAINEL|TIRA|BLOCO|TABELA)\s+\d+\b"
+    TAGS_OPT = r"(?:<\/?(?:u|b|i|strong|em)>)*"
+    HEADING_ORDINAL = rf"{TAGS_OPT}\s*(?:1[ªaºo]|2[ªaºo]|3[ªaºo]|4[ªaºo]|Primeir[ao]|Segund[ao]|Terceir[ao]|Quart[ao]){TAGS_OPT}\s+{TAGS_OPT}(?:Coluna|Column|Tabela|Quadro|Bloco)\b{TAGS_OPT}"
+    HEADING_COL = rf"{TAGS_OPT}\s*(?:Coluna|Column|Quadro|Painel|Tira|Bloco|Tabela){TAGS_OPT}\s+{TAGS_OPT}(?:0*\d+|I{{1,3}}|IV|V|VI|VII|VIII|IX|X|[A-E]\b){TAGS_OPT}(?:\s*[-–—:]\s*{TAGS_OPT}(?:Word|Meaning|Palavra|Significado|Termo|Defini[çc][ãa]o|Conceito|Descri[çc][ãa]o){TAGS_OPT})?"
+    HEADING_PREFIXES = rf"{TAGS_OPT}\s*(?:QUADRO|PAINEL|TIRA|BLOCO|TABELA){TAGS_OPT}\s+\d+\b{TAGS_OPT}"
     HEAD_PAT = rf"(?:{HEADING_ORDINAL}|{HEADING_COL}|{HEADING_PREFIXES})"
-    PREPS = r"da|do|das|dos|na|no|nas|nos|pela|pelo|pelas|pelos|em|à|a|ao|aos|com|para|de|o|os|um|uma|este|esta|esse|essa|e|ou|match|with"
+    PREPS = r"da|do|das|dos|na|no|nas|nos|pela|pelo|pelas|pelos|em|à|a|ao|aos|com|para|de|o|os|um|uma|este|esta|esse|essa|e|ou|match|with|entre|segundo|conforme|sob|sobre"
 
     def format_heading_match(m):
-        prep = m.group(1)
-        heading = m.group(2)
+        prefix_lead = m.group(1) or m.group(4) or ""
+        prep = m.group(2) or m.group(5)
+        heading = m.group(3) or m.group(6)
         if prep:
-            # Precedido por preposição/conjunção narrativa -> mantém inalterado
+            # Precedido por preposição/conjunção narrativa ("a Coluna 01", "na Coluna 02") -> mantém inalterado
             return m.group(0)
-        prefix = re.sub(r"\s+", " ", heading.strip())
-        clean_prefix = prefix.replace("**", "").strip()
-        return f"\n\n**{clean_prefix}:**\n\n"
+        clean_prefix = re.sub(r"<\/?(?:u|b|i|strong|em)>|\*\*", "", heading).strip()
+        clean_prefix = re.sub(r"\s+", " ", clean_prefix).strip()
+        lead_punct = ":" if ":" in prefix_lead else ""
+        return f"{lead_punct}\n\n**{clean_prefix}:**\n\n"
 
     t = re.sub(
-        rf"(\b(?:{PREPS})\s+)?\b({HEAD_PAT})\s*[:.\-]?\s*",
+        rf"(?i)(?:(^|\s+|[:.\-]\s*)(\b(?:{PREPS})\s+)({HEAD_PAT})|(^|\s+|[:.\-]\s*)()({HEAD_PAT}))\s*[:.\-]?(?=\s|$)",
         format_heading_match,
-        t,
-        flags=re.IGNORECASE
+        t
     )
 
     # 7. Desaglutinação de sub-itens de letras em colunas pareadas (ex: "A. Depende de... B. Integra...")
@@ -262,10 +347,17 @@ def restore_exam_typography(text: str, is_option: bool = False) -> str:
     for c_pat in COMMAND_PATTERNS:
         t = re.sub(rf"(?<!\n\n)(?:^|\n|\s+)({c_pat})", r"\n\n\1\n\n", t, flags=re.IGNORECASE)
 
-    # 9. Desaglutinação Universal de Itens Romanos (ex: "I.O texto... II. A norma..." -> "\n\nI. O texto...\n\nII. A norma...")
+    # 9. Desaglutinação Universal de Itens Romanos (apenas se não precedido por palavras de seção/título)
+    def format_roman_item(m):
+        prefix = m.group(1) or ""
+        roman = m.group(2)
+        if re.search(r'(?:Se[çc][ãa]o|Artigo|Art|Cap[íi]tulo|T[íi]tulo|Livro|Parte|Anexo|Item|Grupo|Classe|N[íi]vel|Fase|Bloco|Quadro|Tabela|Coluna|Volume|Edi[çc][ãa]o)\s*$', prefix, re.IGNORECASE):
+            return m.group(0)
+        return f"{prefix}\n\n{roman}. "
+
     t = re.sub(
-        r"(?:^|\n|(?<=\.|\;|\:|\))\s*|\s{2,}|\b)(I|II|III|IV|V|VI|VII|VIII|IX|X)\s*[\.\-\–\—\)]\s*(?=[A-Z\u00C0-\u00DC\"])",
-        r"\n\n\1. ",
+        r"(^|\n|(?<=\.|\;|\:|\))\s*|\s{2,}|\b[A-Za-z\u00C0-\u00DC]+\s+)(I|II|III|IV|V|VI|VII|VIII|IX|X)\s*[\.\-\–\—\)]\s*(?=[A-Z\u00C0-\u00DC\"])",
+        format_roman_item,
         t
     )
 
@@ -283,38 +375,62 @@ def restore_exam_typography(text: str, is_option: bool = False) -> str:
         t
     )
 
-    # 11. Desaglutinação de itens numéricos internos (ex: "1.Os cristais... 2.Os mortais..." -> "\n\n1. Os cristais...\n\n2. Os mortais...")
+    # 10.2 Recomposição de sentenças pareadas com barra em itens/lacunas (ex: "(__) ACENDER a luz.\n/ ASCENDER socialmente" -> "(__) ACENDER a luz. / ASCENDER socialmente")
+    t = re.sub(r"\n+\s*(/\s+[A-Za-z\u00C0-\u00DC])", r" \1", t)
+
+    # 11. Itens numéricos sem parênteses (1. , 2. ) isolados e desaglutinados (inclusive palavras curtas como 'Pé')
+    def format_numbered_item(m):
+        lead = m.group(1) or ""
+        num = m.group(2)
+        lead_punct = ";" if ";" in lead else ""
+        return f"{lead_punct}\n\n{num}. "
+
     t = re.sub(
-        r"(?:^|\n|(?<=\.|\;)\s+)(\d{1,2})\s*[\.\)]\s*(?=[A-Z\u00C0-\u00DC\"][A-Za-z\u00C0-\u00DC0-9\s]{3,})",
-        r"\n\n\1. ",
+        r"(^|\n|[.;:\)]\s*|\s{2,})([1-9]|1[0-2])\s*[\.\)]\s*(?=[A-Z\u00C0-\u00DC\"])",
+        format_numbered_item,
         t
     )
 
-    # 12. Formatação de Artigos de Lei e Parágrafos Legais (Art. 5º, § 1º, Inciso II)
+    # 11.1 Desaglutinação de Frases de Transição e Conexão de Itens (ex: "5. Passagem. Esses elementos correspondem a..." -> "5. Passagem.\n\nEsses elementos correspondem a...")
+    TRANSITION_PATTERNS = [
+        r"(?:Ess[ea]s?|Est[ea]s?|Ta[li]s?|Os|As|Cada|Tais)\s+(?:elementos|itens|conceitos|termos|defini[çc][õo]es|caracter[íi]sticas|situa[çc][õo]es|assertivas|proposi[çc][õo]es|fatores|aspectos|grupos|senten[çc]as|frases|palavras|express[õo]es|enunciados)\s+(?:correspondem|referem-se|dizem\s+respeito|apresentam|relacionam-se|est[ãa]o|s[ãa]o|possuem|t[êe]m|tratam)[^\n]*",
+        r"(?:Associe|Relacione|Correlacione|Vincule)\s+(?:os\s+elementos|os\s+itens|as\s+colunas|os\s+termos|as\s+defini[çc][õo]es|as\s+frases|as\s+senten[çc]as|cada\s+um)[^\n]*",
+        r"(?:A\s+respeito|Em\s+rela[çc][ãa]o|Quanto)\s+(?:a\s+ess[ea]s|a\s+est[ea]s|aos\s+elementos|aos\s+itens|às\s+situa[çc][õo]es|às\s+defini[çc][õo]es)[^\n]*",
+    ]
+    for tr_pat in TRANSITION_PATTERNS:
+        t = re.sub(rf"(?<!\n\n)(?:^|\n|\s+)({tr_pat})", r"\n\n\1\n\n", t, flags=re.IGNORECASE)
+
+    # 12. Artigos e parágrafos de legislação
+    def format_legal_article(m):
+        prefix = m.group(1) or ""
+        art = m.group(2)
+        if re.search(r'(?:em\s+seu|no\s+seu|no|na|nos|nas|do|da|dos|das|pelo|pela|pelos|pelas|conforme|segundo|termos\s+do|disposto\s+no|previsto\s+no|com\s+base\s+no|sob\s+o|sobre\s+o|ao|aos|seu|sua|este|esta)\s*$', prefix, re.IGNORECASE):
+            return m.group(0)
+        return f"{prefix}\n\n{art} - "
+
     t = re.sub(
-        r"(?:^|\n|\s+)(Art\.\s*\d+[º°\.]?|§\s*\d+[º°\.]?|Parágrafo\s+[ÚUúu]nico|Inciso\s+[I|V|X\d]+)\s*[:.\-]?\s*",
-        r"\n\n\1 - ",
+        r"(^|\n|[.;:]\s+|\s{2,}|\b[A-Za-z\u00C0-\u00DC]+\s+)(Art\.\s*\d+[º°\.]?|§\s*\d+[º°\.]?|Parágrafo\s+[ÚUúu]nico|Inciso\s+[I|V|X\d]+)\s*[:.\-]?\s*",
+        format_legal_article,
         t,
         flags=re.IGNORECASE
     )
 
-    # 13. Limpeza e Isolamento de Links e Fontes Bibliográficas (ex: "https://... %C3%ADvel...")
+    # 13. Links e referências web: isola a URL e preserva metadados
     def clean_url_match(m):
-        full_match = m.group(0).strip()
-        url_match = re.search(r"https?://[^\s\)\"]+(?:\s*(?:\n|\r\n)?\s*(?:%[0-9A-Fa-f]{2}|[a-zA-Z0-9\-\_\.\/\?\&\=\#])[^\s\)\"]*)*", full_match)
+        full_match = m.group(0)
+        url_match = re.search(r"(?:https?://|://)[a-zA-Z0-9\-_./%?&=#@:+ \u00C0-\u00FC]+(?:\([a-zA-Z0-9\-_\s./%?&=#@:+\u00C0-\u00FC]+\)[a-zA-Z0-9\-_./%?&=#@:+ \u00C0-\u00FC]*)*(?:\.pdf|\.html|\.php|[a-zA-Z0-9/])", full_match, re.IGNORECASE)
         if not url_match:
             return full_match
         raw_url = url_match.group(0).strip()
-        sanitized_url = re.sub(r"[\.\,\s\(\)]+$", "", raw_url)
-        sanitized_url = re.sub(r"\s+", "", sanitized_url)
+        raw_url = raw_url.strip("()*. ")
         try:
-            sanitized_url = urllib.parse.unquote(sanitized_url)
+            sanitized_url = urllib.parse.unquote(raw_url)
         except Exception:
-            pass
+            sanitized_url = raw_url
         return f"\n\n*(Fonte: {sanitized_url})*\n\n"
 
     t = re.sub(
-        r"(?:\(?[Ff]onte\s*:\s*)?https?://[^\s\)\"]+(?:\s*(?:\n|\r\n)?\s*(?:%[0-9A-Fa-f]{2}|[a-zA-Z0-9\-\_\.\/\?\&\=\#])[^\s\)\"]*)*\)?",
+        r"(?i)(?:\*\([Ff]onte:\s*|\(?[Ff]onte\s*:\s*|\(?[Aa]cesso\s+em\s*:\s*)?(?:https?://|://)[a-zA-Z0-9\-_./%?&=#@:+ \u00C0-\u00FC]+(?:\([a-zA-Z0-9\-_\s./%?&=#@:+\u00C0-\u00FC]+\)[a-zA-Z0-9\-_./%?&=#@:+ \u00C0-\u00FC]*)*(?:\.pdf|\.html|\.php|[a-zA-Z0-9/])(?:\)\*|\))?",
         clean_url_match,
         t
     )
@@ -332,21 +448,60 @@ def restore_exam_typography(text: str, is_option: bool = False) -> str:
     # 15.1 Limpeza de marcações markdown corrompidas (apenas linhas contendo somente asteriscos)
     t = re.sub(r"(?m)^\s*\*+\s*$", "", t)
 
-    # 16. Reconstrução de Parágrafos Naturais e Junção de Continuações entre Páginas:
+    # 16. Reconstrução de Parágrafos Naturais e Preservação de Estrofes e Poemas:
     raw_blocks = [b.strip() for b in t.split("\n\n") if b.strip()]
     final_paras = []
+    
+    # Rastreia se o contexto geral do texto é poético
+    has_global_poetic_context = bool(POEM_CUES_REGEX.search(t) or FAMOUS_POETS_REGEX.search(t))
 
-    for block in raw_blocks:
-        if block.startswith("---") or block.startswith("📖") or block.startswith("**QUADRO") or block.startswith("**Coluna") or block.startswith("**Column") or block.startswith("###") or block.startswith("*("):
+    for block_idx, block in enumerate(raw_blocks):
+        if block.startswith("---") or block.startswith("📖") or block.startswith("**") or block.startswith("###") or block.startswith("*(") or block.startswith(">") or block.startswith("|") or "\n|" in block:
             final_paras.append(block)
             continue
 
         # Se o bloco começa com letra minúscula e o parágrafo anterior existe e não fecha com ponto final forte, junta!
-        if final_paras and block and block[0].islower() and not final_paras[-1].startswith(("---", "📖", "**QUADRO", "**Coluna", "**Column", "###", "*(")):
+        if final_paras and block and block[0].islower() and not final_paras[-1].startswith(("---", "📖", "**", "###", "*(", ">", "|")):
             final_paras[-1] = final_paras[-1] + " " + block
             continue
 
+        # Contexto local do bloco anterior/atual
+        prev_block_text = raw_blocks[block_idx - 1] if block_idx > 0 else ""
+        has_local_poetic_context = (
+            has_global_poetic_context 
+            or bool(POEM_CUES_REGEX.search(prev_block_text) or FAMOUS_POETS_REGEX.search(prev_block_text))
+            or bool(POEM_CUES_REGEX.search(block) or FAMOUS_POETS_REGEX.search(block))
+        )
+
+        # Desmembra versos aglutinados no bloco
+        block = unsquash_poem_lines(block)
         lines = [l.strip() for l in block.split("\n") if l.strip()]
+
+        # Se o bloco tem comando/intro na primeira linha (ex: "Leia o fragmento a seguir, de Fernando Pessoa:")
+        is_intro = lines[0].endswith(':') or bool(re.match(r'(?i)^(?:Leia|Considere|Observe|Veja|Analise|Texto\s+para|Fragmento\s+de|Trecho\s+de)\b', lines[0]))
+        if len(lines) >= 3 and is_intro:
+            final_paras.append(lines[0])
+            lines = lines[1:]
+
+
+        # Se o bloco inteiro é uma estrofe de poema
+        if is_poem_stanza_block(lines, has_poetic_context=has_local_poetic_context):
+            final_paras.append(format_poem_stanza(lines))
+            continue
+
+        # Se o bloco contém uma estrofe seguida de prosa/comentário (ex: versos seguidos de "Nos versos de Luiz Gonzaga...")
+        if has_local_poetic_context and len(lines) >= 3:
+            for split_idx in range(2, len(lines)):
+                verse_candidate = lines[:split_idx]
+                remaining_lines = lines[split_idx:]
+                first_rem = remaining_lines[0].strip().strip('*_`')
+                if PROSE_PROMPT_REGEX.match(first_rem) or not is_verse_line(remaining_lines[0]):
+                    if is_poem_stanza_block(verse_candidate, has_poetic_context=True):
+                        final_paras.append(format_poem_stanza(verse_candidate))
+                        lines = remaining_lines
+                        break
+
+
         current_sub = []
         for line in lines:
             if not current_sub:
@@ -358,14 +513,15 @@ def restore_exam_typography(text: str, is_option: bool = False) -> str:
             is_prev_incomplete = bool(re.search(r'(?:,|;\s*$|\b(?:e|ou|de|do|da|dos|das|em|com|para|por|que|apenas|somente|todas|todos|nenhum|nenhuma|como|onde|ao|aos|na|nas|no|nos|pelo|pela|pelos|pelas|opção|opções|with|match)\s*$)', prev_line, re.IGNORECASE))
             
             # Um item estruturado real DEVE ter conteúdo substancial após o marcador (ex: "I. O princípio...", "(1) Deck.", "(__) The floor...")
+            is_prev_item = bool(re.match(r"^(?:I|II|III|IV|V|VI|VII|VIII|IX|X|\d{1,2})\.\s+[A-Za-z\u00C0-\u00DC0-9\"\(]{2,}|\(\d{1,2}\)\s+[A-Za-z0-9\"\'\-]|\(\s*_{1,4}\s*\)\s+[A-Za-z0-9\"\'\-]", prev_line))
             is_current_item = (
                 not is_prev_incomplete 
-                and bool(re.match(r"^(?:I|II|III|IV|V|VI|VII|VIII|IX|X|\d{1,2})\.\s+[A-Za-z\u00C0-\u00DC0-9\"\(]{2,}|\(\d{1,2}\)\s+[A-Za-z0-9\"\'\-]|\(\s*_{1,4}\s*\)\s+[A-Za-z0-9\"\'\-]|Art\.\s*\d+|§\s*\d+|\*\*QUADRO|\*\*Coluna|\*\*Column|###", line))
+                and bool(re.match(r"^(?:I|II|III|IV|V|VI|VII|VIII|IX|X|\d{1,2})\.\s+[A-Za-z\u00C0-\u00DC0-9\"\(]{2,}|\(\d{1,2}\)\s+[A-Za-z0-9\"\'\-]|\(\s*_{1,4}\s*\)\s+[A-Za-z0-9\"\'\-]|Art\.\s*\d+|§\s*\d+|\*\*|###|(?:Correlacione|Assinale|Marque|Indique|Identifique|A\s+sequ[êe]ncia|Est[áa]\(?[ãa]o\)?|S[ãa]o|[ÉE]\s+correto|[ÉE]\s+INCORRETO|Julgue|Analise)", line))
             )
             
-            is_prev_end = not is_prev_incomplete and bool(re.search(r"[\.\!\?\:\;]\s*$", prev_line)) and len(prev_line) > 30
+            is_prev_end = not is_prev_incomplete and bool(re.search(r"[\.\!\?\:\;]\s*$", prev_line))
 
-            if is_current_item or (is_prev_end and len(line) > 10):
+            if not is_prev_incomplete and (is_current_item or (is_prev_item and is_prev_end) or (is_prev_end and len(prev_line) > 30 and len(line) > 10)):
                 final_paras.append(" ".join(current_sub))
                 current_sub = [line]
             else:
@@ -380,3 +536,4 @@ def restore_exam_typography(text: str, is_option: bool = False) -> str:
     result = re.sub(r"\n{3,}", "\n\n", result)
 
     return result.strip()
+

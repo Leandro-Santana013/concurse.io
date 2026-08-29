@@ -54,7 +54,7 @@ SUBJECT_PATTERNS = [
     r'PEDAGOGIA', r'ENFERMAGEM', r'MEDICINA', r'SERVI[ÇC]O\s+SOCIAL', r'PSICOLOGIA'
 ]
 
-SUBJECT_REGEX = re.compile(r'^\s*(?:' + '|'.join(SUBJECT_PATTERNS) + r')(?:\s*[-–—:]\s*.*)?\s*$', re.IGNORECASE)
+SUBJECT_REGEX = re.compile(r'^\s*(?:<[^>]+>|\*{1,3}|_{1,3})*\s*(?:' + '|'.join(SUBJECT_PATTERNS) + r')(?:[ \t]*(?:<[^>]+>|\*{1,3}|_{1,3})*)*(?:\s*[-–—:]\s*.*)?\s*$', re.IGNORECASE)
 
 def format_subject_title(raw_text: str) -> str:
     """Normaliza o nome da matéria para seu título canônico em português."""
@@ -67,7 +67,8 @@ def format_subject_title(raw_text: str) -> str:
         return rust_res
 
     normalized = raw_text.strip()
-    normalized_clean = re.sub(r'[\ufffd\?]', '', normalized)
+    normalized_clean = re.sub(r'<[^>]+>|\*{1,3}|_{1,3}', ' ', normalized)
+    normalized_clean = re.sub(r'[\ufffd\?]', '', normalized_clean)
     
     canonicos = [
         (r'L[ÍI]?NGUA\s+PORTUGUESA|PORTUGU[ÊE]?S|INTERPRETA[ÇC]?[ÃA]?O\s+DE\s+TEXTO|GRAM[ÁA]?TICA', 'Língua Portuguesa'),

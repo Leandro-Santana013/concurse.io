@@ -43,16 +43,27 @@ export const useExamStore = create<ExamState>()(
       isFinished: false,
       attemptResult: null,
 
-      startExam: (exam) => set({
-        activeExam: exam,
-        currentIdx: 0,
-        answers: {},
-        flaggedQuestions: {},
-        elapsedSeconds: 0,
-        isTimerRunning: true,
-        isFinished: false,
-        attemptResult: null,
-      }),
+      startExam: (exam) => {
+        const sortedQuestions = [...(exam.questions || [])].sort((a, b) => {
+          const numA = parseInt(a.numero_questao || '0', 10);
+          const numB = parseInt(b.numero_questao || '0', 10);
+          if (!isNaN(numA) && !isNaN(numB) && numA !== numB) {
+            return numA - numB;
+          }
+          return (a.numero_questao || '').localeCompare(b.numero_questao || '', undefined, { numeric: true });
+        });
+
+        set({
+          activeExam: { ...exam, questions: sortedQuestions },
+          currentIdx: 0,
+          answers: {},
+          flaggedQuestions: {},
+          elapsedSeconds: 0,
+          isTimerRunning: true,
+          isFinished: false,
+          attemptResult: null,
+        });
+      },
 
       selectAnswer: (qNum, answer) => set((state) => ({
         answers: {

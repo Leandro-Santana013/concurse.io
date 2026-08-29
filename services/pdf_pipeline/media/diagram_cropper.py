@@ -48,7 +48,7 @@ IMAGE_TRIGGER_PATTERN = (
     r'figura|gr[áa]fico|quadro|tabela|diagrama|desenho|'
     r'ilustra[çc][ãa]o|mapa|esquema|imagem|paqu[íi]metro|'
     r'planta|fluxograma|fotografia|foto|tira|tirinha|charge|'
-    r'cartum|organograma|histograma|'
+    r'cartum|organograma|histograma|exemplo|casinha|vilarejo|estrada|malha|'
     r'circuito\s+(?:abaixo|acima|a\s+seguir|da\s+figura)|diagrama\s+de\s+circuito'
     r')\b'
 )
@@ -250,22 +250,6 @@ class ExamImageExtractor:
             if not merged:
                 clusters.append(fitz.Rect(r))
 
-        # 4. Captura Estrita de Legendas ("Figura 1 - Mapa", "Gráfico 2")
-        if text_blocks:
-            for c in clusters:
-                for b in text_blocks:
-                    x0, y0, x1, y1, text = b[:5]
-                    text_clean = text.strip()
-                    # Apenas legendas curtas e explícitas (não questões completas!)
-                    if len(text_clean) <= 90 and CAPTION_REGEX.search(text_clean):
-                        # Rejeita se parecer início de questão ("QUESTÃO 1", "01.")
-                        if re.search(r'\b(quest[aã]o|item|\d+\s*[\.\-\)])\b', text_clean, re.IGNORECASE):
-                            continue
-                        is_below = (0 <= y0 - c.y1 <= 18) and (abs(x0 - c.x0) < 100)
-                        is_above = (0 <= c.y0 - y1 <= 18) and (abs(x0 - c.x0) < 100)
-                        if is_below or is_above:
-                            c.include_rect(fitz.Rect(x0, y0, x1, y1))
-
         # Validação final de tamanho e aspecto
         valid_clusters = []
         for c in clusters:
@@ -287,16 +271,48 @@ class ExamImageExtractor:
         """
         Recorta a região com padding de segurança, renderiza em DPI configurado,
         calcula o hash MD5 e persiste no disco (com deduplicação automática).
+        Aplica clamping inteligente contra blocos de texto da página para evitar vazamentos de texto no crop.
         """
         page_w = page_obj.rect.width
         page_h = page_obj.rect.height
         pad = self.padding
 
+        min_x0 = 0.0
+        min_y0 = 0.0
+        max_x1 = float(page_w)
+        max_y1 = float(page_h)
+
+        try:
+            text_blocks = [b for b in page_obj.get_text('blocks') if b[4].strip()]
+            for b in text_blocks:
+                bx0, by0, bx1, by1 = b[:4]
+                # Verifica sobreposição horizontal e vertical de vizinhança
+                h_overlap = not (bx1 < cluster.x0 - 15 or bx0 > cluster.x1 + 15)
+                v_overlap = not (by1 < cluster.y0 - 15 or by0 > cluster.y1 + 15)
+
+                if h_overlap:
+                    # Texto está abaixo do cluster de imagem
+                    if by0 >= cluster.y1 - 1:
+                        max_y1 = min(max_y1, by0 - 1.0)
+                    # Texto está acima do cluster de imagem
+                    if by1 <= cluster.y0 + 1:
+                        min_y0 = max(min_y0, by1 + 1.0)
+
+                if v_overlap:
+                    # Texto está à direita do cluster
+                    if bx0 >= cluster.x1 - 1:
+                        max_x1 = min(max_x1, bx0 - 1.0)
+                    # Texto está à esquerda do cluster
+                    if bx1 <= cluster.x0 + 1:
+                        min_x0 = max(min_x0, bx1 + 1.0)
+        except Exception:
+            pass
+
         crop_rect = fitz.Rect(
-            max(0, cluster.x0 - pad),
-            max(0, cluster.y0 - pad),
-            min(page_w, cluster.x1 + pad),
-            min(page_h, cluster.y1 + pad)
+            max(min_x0, cluster.x0 - pad),
+            max(min_y0, cluster.y0 - pad),
+            min(max_x1, cluster.x1 + pad),
+            min(max_y1, cluster.y1 + pad)
         )
 
         try:
@@ -409,17 +425,28 @@ class ExamImageExtractor:
 
                 # Se nenhuma questão foi encontrada acima na mesma coluna/página:
                 if best_q_idx == -1:
-                    # Procura se há alguma questão com trigger na mesma página
-                    trigger_qs = [pq for pq in page_qs if pq[1].get('_has_trigger')]
-                    if trigger_qs:
-                        best_q_idx = min(trigger_qs, key=lambda pq: abs(pq[1].get('_y', 0) - cluster_center_y))[0]
-                    elif prev_qs:
-                        best_q_idx = max(prev_qs, key=lambda x: (x[1].get('_page', 0), x[1].get('_y', 0)))[0]
-                    elif candidates:
-                        best_q_idx = candidates[0][0]
+                    # Prioriza estritamente questões da mesma coluna
+                    col_trigger_qs = [pq for pq in same_col_qs if pq[1].get('_has_trigger')]
+                    if col_trigger_qs:
+                        best_q_idx = min(col_trigger_qs, key=lambda pq: pq[1].get('_y', 0))[0]
+                    elif same_col_qs:
+                        best_q_idx = same_col_qs[0][0]
+                    else:
+                        trigger_qs = [pq for pq in page_qs if pq[1].get('_has_trigger')]
+                        if trigger_qs:
+                            best_q_idx = min(trigger_qs, key=lambda pq: abs(pq[1].get('_y', 0) - cluster_center_y))[0]
+                        elif prev_qs:
+                            # Apenas se a questão anterior tiver gatilho explícito de imagem
+                            prev_trigger_qs = [pq for pq in prev_qs if pq[1].get('_has_trigger')]
+                            if prev_trigger_qs:
+                                best_q_idx = max(prev_trigger_qs, key=lambda x: (x[1].get('_page', 0), x[1].get('_y', 0)))[0]
 
                 if best_q_idx != -1:
                     target_q = questions[best_q_idx]
+                    has_trigger = target_q.get('_has_trigger', False)
+                    # Evita anexar linhas isoladas de tabela a questões sem gatilho
+                    if not has_trigger and best_score > 220:
+                        continue
                     q_images = target_q.get('images') or []
                     q_num = target_q.get('numero_questao', '0')
 

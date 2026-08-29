@@ -23,8 +23,9 @@ interface SearchHubProps {
 }
 
 export const SearchHub: React.FC<SearchHubProps> = ({ onExamReady }) => {
-  const { showToast, navigateTo } = useUI();
+  const { showToast, navigateTo, openDirectIngestModal } = useUI();
   const [query, setQuery] = useState('');
+
   const [selectedSource, setSelectedSource] = useState('all');
   const [results, setResults] = useState<SearchResultItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -178,29 +179,42 @@ export const SearchHub: React.FC<SearchHubProps> = ({ onExamReady }) => {
             ))}
           </div>
 
-          {/* Source Filter Tabs */}
-          <div className="mt-4 flex flex-wrap gap-2 pt-3 border-t border-white/10">
-            {[
-              { id: 'all', label: 'Todas as Fontes' },
-              { id: 'idcap', label: 'IDCAP' },
-              { id: 'pci', label: 'PCI Concursos' },
-              { id: 'web', label: 'Web Geral' },
-            ].map((chip) => (
-              <button
-                key={chip.id}
-                onClick={() => handleSourceChange(chip.id)}
-                className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition ${
-                  selectedSource === chip.id
-                    ? 'glass-btn-primary text-white shadow-md'
-                    : 'glass-btn-secondary text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                {chip.label}
-              </button>
-            ))}
+          {/* Source Filter Tabs & Direct Link Action */}
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-white/10">
+            <div className="flex flex-wrap gap-2">
+              {[
+                { id: 'all', label: 'Todas as Fontes' },
+                { id: 'idcap', label: 'IDCAP' },
+                { id: 'pci', label: 'PCI Concursos' },
+                { id: 'web', label: 'Web Geral' },
+              ].map((chip) => (
+                <button
+                  key={chip.id}
+                  onClick={() => handleSourceChange(chip.id)}
+                  className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition ${
+                    selectedSource === chip.id
+                      ? 'glass-btn-primary text-white shadow-md'
+                      : 'glass-btn-secondary text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => openDirectIngestModal()}
+              className="flex items-center gap-1.5 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-400/30 px-3 py-1.5 text-xs font-bold text-indigo-300 hover:text-white transition shadow-sm"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-cyan-300" />
+              <span>Colar Links Diretos (PCI / PDF)</span>
+            </button>
+
           </div>
         </div>
       </div>
+
 
       {/* Error Message Alert */}
       {errorMsg && (
@@ -249,7 +263,8 @@ export const SearchHub: React.FC<SearchHubProps> = ({ onExamReady }) => {
               return (
                 <div
                   key={idx}
-                  className="glass-card-interactive flex flex-col justify-between p-5 group"
+                  onClick={() => openDirectIngestModal({ examUrl: item.url, gabaritoUrl: item.gabarito_url || '', title: item.title })}
+                  className="glass-card-interactive flex flex-col justify-between p-5 group cursor-pointer hover:border-indigo-400/50 hover:shadow-indigo-500/10 transition"
                 >
                   <div>
                     <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -273,7 +288,7 @@ export const SearchHub: React.FC<SearchHubProps> = ({ onExamReady }) => {
                       </div>
                       {item.has_gabarito_link && (
                         <span className="rounded-lg glass-pill-emerald px-2 py-0.5 text-[10px] font-bold">
-                          Gabarito Vinculado
+                          Gabarito Detectado
                         </span>
                       )}
                     </div>
@@ -283,11 +298,11 @@ export const SearchHub: React.FC<SearchHubProps> = ({ onExamReady }) => {
                     </h3>
 
                     {/* Direct PDF Source Link Display - Entire Link Visible */}
-                    <div className="mt-3 rounded-xl bg-slate-950/80 p-2.5 border border-white/10 text-[11px] space-y-2">
+                    <div className="mt-3 rounded-xl bg-slate-950/80 p-2.5 border border-white/10 text-[11px] space-y-2" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-1.5 text-slate-400">
                         <div className="flex items-center gap-1.5 font-semibold text-slate-300">
                           <FileText className="h-3.5 w-3.5 text-indigo-400" />
-                          <span>Link do PDF:</span>
+                          <span>Link Identificado:</span>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <button
@@ -300,7 +315,7 @@ export const SearchHub: React.FC<SearchHubProps> = ({ onExamReady }) => {
                               setTimeout(() => setCopiedUrl(null), 2000);
                             }}
                             className="flex items-center gap-1 rounded-lg glass-pill px-2 py-0.5 text-[10px] font-bold text-slate-300 hover:text-white hover:bg-white/10 transition"
-                            title="Copiar URL completa do PDF"
+                            title="Copiar URL completa"
                           >
                             {copiedUrl === item.url ? (
                               <>
@@ -320,7 +335,7 @@ export const SearchHub: React.FC<SearchHubProps> = ({ onExamReady }) => {
                             rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}
                             className="flex items-center gap-1 rounded-lg glass-pill px-2 py-0.5 text-[10px] font-bold text-slate-300 hover:text-white hover:bg-white/10 transition"
-                            title="Abrir PDF original em nova aba"
+                            title="Abrir página original em nova aba"
                           >
                             <ExternalLink className="h-3 w-3 text-cyan-400" />
                             <span>Abrir</span>
@@ -334,52 +349,25 @@ export const SearchHub: React.FC<SearchHubProps> = ({ onExamReady }) => {
                     </div>
                   </div>
 
-                  {/* Actions & Progress Area */}
+                  {/* Actions Area: Direct Modal Open */}
                   <div className="mt-5 border-t border-white/10 pt-4">
-                    {isProcessing && (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-xs font-semibold text-slate-300">
-                          <span className="truncate pr-2">{ingestStatus.statusMsg}</span>
-                          <span className="text-indigo-400 font-mono font-bold">{ingestStatus.progress}%</span>
-                        </div>
-                        <div className="h-2 w-full overflow-hidden rounded-full bg-slate-900 border border-white/10">
-                          <div
-                            className="h-full bg-gradient-to-r from-indigo-500 via-violet-500 to-cyan-400 transition-all duration-300 shadow-sm"
-                            style={{ width: `${ingestStatus.progress}%` }}
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {isDone && (
-                      <button
-                        onClick={() => ingestStatus.examId && onExamReady && onExamReady(ingestStatus.examId)}
-                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 py-2.5 text-xs font-bold text-white shadow-lg shadow-emerald-600/30 hover:from-emerald-500 hover:to-emerald-600 border border-white/20 transition"
-                      >
-                        <CheckCircle2 className="h-4 w-4" /> Abrir Simulado
-                      </button>
-                    )}
-
-                    {isError && (
-                      <div className="rounded-xl glass-pill-rose p-2.5 text-xs">
-                        {ingestStatus.statusMsg}
-                      </div>
-                    )}
-
-                    {!ingestStatus && (
-                      <button
-                        onClick={() => handleIngest(item)}
-                        className="flex w-full items-center justify-center gap-2 rounded-xl glass-btn-secondary py-2.5 text-xs font-bold text-slate-100 hover:text-white transition shadow"
-                      >
-                        <DownloadCloud className="h-4 w-4 text-indigo-400" />
-                        <span>Baixar & Treinar Prova</span>
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openDirectIngestModal({ examUrl: item.url, gabaritoUrl: item.gabarito_url || '', title: item.title });
+                      }}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 via-violet-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 py-2.5 text-xs font-bold text-white shadow-lg shadow-indigo-500/20 border border-white/20 transition hover:scale-[1.01] active:scale-95"
+                    >
+                      <Sparkles className="h-4 w-4 text-cyan-300" />
+                      <span>Abrir Modal (PDF Prova & Gabarito)</span>
+                    </button>
                   </div>
                 </div>
               );
             })}
           </div>
+
         )}
       </div>
     </div>

@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, Query
@@ -9,6 +10,31 @@ from models.database import get_db, ExamAttempt, Question, User, Exam
 from schemas.exam_schemas import ExamDetailSchema, QuestionSchema
 
 router = APIRouter()
+
+def _sort_questions_key(q):
+    raw = str(getattr(q, 'numero_questao', None) or '').strip()
+    item_id = getattr(q, 'id', 0) or 0
+    if raw.isdigit():
+        return (0, int(raw), item_id)
+    m = re.match(r'^(\d+)', raw)
+    if m:
+        return (0, int(m.group(1)), item_id)
+    return (1, item_id, raw)
+
+def _find_question(exam_q_list, idx_str):
+    for q in exam_q_list:
+        if str(q.numero_questao or '') == str(idx_str):
+            return q
+    for q in exam_q_list:
+        if str(q.id) == str(idx_str):
+            return q
+    try:
+        idx = int(idx_str) - 1
+        if 0 <= idx < len(exam_q_list):
+            return exam_q_list[idx]
+    except Exception:
+        pass
+    return None
 
 @router.get("/stats/overview")
 def get_global_stats(db: Session = Depends(get_db)):
@@ -67,19 +93,15 @@ def get_notebook_subject_stats(db: Session = Depends(get_db)):
         try:
             answers = json.loads(a.answers_json)
             if a.exam_id not in exam_q_cache:
-                exam_q_cache[a.exam_id] = db.query(Question).filter_by(exam_id=a.exam_id).order_by(Question.id).all()
+                raw_qs = db.query(Question).filter_by(exam_id=a.exam_id).all()
+                exam_q_cache[a.exam_id] = sorted(raw_qs, key=_sort_questions_key)
             exam_q_list = exam_q_cache[a.exam_id]
 
             for idx_str, given_ans in answers.items():
-                try:
-                    idx = int(idx_str) - 1 # 1-indexed to 0-indexed
-                    if 0 <= idx < len(exam_q_list):
-                        q = exam_q_list[idx]
-                        if given_ans.strip().upper() != q.correct_answer.strip().upper():
-                            subject = q.subject or 'Geral'
-                            wrong_q_counts[subject] = wrong_q_counts.get(subject, 0) + 1
-                except ValueError:
-                    pass
+                q = _find_question(exam_q_list, idx_str)
+                if q and given_ans.strip().upper() != q.correct_answer.strip().upper():
+                    subject = q.subject or 'Geral'
+                    wrong_q_counts[subject] = wrong_q_counts.get(subject, 0) + 1
         except Exception:
             pass
 
@@ -99,18 +121,14 @@ def get_error_notebook(subject: Optional[str] = None, db: Session = Depends(get_
         try:
             answers = json.loads(a.answers_json)
             if a.exam_id not in exam_q_cache:
-                exam_q_cache[a.exam_id] = db.query(Question).filter_by(exam_id=a.exam_id).order_by(Question.id).all()
+                raw_qs = db.query(Question).filter_by(exam_id=a.exam_id).all()
+                exam_q_cache[a.exam_id] = sorted(raw_qs, key=_sort_questions_key)
             exam_q_list = exam_q_cache[a.exam_id]
 
             for idx_str, given_ans in answers.items():
-                try:
-                    idx = int(idx_str) - 1
-                    if 0 <= idx < len(exam_q_list):
-                        q = exam_q_list[idx]
-                        if given_ans.strip().upper() != q.correct_answer.strip().upper():
-                            wrong_question_ids.add(q.id)
-                except ValueError:
-                    pass
+                q = _find_question(exam_q_list, idx_str)
+                if q and given_ans.strip().upper() != q.correct_answer.strip().upper():
+                    wrong_question_ids.add(q.id)
         except Exception:
             pass
 

@@ -11,6 +11,7 @@ from .scraper_service import (
     _scrape_pci_pdfs,
     _scrape_idcap_pdfs,
     _search_pdfs_web,
+    extract_pci_page_pdfs,
 )
 from .html_exam_parser import (
     clean_text_artifacts,
@@ -26,6 +27,8 @@ __all__ = [
     "_scrape_pci_pdfs",
     "_scrape_idcap_pdfs",
     "_search_pdfs_web",
+    "extract_pci_page_pdfs",
     "clean_text_artifacts",
     "parse_html_exam",
 ]
+

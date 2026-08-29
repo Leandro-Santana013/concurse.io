@@ -199,93 +199,105 @@ def _search_qc_provas(query):
     return results
 
 def _scrape_pci_pdfs(query, nlp_data=None):
-    """Busca rápida, expandida e filtrada de provas no PCI Concursos."""
+    """
+    Busca ultrarrápida e direta de provas no PCI Concursos.
+    Utiliza o formulário de busca nativo do PCI e analisa as tabelas estruturadas de provas.
+    """
     results = []
-    try:
-        ddgs_cls = get_ddgs_class()
-        if not ddgs_cls:
-            return results
+    seen_urls = set()
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    }
 
-        queries_to_try = [
-            f"{query} site:pciconcursos.com.br/provas",
-            f"{query} site:pciconcursos.com.br",
-        ]
-        if nlp_data:
-            cargo = str(nlp_data.get('cargo', '')).strip()
-            orgao = str(nlp_data.get('orgao', '')).strip()
-            if cargo and cargo.lower() not in ['n/a', 'none', '']:
-                queries_to_try.append(f"{cargo} site:pciconcursos.com.br/provas")
-            if orgao and orgao.lower() not in ['n/a', 'none', '']:
-                queries_to_try.append(f"{orgao} site:pciconcursos.com.br/provas")
+    target_words = set(re.findall(r'\w{3,}', query.lower()))
+    stop_words = {'prova', 'provas', 'concurso', 'concursos', 'para', 'com', 'sem', 'pdf', 'download', 'ano', 'pci'}
+    target_words = {w for w in target_words if w not in stop_words}
 
-        ddgs_results = []
-        seen_hrefs = set()
+    orgao_val = str(nlp_data.get('orgao', '')).strip().lower() if nlp_data else ''
+    cargo_val = str(nlp_data.get('cargo', '')).strip().lower() if nlp_data else ''
+    banca_val = str(nlp_data.get('banca', '')).strip().lower() if nlp_data else ''
 
-        for search_q in queries_to_try[:3]:
-            try:
-                with ddgs_cls() as ddgs:
-                    batch = list(ddgs.text(search_q, max_results=8))
-                    for b in batch:
-                        h = b.get('href', '')
-                        if h and h not in seen_hrefs:
-                            seen_hrefs.add(h)
-                            ddgs_results.append(b)
-                if len(ddgs_results) >= 8:
-                    break
-            except Exception:
-                continue
+    queries_to_post = []
+    clean_q = ' '.join([w for w in query.split() if w.lower() not in stop_words]).strip()
+    if clean_q:
+        queries_to_post.append(clean_q)
+    if orgao_val and orgao_val not in queries_to_post:
+        queries_to_post.append(orgao_val)
+    if cargo_val and cargo_val not in queries_to_post:
+        queries_to_post.append(cargo_val)
 
-        if not ddgs_results:
-            return results
-            
-        target_words = set(query.lower().split())
-        if nlp_data:
-            orgao = str(nlp_data.get('orgao', '')).lower()
-            cargo = str(nlp_data.get('cargo', '')).lower()
-            if orgao and orgao != 'n/a': target_words.update(orgao.split())
-            if cargo and cargo != 'n/a': target_words.update(cargo.split())
-            
-        stop_words = {'prova', 'de', 'para', 'em', 'da', 'do', 'concurso', 'pdf', 'a', 'o', 'e'}
-        target_words = {w for w in target_words if len(w) > 2 and w not in stop_words}
-            
-        for r in ddgs_results:
-            href = r.get('href', '')
-            title = r.get('title', 'Prova PCI')
-            
-            # Filtro rigoroso: descarta editais e arquivos administrativos
-            if is_administrative_document(title) or is_administrative_document(href):
-                continue
-
-            if '/download/' in href or '/provas/' in href:
-                title_lower = title.lower()
-                score = 0
-                if target_words:
-                    matches = sum(1 for w in target_words if w in title_lower)
-                    score = int((matches / len(target_words)) * 100)
-                    
-                if nlp_data and nlp_data.get('cargo') and str(nlp_data['cargo']).lower() != 'n/a':
-                    if str(nlp_data['cargo']).lower() in title_lower:
-                        score = min(100, score + 30)
-                else:
-                    if not target_words: score = 50
-                
-                if score == 0 and target_words:
-                    score = 20
-                    
-                results.append({
-                    "title": f"PCI - {title[:100]}",
-                    "url": href,
-                    "gabarito_url": None,
-                    "match_score": max(score, 45),
-                    "source": "pci"
-                })
-                
-        results.sort(key=lambda x: x.get('match_score', 0), reverse=True)
-        results = results[:10]
+    def extract_pci_table(html_bytes):
+        try:
+            text = html_bytes.decode('utf-8')
+        except UnicodeDecodeError:
+            text = html_bytes.decode('iso-8859-1', errors='replace')
+        soup = BeautifulSoup(text, 'html.parser')
         
-    except Exception as e:
-        print(f"   │  [PCI Concursos] Aviso: {e}", flush=True)
-    return results
+        # 1. Extração estruturada de tabelas de provas do PCI
+        for tr in soup.find_all('tr'):
+            tds = tr.find_all('td')
+            a = tr.find('a', href=lambda h: h and '/provas/download/' in h)
+            if not a:
+                continue
+            href = a['href']
+            full_href = href if href.startswith('http') else f"https://www.pciconcursos.com.br{href}"
+            if full_href in seen_urls:
+                continue
+            seen_urls.add(full_href)
+
+            prova_name = a.get_text(separator=' ', strip=True)
+            ano_val = tds[1].get_text(strip=True) if len(tds) > 1 else ''
+            orgao_col = tds[2].get_text(strip=True) if len(tds) > 2 else ''
+            banca_col = tds[3].get_text(strip=True) if len(tds) > 3 else ''
+
+            ano_str = f" {ano_val}" if ano_val and re.match(r'^(19|20)\d{2}$', ano_val) else ''
+            banca_suffix = f" ({banca_col})" if banca_col else ''
+            orgao_str = f" - {orgao_col}" if orgao_col else ''
+
+            display_title = f"{prova_name}{orgao_str}{ano_str}{banca_suffix}"
+            combined_text = f"{prova_name} {orgao_col} {banca_col} {ano_val} {full_href}".lower()
+            
+            score = 60
+            if cargo_val and cargo_val in combined_text:
+                score += 20
+            if banca_val and banca_val in combined_text:
+                score += 15
+            if orgao_val and orgao_val in combined_text:
+                score += 15
+            if target_words:
+                matches = sum(1 for tw in target_words if tw in combined_text)
+                score += int((matches / len(target_words)) * 20)
+
+            results.append({
+                "title": f"PCI - {display_title}",
+                "url": full_href,
+                "gabarito_url": None,
+                "match_score": min(98, max(50, score)),
+                "source": "pci"
+            })
+
+    # 1. Consulta o endpoint nativo de busca do PCI via POST
+    for q_post in queries_to_post[:2]:
+        try:
+            resp = requests.post('https://www.pciconcursos.com.br/provas/', data={'prova': q_post}, headers=headers, timeout=3.5)
+            if resp.status_code == 200:
+                extract_pci_table(resp.content)
+        except Exception:
+            pass
+
+    # 2. Fallback de Slug Direto caso a busca não retorne nada (ex: /provas/{orgao})
+    if not results and orgao_val:
+        try:
+            slug = re.sub(r'[^\w\-]+', '-', orgao_val).strip('-')
+            resp = requests.get(f"https://www.pciconcursos.com.br/provas/{slug}", headers=headers, timeout=3.0)
+            if resp.status_code == 200:
+                extract_pci_table(resp.content)
+        except Exception:
+            pass
+
+    results.sort(key=lambda x: x.get('match_score', 0), reverse=True)
+    return results[:15]
 
 def _scrape_idcap_pdfs(query, nlp_data=None):
     """
@@ -483,4 +495,79 @@ def _search_pdfs_web(query, nlp_data=None):
             print(f"   │  [Web Search] Aviso: {e}", flush=True)
 
     return results
+
+
+def extract_pci_page_pdfs(pci_url: str) -> tuple[str | None, str | None, str | None]:
+    """
+    Inspeciona determinística e diretamente uma página do PCI Concursos ou link direto de arquivo.
+    Retorna: (prova_pdf_url, gabarito_pdf_url, page_title)
+    Garante que nunca troca por outra prova, capturando estritamente os links oficiais presentes na página.
+    """
+    if not pci_url:
+        return None, None, None
+
+    pci_url_clean = pci_url.strip()
+
+    # Se já for link direto de PDF
+    if '.pdf' in pci_url_clean.lower() or 'arquivo.pciconcursos.com.br' in pci_url_clean:
+        if 'gabarito' in pci_url_clean.lower():
+            return None, pci_url_clean, None
+        gab_candidate = None
+        if 'arquivo_prova' in pci_url_clean:
+            gab_candidate = pci_url_clean.replace('arquivo_prova', 'arquivo_gabarito').replace('-prova.pdf', '-gabarito.pdf')
+        elif 'prova.pdf' in pci_url_clean.lower():
+            gab_candidate = pci_url_clean.lower().replace('prova.pdf', 'gabarito.pdf')
+        return pci_url_clean, gab_candidate, None
+
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Referer': 'https://www.pciconcursos.com.br/'
+    }
+
+    try:
+        resp = requests.get(pci_url_clean, headers=headers, timeout=8.0, verify=False)
+        if resp.status_code != 200:
+            return None, None, None
+
+        if resp.content[:4] == b'%PDF':
+            return pci_url_clean, None, None
+
+        try:
+            html_text = resp.content.decode('utf-8')
+        except UnicodeDecodeError:
+            html_text = resp.content.decode('iso-8859-1', errors='replace')
+
+        soup = BeautifulSoup(html_text, 'html.parser')
+
+        page_title = None
+        title_tag = soup.find('h1') or soup.find('title')
+        if title_tag:
+            page_title = title_tag.get_text(separator=' ', strip=True)
+            page_title = re.sub(r'(\s*-\s*PCI Concursos|\s*-\s*Provas para Download|\s*-\s*Download).*', '', page_title, flags=re.IGNORECASE).strip()
+
+        prova_url = None
+        gabarito_url = None
+
+        for a in soup.find_all('a', href=True):
+            href = a['href'].strip()
+            text = a.get_text(separator=' ', strip=True).lower()
+            href_lower = href.lower()
+
+            full_href = href if href.startswith('http') else f"https://www.pciconcursos.com.br{href}"
+
+            if 'arquivo.pciconcursos.com.br' in href_lower or '.pdf' in href_lower or '/download/' in href_lower:
+                if 'gabarito' in text or 'gabarito' in href_lower:
+                    if not gabarito_url:
+                        gabarito_url = full_href
+                elif any(k in text for k in ['prova', 'caderno', 'download']) or 'prova' in href_lower or '.pdf' in href_lower:
+                    if not prova_url and not is_administrative_document(text):
+                        prova_url = full_href
+
+        return prova_url, gabarito_url, page_title
+
+    except Exception as e:
+        print(f"[PCI Page Extract Error] {e}", flush=True)
+        return None, None, None
+
 

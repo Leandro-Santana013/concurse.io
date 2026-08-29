@@ -1,9 +1,22 @@
 import fitz
 import re
+from dataclasses import dataclass
 from typing import List, Dict, Set, Tuple, Any, Optional
+
+@dataclass
+class LayoutConfig:
+    """Configuração de hiperparâmetros geométricos para detecção e segmentação de layout."""
+    full_width_threshold: float = 0.50       # Limiar de largura para considerar texto de apoio/cabeçalho de página inteira
+    y_overlap_tolerance: float = 5.0         # Tolerância vertical máxima (pt) para costurar palavras na mesma linha horizontal
+    column_gutter_margin: float = 25.0       # Margem de segurança central ao redor do divisor de colunas (pt)
+    min_overlapping_pairs: int = 2           # Mínimo de pares de linhas concorrentes para confirmar modo 2 colunas
+    stitch_gap_max: float = 20.0             # Distância horizontal máxima (pt) para juntar spans adjacentes
+    line_height_multiplier: float = 1.2      # Fator de altura de linha para agrupamento de parágrafos
+
 
 CONTEXT_TEXT_HEADER_REGEX = re.compile(
     r'(?:^|\n|\.\s+|\s+)'
+    r'(?:<[^>]+>|\*{1,3}|_{1,3})*\s*'
     r'('
     r'(?:'
     r'Instru[çc][ãa\ufffd\?]?o\s*[:\.\-]?\s*|'
@@ -171,7 +184,10 @@ def normalize_paragraph_flow(text_str: str) -> str:
         r'Instru[çc][ãa]o|'
         r'Considere\s+|'
         r'Leia\s+|'
-        r'Com\s+base\s+'
+        r'Com\s+base\s+|'
+        r'Pre[çc]o\s+Custo|'
+        r'[A-Za-z\u00C0-\u00DC\w\s\-\/\(\)\.]{2,30}?\s+\d+(?:[\,\.]\d+)?\s+\d+(?:[\,\.]\d+)?|'
+        r'\([0-9\,\.]+\)\s*\d+\s*=\s*[0-9\,\.]+'
         r')',
         re.IGNORECASE
     )
@@ -218,7 +234,7 @@ def normalize_paragraph_flow(text_str: str) -> str:
 def extract_tables_from_page(page: fitz.Page) -> List[Dict[str, Any]]:
     """
     Localiza tabelas nativas de dados na página via PyMuPDF e converte para representação Markdown estruturada.
-    Filtra bordas decorativas e molduras de página que não sejam tabelas de conteúdo.
+    Filtra bordas decorativas, molduras de alternativas e blocos de instrução que não sejam tabelas de conteúdo.
     Retorna: [{'bbox': (x0, y0, x1, y1), 'markdown': '| Col 1 | Col 2 |\n|---|---|...'}, ...]
     """
     tables_found = []
@@ -234,15 +250,17 @@ def extract_tables_from_page(page: fitz.Page) -> List[Dict[str, Any]]:
             tb_w = tb_rect[2] - tb_rect[0]
             tb_h = tb_rect[3] - tb_rect[1]
 
-            # Filtra molduras de página inteira (ex: borda de layout da banca IBAM)
+            # Filtra molduras de página inteira ou cabeçalhos/rodapés de margem extrema
             if tb_h > p_h * 0.55 and tb_w > p_w * 0.70:
+                continue
+            if tb_rect[1] < 30 or tb_rect[3] > p_h - 30:
                 continue
 
             extracted = tab.extract()
             if not extracted or len(extracted) < 2:
                 continue
 
-            # Se qualquer célula contiver "Questão 01" ou mais de 200 caracteres, é uma moldura de coluna
+            # Se qualquer célula contiver cabeçalho de questão ou texto longo de parágrafo, é moldura de layout
             is_layout_frame = False
             for r in extracted:
                 for c in r:
@@ -270,6 +288,31 @@ def extract_tables_from_page(page: fitz.Page) -> List[Dict[str, Any]]:
             if num_cols < 2:
                 continue
 
+            # Filtra blocos de instrução de prova (ex: capa)
+            all_tab_text = ' '.join(' '.join(r) for r in valid_rows).lower()
+            if any(kw in all_tab_text for kw in [
+                'cartão de respostas', 'folha de respostas', 'fiscal de sala', 'fiscal de prova',
+                'caderno de questões', 'caneta esferográfica', 'impressões digitais',
+                'detecção de metais', 'tempo disponível', 'tempo para a marcação', 'candidato'
+            ]):
+                continue
+
+            # Filtra se for falso positivo de alternativas de questão (A, B, C, D, E)
+            opt_count = 0
+            for r in valid_rows:
+                for c in r:
+                    if re.match(r'^\s*\(?[A-Ea-e]\)[\.\s]*', c):
+                        opt_count += 1
+            if opt_count >= 2:
+                continue
+
+            # Filtra se a primeira linha tiver palavras soltas de continuação sintática
+            first_row_non_empty = [c for c in valid_rows[0] if c]
+            if not first_row_non_empty or any(re.match(r'^\(?[A-Ea-e]\)?$', w) for w in first_row_non_empty):
+                continue
+            if len(first_row_non_empty) == 1 and first_row_non_empty[0].lower() in ['para', 'tipo', 'de', 'do', 'da', 'com', 'em', 'por', 'que', 'se']:
+                continue
+
             norm_rows = []
             for r in valid_rows:
                 row_padded = r + [''] * (num_cols - len(r))
@@ -289,13 +332,97 @@ def extract_tables_from_page(page: fitz.Page) -> List[Dict[str, Any]]:
 
     return tables_found
 
-def detect_layout_and_ordered_blocks(page: fitz.Page, watermarks: Set[Tuple[int, int, int, int]], force_ocr: bool = False) -> List[Dict[str, Any]]:
+def format_styled_span(text: str, is_bold: bool, is_italic: bool, is_underlined: bool) -> str:
+    """Aplica marcações ricas de tipografia (HTML/Markdown) ao núcleo textual, preservando pontuação."""
+    text = text.strip()
+    if not text:
+        return ""
+    
+    if re.match(r'^[.,;:!?()\[\]{}—–\-\"\'“”‘’]+$', text):
+        return text
+
+    m = re.match(r'^([.,;:!?()\[\]{}—–\-\"\'“”‘’]*)(.*?)([.,;:!?()\[\]{}—–\-\"\'“”‘’]*)$', text)
+    if not m:
+        return text
+    lead_punct, core_text, trail_punct = m.groups()
+    if not core_text:
+        return text
+
+    styled_core = core_text
+    if is_bold and is_italic:
+        styled_core = f"***{styled_core}***"
+    elif is_bold:
+        styled_core = f"**{styled_core}**"
+    elif is_italic:
+        styled_core = f"*{styled_core}*"
+
+    if is_underlined:
+        styled_core = f"<u>{styled_core}</u>"
+
+    return f"{lead_punct}{styled_core}{trail_punct}"
+
+
+def extract_rich_line_spans(line: Dict[str, Any], page_drawings: Optional[List[Dict[str, Any]]] = None) -> str:
+    """Extrai os spans de uma linha preservando grifados vetoriais (underlines), negritos pontuais e itálicos."""
+    spans = line.get('spans', [])
+    if not spans:
+        return ""
+
+    # Se a linha inteira for bold (títulos, cabeçalhos de matérias, banners), não aplica ** em cada palavra
+    all_bold = all(
+        ((s.get('flags', 0) & 16 != 0) or ('bold' in s.get('font', '').lower()) or ('black' in s.get('font', '').lower()))
+        for s in spans if s.get('text', '').strip()
+    )
+
+    formatted_spans = []
+    for span in spans:
+        t = span.get('text', '')
+        if not t.strip():
+            continue
+        flags = span.get('flags', 0)
+        font = span.get('font', '').lower()
+        bbox = span.get('bbox')
+        
+        is_italic = (flags & 2 != 0) or ('italic' in font) or ('oblique' in font)
+        # Bold somente se for destaque específico no meio do texto e não uma linha inteira em negrito
+        is_bold = ((flags & 16 != 0) or ('bold' in font) or ('black' in font)) and not all_bold
+        
+        # Detecção geométrica de linha de grifado (sublinhado) imediatamente sob a palavra
+        is_underlined = False
+        if bbox and page_drawings:
+            for dr in page_drawings:
+                rect = dr.get('rect')
+                if rect and rect.height <= 3.5 and abs(rect.y0 - bbox[3]) <= 4.5:
+                    if rect.x0 <= bbox[0] + 5 and rect.x1 >= bbox[2] - 5:
+                        is_underlined = True
+                        break
+        
+        txt = t.strip()
+        # Não adiciona marcadores de formatação ao número da questão, letra de alternativa ou gabarito embutido
+        is_q_header = bool(re.match(r'^(?:Quest[aã]o|Item)?\s*\d+[\.\-–—:\)]?$', txt, re.IGNORECASE))
+        is_opt_label = bool(re.match(r'^\(?[A-E]\)[\.\-–—:]?$', txt))
+        is_ans_marker = bool(re.search(r'(?i)\(?\s*(?:Correta|Gabarito|Resposta)\s*[:=-]?\s*[A-Ea-eXNxn\*]\s*\)?', txt))
+        
+        if not (is_q_header or is_opt_label or is_ans_marker):
+            txt = format_styled_span(txt, is_bold, is_italic, is_underlined)
+                
+        formatted_spans.append(txt)
+        
+    return ' '.join(formatted_spans).strip()
+
+def detect_layout_and_ordered_blocks(
+    page: fitz.Page,
+    watermarks: Set[Tuple[int, int, int, int]],
+    force_ocr: bool = False,
+    config: Optional[LayoutConfig] = None
+) -> List[Dict[str, Any]]:
     """
     Algoritmo adaptativo multi-coluna (PyMuPDF Layout-Aware em nível de linha).
     Reorganiza o texto respeitando a ordem natural e espacial de leitura:
     1. Filtra margens, marcas d'água e ruídos.
     2. Agrupa linhas por cabeçalho superior, coluna esquerda, coluna direita e rodapé.
     """
+    cfg = config or LayoutConfig()
     width, height = page.rect.width, page.rect.height
     mid_x_page = width * 0.5
 
@@ -319,13 +446,14 @@ def detect_layout_and_ordered_blocks(page: fitz.Page, watermarks: Set[Tuple[int,
 
         # 2. Extração precisa em nível de linha via dict de spans do PyMuPDF
         text_page = page.get_text('dict')
+        page_drawings = page.get_drawings()
         lines_extracted = []
 
         for block in text_page.get('blocks', []):
             if block.get('type') != 0:
                 continue
             for line in block.get('lines', []):
-                line_text = ' '.join([span.get('text', '').strip() for span in line.get('spans', []) if span.get('text', '').strip()]).strip()
+                line_text = extract_rich_line_spans(line, page_drawings)
                 if not line_text:
                     continue
                 lx0, ly0, lx1, ly1 = line['bbox']
@@ -338,16 +466,10 @@ def detect_layout_and_ordered_blocks(page: fitz.Page, watermarks: Set[Tuple[int,
                     continue
                 if 'PROVA' in line_text.upper() and len(line_text) < 25 and any(f'PROVA {k}' in line_text.upper() for k in range(10)):
                     continue
-
-                # Filtra números de linha marginais de textos de apoio (ex: 5, 10, 15, 20... 70 com largura estreita)
-                txt_strip = line_text.strip()
-                if txt_strip.isdigit():
-                    try:
-                        val_d = int(txt_strip)
-                        if (val_d % 5 == 0 or (val_d == 1 and lx1 - lx0 < 8)) and (lx1 - lx0 < 15):
-                            continue
-                    except ValueError:
-                        pass
+                if ly1 > height - 52 and any(kw in lt_lower for kw in ['tipo ', 'página', 'pagina', 'tarde', 'manhã', 'manha', 'noite', 'ati -', 'fgv', 'dataprev', 'analista', 'cargo']):
+                    continue
+                if ly0 < 52 and any(kw in lt_lower for kw in ['dataprev', 'empresa de tecnologia', 'fgv conhecimento', 'caderno de prova']):
+                    continue
 
                 cleaned = clean_marginal_line_numbers(line_text)
                 if not cleaned.strip():
@@ -399,7 +521,7 @@ def detect_layout_and_ordered_blocks(page: fitz.Page, watermarks: Set[Tuple[int,
                 if j in skip_idx:
                     continue
                 nxt = group_lines[j]
-                if abs(cur['y0'] - nxt['y0']) < 6 and nxt['x0'] >= cur['x0'] and (nxt['x0'] - cur['x1']) < 25:
+                if abs(cur['y0'] - nxt['y0']) < cfg.y_overlap_tolerance and nxt['x0'] >= cur['x0'] and (nxt['x0'] - cur['x1']) < cfg.stitch_gap_max:
                     if len(cur['text'].strip()) < 15 or cur['text'].strip().endswith(('-', ':', 'Afi', 'fi', 'fl', 'Obs', '(')):
                         cur['text'] = cur['text'].strip() + ' ' + nxt['text'].strip()
                         cur['x1'] = max(cur['x1'], nxt['x1'])
@@ -419,10 +541,10 @@ def detect_layout_and_ordered_blocks(page: fitz.Page, watermarks: Set[Tuple[int,
     for l in left_lines:
         if any(abs(r['y0'] - l['y0']) < 20 for r in right_lines):
             overlapping_y_pairs += 1
-            if overlapping_y_pairs >= 3:
+            if overlapping_y_pairs >= cfg.min_overlapping_pairs:
                 break
 
-    has_columns = overlapping_y_pairs >= 3 and len(left_lines) >= 3 and len(right_lines) >= 3
+    has_columns = overlapping_y_pairs >= cfg.min_overlapping_pairs and len(left_lines) >= 3 and len(right_lines) >= 3
 
     if not has_columns:
         stitched_all = stitch_lines_within_group(lines_extracted) if not force_ocr else lines_extracted
@@ -431,9 +553,9 @@ def detect_layout_and_ordered_blocks(page: fitz.Page, watermarks: Set[Tuple[int,
         norm_text = normalize_paragraph_flow(raw_full)
         return [{'page': page.number, 'x0': 0, 'y0': 0, 'x1': width, 'y1': height, 'text': norm_text}]
 
-    # Detecta candidatas a colunas paralelas na esquerda e direita
-    left_cands = [l for l in text_only_lines if l['x1'] < mid_x_page + 30 and l['mid_x'] < mid_x_page]
-    right_cands = [l for l in text_only_lines if l['x0'] > mid_x_page - 30 and l['mid_x'] >= mid_x_page]
+    # Detecta candidatas a colunas paralelas na esquerda e direita com base na margem de gutter
+    left_cands = [l for l in text_only_lines if l['x1'] < mid_x_page + cfg.column_gutter_margin and l['mid_x'] < mid_x_page]
+    right_cands = [l for l in text_only_lines if l['x0'] > mid_x_page - cfg.column_gutter_margin and l['mid_x'] >= mid_x_page]
 
     # Encontra faixa Y inicial onde coexistem colunas paralelas
     two_col_y_min = None

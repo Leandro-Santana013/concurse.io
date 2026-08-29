@@ -25,7 +25,8 @@ export const FoldersView: React.FC<FoldersViewProps> = ({ onStartExam }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [loadingExamId, setLoadingExamId] = useState<number | null>(null);
   const { loadAndStartExam, generateCustomExam } = useExam();
-  const { navigateTo, showToast } = useUI();
+  const { navigateTo, showToast, openDirectIngestModal } = useUI();
+
 
   const handleStart = onStartExam || (() => navigateTo('exam'));
 
@@ -101,16 +102,26 @@ export const FoldersView: React.FC<FoldersViewProps> = ({ onStartExam }) => {
             </p>
           </div>
 
-          <div className="mt-6 pt-4 border-t border-white/10 flex items-center gap-4 relative z-10">
+          <div className="mt-6 pt-4 border-t border-white/10 flex flex-wrap items-center gap-3 relative z-10">
             <button
               onClick={handleGenerateCustom}
               className="flex items-center gap-2 rounded-2xl glass-btn-primary px-6 py-3.5 font-heading font-bold text-sm text-white"
             >
-              <Sparkles className="h-4 w-4" />
+              <Sparkles className="h-4 w-4 text-cyan-300" />
               <span>Gerar Simulado Geral (20q)</span>
+            </button>
+
+            <button
+              onClick={() => openDirectIngestModal()}
+              className="flex items-center gap-2 rounded-2xl glass-btn-secondary px-5 py-3.5 font-heading font-bold text-sm text-slate-200 hover:text-white"
+            >
+              <BookOpen className="h-4 w-4 text-indigo-400" />
+              <span>Importar por Link / PCI</span>
             </button>
           </div>
         </div>
+
+
 
         {/* Quick Metric Bento Card (1 Col) */}
         <div className="glass-card p-6 flex flex-col justify-between">

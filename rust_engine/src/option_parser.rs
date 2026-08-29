@@ -2,16 +2,45 @@
 use std::collections::HashMap;
 use once_cell::sync::Lazy;
 use regex::Regex;
-use crate::patterns::{OPTION_PRIMARY_REGEX, OPTION_NEWLINE_REGEX};
+use crate::patterns::{
+    OPTION_PRIMARY_REGEX, OPTION_NEWLINE_REGEX
+};
 use crate::typography::{restore_exam_typography_native, clean_text_artifacts_native};
 
 static EMBEDDED_ANSWER_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?i)\(?\s*(?:Correta|Gabarito|Resposta|Gabarito\s*Oficial)\s*[:=-]?\s*([A-Ea-eXNxn\*]|CERTO|ERRADO|C|E)\s*\)?").unwrap()
+    Regex::new(r"(?i)(?:\*{0,2}|_{0,2})\s*\(\s*(?:\*{0,2}|_{0,2})\s*(?:Correta|Gabarito|Resposta|Gabarito\s*Oficial)\s*[:=-]?\s*([A-Ea-eXNxn\*]|CERTO|ERRADO|C|E)\s*(?:\*{0,2}|_{0,2})\s*\)\s*(?:\*{0,2}|_{0,2})|\b(?:Gabarito\s*Oficial|Gabarito|Resposta)\s*[:=-]\s*([A-Ea-eXNxn\*]|CERTO|ERRADO)\b").unwrap()
 });
 
 static CERTO_ERRADO_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(?i)(?:^|\n|\s{2,})(?:\(?\s*(CERTO|ERRADO|C|E)\s*\)?)\s*").unwrap()
 });
+
+static INLINE_SUBJECT_OR_CONTEXT_LEAK: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r##"(?is)(?:\n|\r|\.\s+|\s+)\s*(?:<[^>]+>|\*{1,3}|_{1,3})*\s*(?:NO[ÇC\u{FFFD}\?][ÕO\u{FFFD}\?]?ES\s+DE\s+[^<>\n\r.]{2,60}|CONHECIMENTOS\s+(?:ESPEC[ÍI\u{FFFD}\?]FICOS|B[ÁA\u{FFFD}\?]SICOS|GERAIS|REGIONAIS)|L[ÍI\u{FFFD}\?]NGUA\s+(?:PORTUGUESA|INGLESA|ESPANHOLA)|PORTUGU[ÊE\u{FFFD}\?]S|INGL[ÊE\u{FFFD}\?]S|ESPANHOL|INFORM[ÁA\u{FFFD}\?]TICA|LEGISLA[ÇC\u{FFFD}\?][ÃA\u{FFFD}\?]O\s+(?:ESPEC[ÍI\u{FFFD}\?]FICA|B[ÁA\u{FFFD}\?]SICA|APLICADA|GERAL|[^<>\n\r.]{2,60})|DIREITO\s+(?:CONSTITUCIONAL|ADMINISTRATIVO|PENAL|PROCESSUAL|TRIBUT[ÁA\u{FFFD}\?]RIO|CIVIL|DO\s+TRABALHO|PREVIDENCI[ÁA\u{FFFD}\?]RIO|EMPRESARIAL|AMBIENTAL|ELEITORAL|FINANCEIRO|INTERNACIONAL)|MATEM[ÁA\u{FFFD}\?]TICA|RACIOC[ÍI\u{FFFD}\?]NIO\s+L[ÓO\u{FFFD}\?]GICO|O\s+texto\s+(?:seguinte|abaixo|a\s+seguir)\s*(?:refere-se|servir[áa\u{FFFD}\?]|para)|Instru[çc\u{FFFD}\?][ãa\u{FFFD}\?]?o\s*[:.\-]?|Para\s+responder\s+[àa\u{FFFD}\?]?s\s+quest[oõa\u{FFFD}\?]?es|Use\s+the\s+following\s+TEXT|Read\s+the\s+following\s+text).*$"##
+    ).unwrap()
+});
+
+#[inline]
+fn safe_slice<'a>(s: &'a str, start_byte: usize, end_byte: usize) -> &'a str {
+    let len = s.len();
+    if len == 0 || start_byte >= len {
+        return "";
+    }
+    let mut start = start_byte;
+    while start < len && !s.is_char_boundary(start) {
+        start += 1;
+    }
+    let mut end = end_byte.min(len);
+    while end > start && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    if start <= end && end <= len {
+        &s[start..end]
+    } else {
+        ""
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct ParsedQuestionBody {
@@ -23,7 +52,7 @@ pub struct ParsedQuestionBody {
 
 /// Extrai e formata o enunciado e suas alternativas em uma única passada
 pub fn parse_question_body_native(raw_chunk: &str) -> ParsedQuestionBody {
-    let clean_chunk = clean_text_artifacts_native(raw_chunk);
+    let mut clean_chunk = clean_text_artifacts_native(raw_chunk);
 
     // 1. Extração de Gabarito Embutido (ex: "(Correta: C)")
     let mut embedded_answer = None;
@@ -37,6 +66,7 @@ pub fn parse_question_body_native(raw_chunk: &str) -> ParsedQuestionBody {
             }
             embedded_answer = Some(ans_upper);
         }
+        clean_chunk = EMBEDDED_ANSWER_REGEX.replace_all(&clean_chunk, "").into_owned();
     }
 
     // 2. Busca por alternativas primárias (A..E)
@@ -93,7 +123,7 @@ pub fn parse_question_body_native(raw_chunk: &str) -> ParsedQuestionBody {
     // 4. Se encontrou sequência A..E válida (2 a 5 opções)
     if !best_seq.is_empty() {
         let first_start = best_seq[0].0;
-        let enunciado_raw = clean_chunk[..first_start].trim().to_string();
+        let enunciado_raw = safe_slice(&clean_chunk, 0, first_start).trim().to_string();
 
         let mut opcoes = HashMap::new();
         for i in 0..best_seq.len() {
@@ -105,8 +135,18 @@ pub fn parse_question_body_native(raw_chunk: &str) -> ParsedQuestionBody {
                 chunk_len
             };
 
-            let opt_content_raw = clean_chunk[content_start..content_end].trim();
-            let opt_formatted = restore_exam_typography_native(opt_content_raw, true);
+            let opt_content_raw = safe_slice(&clean_chunk, content_start, content_end).trim();
+            let mut opt_formatted = restore_exam_typography_native(opt_content_raw, true);
+            opt_formatted = clean_text_artifacts_native(&opt_formatted).trim().to_string();
+
+            // Limpa qualquer banner de matéria ou texto de apoio vazado no final da opção
+            if let Some(m_leak) = INLINE_SUBJECT_OR_CONTEXT_LEAK.find(&opt_formatted) {
+                if m_leak.start() > 0 {
+                    opt_formatted = safe_slice(&opt_formatted, 0, m_leak.start()).trim_end_matches([' ', '\t', '\r', '\n', '.', ';', ':']).to_string();
+                    opt_formatted.push('.');
+                }
+            }
+
             opcoes.insert(letter, opt_formatted);
         }
 
@@ -128,7 +168,7 @@ pub fn parse_question_body_native(raw_chunk: &str) -> ParsedQuestionBody {
         opcoes.insert("E".to_string(), "Errado".to_string());
 
         let first_match_start = ce_matches[0].get(0).unwrap().start();
-        let enunciado_raw = clean_chunk[..first_match_start].trim();
+        let enunciado_raw = safe_slice(&clean_chunk, 0, first_match_start).trim();
         let enunciado_formatted = restore_exam_typography_native(enunciado_raw, false);
 
         return ParsedQuestionBody {

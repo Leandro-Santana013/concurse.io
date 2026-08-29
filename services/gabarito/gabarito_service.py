@@ -1,5 +1,6 @@
 import re
 import fitz
+from typing import Dict, List, Optional, Any, Tuple
 
 GABARITO_HEADER_REGEX = re.compile(r'\b(gabarito|folha\s+de\s+respostas?|quadro\s+de\s+respostas?|respostas?\s+das?\s+quest[õo]es|gabarito\s+oficial|gabarito\s+preliminar|gabarito\s+definitivo)\b', re.IGNORECASE)
 
@@ -139,13 +140,57 @@ def parse_gabarito_from_text(raw_text):
         for idx_seq, l_ans in enumerate(best_chunk, start=1):
             gabarito[idx_seq] = l_ans
 
+    # 6. Padrão Vertical FGV / Cebraspe (Sequências de N números seguidas por N letras)
+    fgv_vertical = parse_fgv_vertical_gabarito(raw_text)
+    if fgv_vertical and len(fgv_vertical) >= 10:
+        return fgv_vertical
+
     return gabarito
 
-def parse_gabarito_from_pdf(pdf_input):
+def parse_fgv_vertical_gabarito(text: str) -> Dict[int, str]:
+    """
+    Parses FGV vertical block format where N numbers are followed by N answers:
+    1..20 followed by 20 letters
+    21..40 followed by 20 letters
+    41..60 followed by 20 letters
+    61..70 followed by 10 letters
+    """
+    gabarito = {}
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+    
+    i = 0
+    while i < len(lines):
+        if lines[i].isascii() and lines[i].isdigit():
+            nums = []
+            while i < len(lines) and lines[i].isascii() and lines[i].isdigit():
+                nums.append(int(lines[i]))
+                i += 1
+            
+            ans = []
+            while i < len(lines) and (lines[i].upper() in ['A', 'B', 'C', 'D', 'E', 'X', 'N', '*'] or lines[i].upper() in ['CERTO', 'ERRADO']):
+                val = lines[i].upper()
+                if val == '*':
+                    val = 'X'
+                elif val == 'CERTO':
+                    val = 'C'
+                elif val == 'ERRADO':
+                    val = 'E'
+                ans.append(val)
+                i += 1
+            
+            if len(nums) == len(ans) and len(nums) >= 4:
+                for n, a in zip(nums, ans):
+                    gabarito[n] = a
+        else:
+            i += 1
+            
+    return gabarito
+
+def parse_gabarito_from_pdf(pdf_input, cargo_or_title: Optional[str] = None, tipo: Optional[str] = None):
     """
     Extrai gabarito oficial de um arquivo PDF avulso ou folha de respostas.
-    Utiliza primeiramente extração estruturada de tabelas nativa (find_tables),
-    seguida por layout parser e OCR caso seja escaneado.
+    Suporta filtragem por cargo/tipo para PDFs com múltiplos cargos (como FGV e FCC),
+    extração estruturada de tabelas (find_tables), varredura vertical e OCR.
     """
     doc = None
     should_close = False
@@ -164,6 +209,40 @@ def parse_gabarito_from_pdf(pdf_input):
     try:
         gabarito = {}
 
+        # 0. Se houver cargo/título de prova especificado, procura pela página exata do cargo
+        if cargo_or_title:
+            clean_kw = re.sub(r'\[\d+\]', '', cargo_or_title).strip()
+            # Pega palavras-chave significativas do cargo (ex: 'Contabilidade', 'Analista', etc.)
+            keywords = [w.lower() for w in clean_kw.split() if len(w) >= 4 and w.lower() not in ['para', 'com', 'pelo', 'sobre', 'geral', 'tarde', 'manha', 'branca']]
+            
+            best_page_text = None
+            for page in doc:
+                p_text = page.get_text()
+                p_lower = p_text.lower()
+                if any(kw in p_lower for kw in keywords):
+                    # Se tiver tipo específico (ex: TIPO 1), filtra a seção correspondente
+                    target_tipo = tipo or "1"
+                    if f"tipo  {target_tipo}" in p_lower or f"tipo {target_tipo}" in p_lower:
+                        # Corta o texto para o bloco do tipo correspondente
+                        m_start = re.search(rf'TIPO\s*{target_tipo}\b', p_text, re.I)
+                        if m_start:
+                            sub_text = p_text[m_start.start():]
+                            # Procura o próximo tipo para delimitar o fim
+                            next_tipo = str(int(target_tipo) + 1) if target_tipo.isdigit() else "2"
+                            m_next = re.search(rf'TIPO\s*{next_tipo}\b', sub_text, re.I)
+                            if m_next:
+                                sub_text = sub_text[:m_next.start()]
+                            best_page_text = sub_text
+                            break
+                    best_page_text = p_text
+            
+            if best_page_text:
+                gab_cargo = parse_fgv_vertical_gabarito(best_page_text)
+                if not gab_cargo:
+                    gab_cargo = parse_gabarito_from_text(best_page_text)
+                if gab_cargo and len(gab_cargo) >= 5:
+                    return gab_cargo
+
         # 1. Extração Estruturada via PyMuPDF Table Extractor (find_tables)
         for page in doc:
             if hasattr(page, 'find_tables'):
@@ -178,30 +257,31 @@ def parse_gabarito_from_pdf(pdf_input):
                         header_row = extracted[0]
                         q_cols = []
                         for col_i, cell in enumerate(header_row):
-                            if cell and str(cell).strip().isdigit():
-                                q_cols.append((col_i, int(str(cell).strip())))
-
+                            c_str = str(cell or '').strip()
+                            if c_str.isascii() and c_str.isdigit():
+                                q_cols.append((col_i, int(c_str)))
+                        
                         if len(q_cols) >= 5:
                             for row in extracted[1:]:
-                                row_answers = {}
+                                if not any(row):
+                                    continue
                                 for col_i, q_num in q_cols:
-                                    if col_i < len(row) and row[col_i]:
-                                        ans_val = str(row[col_i]).strip().upper()
-                                        if ans_val in ['A', 'B', 'C', 'D', 'E', 'X', 'N', '*', 'CERTO', 'ERRADO', 'C', 'E']:
-                                            norm_ans = 'C' if ans_val == 'CERTO' else ('E' if ans_val == 'ERRADO' else ('X' if ans_val in ['*', 'N'] else ans_val))
-                                            row_answers[q_num] = norm_ans
-                                if len(row_answers) >= len(gabarito):
-                                    gabarito = row_answers
+                                    if col_i < len(row):
+                                        ans_val = str(row[col_i] or '').strip().upper()
+                                        if ans_val in ['A', 'B', 'C', 'D', 'E', 'X', 'N', '*']:
+                                            gabarito[q_num] = 'X' if ans_val in ['*', 'N'] else ans_val
+                                if len(gabarito) >= 5:
+                                    return gabarito
 
-                        # B) Extração Vertical Multi-Coluna (Padrão [Q1, R1, Q21, R21])
+                        # B) Extração por Pares Colunares (Padrão Questão / Resposta: '1' | 'A' | '2' | 'B')
                         for row in extracted:
-                            if not row or len(row) < 2:
+                            if not row:
                                 continue
                             for c_idx in range(0, len(row) - 1, 2):
                                 col_q = str(row[c_idx] or '').strip()
                                 col_a = str(row[c_idx + 1] or '').strip().upper()
                                 
-                                if col_q.isdigit():
+                                if col_q.isascii() and col_q.isdigit():
                                     q_num = int(col_q)
                                     if col_a in ['A', 'B', 'C', 'D', 'E', 'X', 'N', '*', 'CERTO', 'ERRADO', 'C', 'E']:
                                         norm_ans = 'C' if col_a == 'CERTO' else ('E' if col_a == 'ERRADO' else ('X' if col_a in ['*', 'N'] else col_a))
@@ -217,7 +297,16 @@ def parse_gabarito_from_pdf(pdf_input):
         if gabarito_fallback and len(gabarito_fallback) >= 5:
             return gabarito_fallback
 
-        # 3. Se não encontrou, faz varredura textual direta em todas as páginas
+        # 3. Se não encontrou, faz varredura textual direta página por página (suporta vertical FGV)
+        for page in doc:
+            p_text = page.get_text()
+            p_gab = parse_fgv_vertical_gabarito(p_text)
+            if p_gab and len(p_gab) >= len(gabarito):
+                gabarito.update(p_gab)
+
+        if gabarito and len(gabarito) >= 5:
+            return gabarito
+
         full_text = ""
         for page in doc:
             full_text += "\n" + page.get_text()
@@ -257,11 +346,21 @@ def merge_exam_with_gabarito(questions, gabarito_dict):
     if not questions:
         return [], {"total_questions": 0, "matched_answers": 0, "coverage_pct": 0.0, "has_official_answers": False}
 
+    def _q_sort_key(q):
+        raw = str(q.get('numero_questao', '') if isinstance(q, dict) else getattr(q, 'numero_questao', '')).strip()
+        if raw.isdigit():
+            return (0, int(raw))
+        m = re.match(r'^(\d+)', raw)
+        if m:
+            return (0, int(m.group(1)))
+        return (1, 99999)
+
+    sorted_questions = sorted(questions, key=_q_sort_key)
     gabarito_dict = gabarito_dict or {}
     matched_count = 0
     updated_questions = []
 
-    for idx, q in enumerate(questions, start=1):
+    for idx, q in enumerate(sorted_questions, start=1):
         q_copy = dict(q)
         q_num = q_copy.get('numero_questao') or idx
         try:

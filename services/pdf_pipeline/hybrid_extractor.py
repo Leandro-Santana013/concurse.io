@@ -9,6 +9,7 @@ from .layout.layout_detector import (
     detect_layout_and_ordered_blocks,
     extract_context_blocks,
     is_instruction_or_cover_page,
+    LayoutConfig,
 )
 from .media.diagram_cropper import (
     ExamImageExtractor,
@@ -73,7 +74,8 @@ def parse_exam_document(
     exam_id: Optional[int] = None,
     extract_images: bool = True,
     gabarito_override: Optional[str] = None,
-    force_ocr: bool = False
+    force_ocr: bool = False,
+    layout_config: Optional[LayoutConfig] = None
 ) -> List[Dict[str, Any]]:
     """
     Motor híbrido avançado de processamento de exames:
@@ -156,7 +158,7 @@ def parse_exam_document(
                 except ValueError:
                     pass
 
-        ordered_blocks = detect_layout_and_ordered_blocks(page, watermarks, force_ocr=force_ocr)
+        ordered_blocks = detect_layout_and_ordered_blocks(page, watermarks, force_ocr=force_ocr, config=layout_config)
         for b in ordered_blocks:
             raw_blocks.append(b['text'])
 
@@ -240,7 +242,7 @@ def parse_exam_document(
     found_positions = []
 
     header_pat = re.compile(
-        r'(?i)(?:^|\n|\.\s+|\s{2,})(?:(?:QUEST[AÃ\?]?O\s+|ITEM\s+)(0*\d{1,3})[ \t]*(?:[\.\-–—:\)]|\n+|[ \t]+)|(0*\d{1,3})[ \t]*(?:[\.\-–—:\)]|\n+|\t+|[ \t]+(?=[A-Za-z\u00C0-\u00DC\"\'\(\[]))[ \t]*|\((0*\d{1,3})\)[ \t]+|(?<=\n)\s*(0*\d{1,3})\s*(?=\n|\t))'
+        r'(?i)(?:^|\n|\.\s+|\s{2,})(?:(?:QUEST[AÃ\?]?O\s+|ITEM\s+)(0*\d{1,3})[ \t]*(?:[\.\-–—:\)]|\n+|[ \t]+)|(0*\d{1,3})[ \t]*(?:[\.\-–—:\)]|\n+|\t+|[ \t]+(?=[A-Za-z\u00C0-\u00DC\"\'\u201c\u201d\u2018\u2019\(\[«]))[ \t]*|\((0*\d{1,3})\)[ \t]+|(?<=\n)\s*(0*\d{1,3})\s*(?=\n|\t))'
     )
 
     py_found_positions = []
@@ -457,8 +459,8 @@ def parse_exam_document(
                 opt_content = re.sub(r'^\(\s*\)\s*', '', opt_content)
                 opt_content = clean_text_artifacts(opt_content)
                 if o_idx == len(valid_seq) - 1:
-                    # Remove cabeçalho de disciplina colado no final da última alternativa (ex: '4-C Conhecimentos Específicos')
-                    opt_content = re.sub(r'\s*(?:Conhecimentos\s+Espec[íi\ufffd\?]?ficos|Conhecimentos\s+Gerais|L[íi\ufffd\?]?ngua\s+Portuguesa|No[çc\ufffd\?][õo\ufffd\?]?es\s+de\s+[^\n]+|Racioc[íi\ufffd\?]?nio\s+L[óo\ufffd\?]?gico[^\n]*)\s*$', '', opt_content, flags=re.IGNORECASE)
+                    # Remove cabeçalho de disciplina colado no final da última alternativa (ex: '4-C <u>Conhecimentos Específicos</u>')
+                    opt_content = re.sub(r'\s*(?:<[^\s>]+>|\*{1,3}|_{1,3})*\s*(?:Conhecimentos\s+Espec[íi\ufffd\?]?ficos|Conhecimentos\s+Gerais|Conhecimentos\s+B[áa\ufffd\?]?sicos|L[íi\ufffd\?]?ngua\s+Portuguesa|No[çc\ufffd\?][õo\ufffd\?]?es\s+de\s+[^\n<]+|Racioc[íi\ufffd\?]?nio\s+L[óo\ufffd\?]?gico[^\n<]*|Legisla[çc\ufffd\?][ãa\ufffd\?]?o[^\n<]*|Inform[áa\ufffd\?]?tica|Direito\s+[^\n<]+)[^\n]*$', '', opt_content, flags=re.IGNORECASE)
                     opt_lines = opt_content.splitlines()
                     while opt_lines and SUBJECT_REGEX.match(opt_lines[-1].strip()):
                         opt_lines.pop()
@@ -557,6 +559,18 @@ def parse_exam_document(
         q.pop('_page', None)
         q.pop('_x', None)
         q.pop('_y', None)
+
+    # Ordenação canônica e sequencial pelo número da questão (1..N)
+    def _q_sort_key(q):
+        raw = str(q.get('numero_questao', '')).strip()
+        if raw.isdigit():
+            return (0, int(raw))
+        m = re.match(r'^(\d+)', raw)
+        if m:
+            return (0, int(m.group(1)))
+        return (1, 99999)
+    
+    questions.sort(key=_q_sort_key)
 
     doc.close()
     return questions

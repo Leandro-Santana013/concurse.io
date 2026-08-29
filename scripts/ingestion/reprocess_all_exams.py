@@ -4,6 +4,7 @@ if _repo_root not in sys.path:
     sys.path.insert(0, _repo_root)
 
 import os
+import re
 import sys
 import json
 import glob
@@ -91,13 +92,13 @@ def reprocess_all_exams():
 
             gab_matching = glob.glob(f"pdfs/{exam_id}_gab_*.pdf")
             if gab_matching and os.path.exists(gab_matching[0]):
-                gabarito_dict = parse_gabarito_from_pdf(gab_matching[0])
+                gabarito_dict = parse_gabarito_from_pdf(gab_matching[0], cargo_or_title=title)
                 answer_source = "attached_pdf"
             elif gabarito_url and os.path.exists(gabarito_url):
-                gabarito_dict = parse_gabarito_from_pdf(gabarito_url)
+                gabarito_dict = parse_gabarito_from_pdf(gabarito_url, cargo_or_title=title)
                 answer_source = "attached_pdf"
             elif not gabarito_dict and os.path.exists(pdf_path):
-                gabarito_dict = parse_gabarito_from_pdf(pdf_path)
+                gabarito_dict = parse_gabarito_from_pdf(pdf_path, cargo_or_title=title)
                 if gabarito_dict:
                     answer_source = "embedded_pdf"
 
@@ -110,14 +111,25 @@ def reprocess_all_exams():
 
                 session.query(Question).filter_by(exam_id=exam_id).delete()
 
-                for q_data in updated_questions:
+                def _q_sort_key(q):
+                    raw = str(q.get('numero_questao', '')).strip()
+                    if raw.isdigit():
+                        return (0, int(raw))
+                    m = re.match(r'^(\d+)', raw)
+                    if m:
+                        return (0, int(m.group(1)))
+                    return (1, 99999)
+
+                sorted_questions = sorted(updated_questions, key=_q_sort_key)
+
+                for q_data in sorted_questions:
                     new_q = Question(
                         exam_id=exam_id,
                         statement=q_data['enunciado'],
-                        options=json.dumps(q_data['opcoes']),
+                        options=json.dumps(q_data['opcoes'], ensure_ascii=False),
                         correct_answer=q_data['resposta'],
                         subject=q_data.get('disciplina', 'Geral'),
-                        images=json.dumps(q_data['images']) if q_data.get('images') else None,
+                        images=json.dumps(q_data['images'], ensure_ascii=False) if q_data.get('images') else None,
                         numero_questao=str(q_data['numero_questao']),
                         latex_support=q_data.get('latex_support', 0)
                     )

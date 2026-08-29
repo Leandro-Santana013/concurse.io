@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import asyncio
 from typing import List, Optional, Dict, Any
@@ -89,6 +90,16 @@ def list_folders(db: Session = Depends(get_db)):
 
     return result
 
+def _sort_questions_key(q):
+    raw = str(getattr(q, 'numero_questao', None) or (q.get('numero_questao') if isinstance(q, dict) else '') or '').strip()
+    item_id = getattr(q, 'id', 0) if hasattr(q, 'id') else (q.get('id', 0) if isinstance(q, dict) else 0) or 0
+    if raw.isdigit():
+        return (0, int(raw), item_id)
+    m = re.match(r'^(\d+)', raw)
+    if m:
+        return (0, int(m.group(1)), item_id)
+    return (1, item_id, raw)
+
 @router.get("/exams/{exam_id}", response_model=ExamDetailSchema)
 def get_exam_detail(exam_id: int, db: Session = Depends(get_db)):
     """Retorna detalhes completos da prova com todas as questões formatadas para o simulado."""
@@ -97,7 +108,8 @@ def get_exam_detail(exam_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Prova não encontrada.")
 
     questions_list = []
-    for q in exam.questions:
+    sorted_questions = sorted(exam.questions, key=_sort_questions_key)
+    for q in sorted_questions:
         try:
             raw_opts = json.loads(q.options) if q.options else {}
             if isinstance(raw_opts, dict):
@@ -327,7 +339,7 @@ def ingest_exam_from_url(
 
     # Verifica se já existe
     existing = db.query(Exam).filter_by(source_url=url).first()
-    if existing and existing.status == 'Aprovada':
+    if existing and existing.status == 'Aprovada' and not gabarito_url:
         return {"exam_id": existing.id, "status": "Aprovada", "message": "Prova já cadastrada e processada."}
 
     if not existing:
@@ -348,7 +360,9 @@ def ingest_exam_from_url(
         exam.status = "Processando"
         exam.progress = 5
         exam.progress_message = "Reiniciando processamento..."
-        if gabarito_url and not exam.gabarito_url:
+        if title and title != "Nova Prova de Concurso":
+            exam.title = title
+        if gabarito_url:
             exam.gabarito_url = gabarito_url
         db.commit()
 
@@ -360,6 +374,7 @@ def ingest_exam_from_url(
         "progress": 5,
         "message": "Processamento assíncrono iniciado com sucesso."
     }
+
 
 @router.post("/exams/{exam_id}/status")
 def update_exam_status(exam_id: int, payload: Dict[str, Any], db: Session = Depends(get_db)):
