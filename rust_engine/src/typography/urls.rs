@@ -3,11 +3,11 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 pub static URL_RAW_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r##"(?i)(?:\*\([Ff]onte:\s*|\(?[Ff]onte\s*:\s*|\(?[Aa]cesso\s+em\s*:\s*)?(?:https?://|://)[a-zA-Z0-9\-_./%?&=#@:+ \u{00C0}-\u{00FC}]+(?:\([a-zA-Z0-9\-_\s./%?&=#@:+\u{00C0}-\u{00FC}]+\)[a-zA-Z0-9\-_./%?&=#@:+ \u{00C0}-\u{00FC}]*)*(?:\.pdf|\.html|\.php|[a-zA-Z0-9/])(?:\)\*|\))?"##).unwrap()
+    Regex::new(r##"(?i)(?:\*\([Ff]onte:\s*|\(?[Ff]onte\s*:\s*|\(?[Aa]cesso\s+em\s*:\s*)?(?:https?://|://)[a-zA-Z0-9\-_./%?&=#@:+~]+(?:\([a-zA-Z0-9\-_\s./%?&=#@:+~]+\)[a-zA-Z0-9\-_./%?&=#@:+~]*)*(?:\.pdf|\.html|\.php|[a-zA-Z0-9/])(?:\)\*|\))?"##).unwrap()
 });
 
 pub static URL_EXTRACT_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r##"(?i)(?:https?://|://)[a-zA-Z0-9\-_./%?&=#@:+ \u{00C0}-\u{00FC}]+(?:\([a-zA-Z0-9\-_\s./%?&=#@:+\u{00C0}-\u{00FC}]+\)[a-zA-Z0-9\-_./%?&=#@:+ \u{00C0}-\u{00FC}]*)*(?:\.pdf|\.html|\.php|[a-zA-Z0-9/])"##).unwrap()
+    Regex::new(r##"(?i)(?:https?://|://)[a-zA-Z0-9\-_./%?&=#@:+~]+(?:\([a-zA-Z0-9\-_\s./%?&=#@:+~]+\)[a-zA-Z0-9\-_./%?&=#@:+~]*)*(?:\.pdf|\.html|\.php|[a-zA-Z0-9/])"##).unwrap()
 });
 
 /// Decodifica sequências percent-encoded (ex: %C3%A1 -> á, %20 -> espaço) preservando UTF-8 válido

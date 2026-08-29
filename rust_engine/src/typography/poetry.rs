@@ -22,8 +22,8 @@ static COMMAND_START_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r##"(?i)^(?:Assinale|Marque|Indique|Identifique|A\s+respeito|Considerando|Com\s+base|De\s+acordo|Julgue|Analise|O\s+texto|Em\s+rela[çc][ãa]o)\b"##).unwrap()
 });
 
-static ROMAN_START_LONG_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r##"^(?:I|II|III|IV|V|VI|VII|VIII|IX|X)\.\s+"##).unwrap()
+static LIST_ITEM_PREFIX_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r##"^(?:(?:[IVXLCDM]+|\d{1,3})\.|\([IVXLCDM\d]+\)|[-•*]|\(__\))\s*"##).unwrap()
 });
 
 static POEM_UNSQUASH_ASTERISKS_REGEX: Lazy<Regex> = Lazy::new(|| {
@@ -88,7 +88,7 @@ pub fn is_verse_line(line: &str) -> bool {
     if PROSE_PROMPT_REGEX.is_match(clean) {
         return false;
     }
-    if ROMAN_START_LONG_REGEX.is_match(clean) && clean.chars().count() > 60 {
+    if LIST_ITEM_PREFIX_REGEX.is_match(clean) {
         return false;
     }
     if l.starts_with("---") || l.starts_with("###") || l.starts_with("📖") || l.starts_with("**") {

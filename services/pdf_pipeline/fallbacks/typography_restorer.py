@@ -74,8 +74,8 @@ def is_verse_line(line: str) -> bool:
     if PROSE_PROMPT_REGEX.match(l):
         return False
 
-    # Não pode ser item romano com texto longo
-    if re.match(r'^(?:I|II|III|IV|V|VI|VII|VIII|IX|X)\.\s+', l) and len(l) > 60:
+    # Não pode ser item de lista (romano, numérico, marcador, lacuna)
+    if re.match(r'^(?:(?:[IVXLCDM]+|\d{1,3})\.|\([IVXLCDM\d]+\)|[-•*]|\(__\))\s*', l):
         return False
     # Não pode ser cabeçalho ou divisor
     if l.startswith(('---', '###', '📖', '**')):
@@ -241,8 +241,7 @@ def restore_exam_typography(text: str, is_option: bool = False) -> str:
     # 0. Recomposição de URLs e codificação percentual quebradas entre linhas
     t = re.sub(r'%\s*\n\s*([0-9A-Fa-f]{2})', r'%\1', t)
     t = re.sub(r'%\s+([0-9A-Fa-f]{2})', r'%\1', t)
-    t = re.sub(r'(https?://[^\s\n\)]+)\s*\n\s*(%[0-9A-Fa-f]{2}|[a-zA-Z0-9\-_./?&=#@:+]+|\([^\)]+\))', r'\1\2', t)
-    t = re.sub(r'(https?://[^\s\n\)]+)\s*\n\s*(%[0-9A-Fa-f]{2}|[a-zA-Z0-9\-_./?&=#@:+]+|\([^\)]+\))', r'\1\2', t)
+    t = re.sub(r'(https?://[^\s\n\)]+[-_&])\s*\n\s*([a-zA-Z0-9\-_./?&=#@:+]{2,})', r'\1\2', t)
 
     # 2.1 Costura de referências de Leis e Normas quebradas (ex: "Norma Regulamentadora\n29:" -> "Norma Regulamentadora 29:")
     t = re.sub(
@@ -418,7 +417,7 @@ def restore_exam_typography(text: str, is_option: bool = False) -> str:
     # 13. Links e referências web: isola a URL e preserva metadados
     def clean_url_match(m):
         full_match = m.group(0)
-        url_match = re.search(r"(?:https?://|://)[a-zA-Z0-9\-_./%?&=#@:+ \u00C0-\u00FC]+(?:\([a-zA-Z0-9\-_\s./%?&=#@:+\u00C0-\u00FC]+\)[a-zA-Z0-9\-_./%?&=#@:+ \u00C0-\u00FC]*)*(?:\.pdf|\.html|\.php|[a-zA-Z0-9/])", full_match, re.IGNORECASE)
+        url_match = re.search(r"(?:https?://|://)[a-zA-Z0-9\-_./%?&=#@:+~]+(?:\([a-zA-Z0-9\-_\s./%?&=#@:+~]+\)[a-zA-Z0-9\-_./%?&=#@:+~]*)*(?:\.pdf|\.html|\.php|[a-zA-Z0-9/])", full_match, re.IGNORECASE)
         if not url_match:
             return full_match
         raw_url = url_match.group(0).strip()
@@ -430,7 +429,7 @@ def restore_exam_typography(text: str, is_option: bool = False) -> str:
         return f"\n\n*(Fonte: {sanitized_url})*\n\n"
 
     t = re.sub(
-        r"(?i)(?:\*\([Ff]onte:\s*|\(?[Ff]onte\s*:\s*|\(?[Aa]cesso\s+em\s*:\s*)?(?:https?://|://)[a-zA-Z0-9\-_./%?&=#@:+ \u00C0-\u00FC]+(?:\([a-zA-Z0-9\-_\s./%?&=#@:+\u00C0-\u00FC]+\)[a-zA-Z0-9\-_./%?&=#@:+ \u00C0-\u00FC]*)*(?:\.pdf|\.html|\.php|[a-zA-Z0-9/])(?:\)\*|\))?",
+        r"(?i)(?:\*\([Ff]onte:\s*|\(?[Ff]onte\s*:\s*|\(?[Aa]cesso\s+em\s*:\s*)?(?:https?://|://)[a-zA-Z0-9\-_./%?&=#@:+~]+(?:\([a-zA-Z0-9\-_\s./%?&=#@:+~]+\)[a-zA-Z0-9\-_./%?&=#@:+~]*)*(?:\.pdf|\.html|\.php|[a-zA-Z0-9/])(?:\)\*|\))?",
         clean_url_match,
         t
     )

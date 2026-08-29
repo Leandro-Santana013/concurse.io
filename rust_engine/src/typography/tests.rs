@@ -99,3 +99,16 @@ fn test_q12_luiz_gonzaga_poem_and_prose() {
     assert!(res.contains("Nos versos de Luiz Gonzaga, o eu poético narra, em primeira pessoa, suas impressões sobre um determinado assunto."));
     assert!(res.contains("Para isso, ele utiliza construções linguísticas próprias, constatadas pelo uso"));
 }
+
+#[test]
+fn test_q10_ibam_url_and_roman_items() {
+    let raw = "Fonte:\nhttps://www.pensador.com/frase/MjI5OTc2Mw/\nO texto, que circula em redes sociais.\nI. É uma homenagem à arte, considerando a literatura e a música como duas atividades às quais a pessoa pode se entregar com prazer.\nII. É um convite ao leitor, dirigindo-se a este por meio dos verbos no modo imperativo.\nIII. É uma poesia por sua linguagem criativa, transformando substantivos comuns e próprios em verbos.\nEstá correto o que se afirma em:\n(A) II e III, apenas.";
+    let res = restore_exam_typography_native(raw, false);
+    assert!(res.contains("*(Fonte: https://www.pensador.com/frase/MjI5OTc2Mw/)*"));
+    assert!(res.contains("O texto, que circula em redes sociais."));
+    assert!(!res.contains("> II."));
+    assert!(!res.contains("> III."));
+    assert!(res.contains("I. É uma homenagem à arte"));
+    assert!(res.contains("II. É um convite ao leitor"));
+    assert!(res.contains("III. É uma poesia por sua linguagem criativa"));
+}

@@ -76,7 +76,7 @@ static MULTI_OPT_INLINE_DOT: Lazy<Regex> = Lazy::new(|| Regex::new(r##"(\S)[ \t]
 static HYPHEN_BREAK_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r##"([A-Za-z\u{00C0}-\u{00DC}]+)-\s*\n\s*([a-z\u{00E0}-\u{00FC}]+)"##).unwrap());
 static PERCENT_ENCODING_BREAK_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r##"%\s*\n\s*([0-9A-Fa-f]{2})"##).unwrap());
 static PERCENT_ENCODING_SPACE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r##"%\s+([0-9A-Fa-f]{2})"##).unwrap());
-static URL_LINE_BREAK_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r##"(https?://[^\s\n\)]+)\s*\n\s*(%[0-9A-Fa-f]{2}|[a-zA-Z0-9\-_./?&=#@:+]+|\([^\)]+\))"##).unwrap());
+static URL_LINE_BREAK_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r##"(https?://[^\s\n\)]+[-_&])\s*\n\s*([a-zA-Z0-9\-_./?&=#@:+]{2,})"##).unwrap());
 static LAW_REF_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r##"(?i)\b(Norma\s+Regulamentadora|Norma|Lei|Decreto|Portaria|NR|Resolu[çc][ãa]o)\s*(?:n[º°o]?\.?)?\s*\n*\s*(\d+)\s*(:?)"##).unwrap());
 static SEQ_DOS_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r##"(?i)\bsequ[êe]nciaos\b"##).unwrap());
 static QUESTION_MARKS_GLITCH: Lazy<Regex> = Lazy::new(|| Regex::new(r##"\s*\?\?\s*"##).unwrap());
