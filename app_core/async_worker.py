@@ -198,14 +198,14 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
             gab_pdf_path = os.path.join('pdfs', f"{exam_id}_gab_{ts}.pdf")
             if gabarito_url.startswith('http'):
                 if download_pdf_file(gabarito_url, gab_pdf_path):
-                    gabarito_dict = parse_gabarito_from_pdf(gab_pdf_path)
+                    gabarito_dict = parse_gabarito_from_pdf(gab_pdf_path, cargo_or_title=clean_title)
                     answer_source = "attached_pdf"
             elif os.path.exists(gabarito_url):
-                gabarito_dict = parse_gabarito_from_pdf(gabarito_url)
+                gabarito_dict = parse_gabarito_from_pdf(gabarito_url, cargo_or_title=clean_title)
                 answer_source = "attached_pdf"
 
         if not gabarito_dict and not is_html_source and os.path.exists(pdf_path):
-            gabarito_dict = parse_gabarito_from_pdf(pdf_path)
+            gabarito_dict = parse_gabarito_from_pdf(pdf_path, cargo_or_title=clean_title)
             if gabarito_dict:
                 answer_source = "embedded_pdf"
 

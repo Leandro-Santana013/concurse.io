@@ -32,6 +32,8 @@ def clean_text_artifacts(text: str) -> str:
         r'(?:^|\n)\s*(?:CARGO|FUN[ÇC][ÃA]O)\s*:\s*[^\n]*',
         r'(?:^|\n)\s*N[ÍI]VEL\s+(?:SUPERIOR|M[ÉE]DIO|FUNDAMENTAL)[^\n]*',
         r'(?:^|\n)\s*CONHECIMENTOS\s+(?:ESPEC[ÍI]FICOS|B[ÁA]SICOS|GERAIS)\s*(?=\n|$)',
+        r'(?:^|\n)\s*[A-ZÁ-Ú\s]{3,35}\s*[-–—]\s*\d+\s*(?=\n|$)',
+        r'(?m)^\s*(?:[A-Z\s\-]+–\s*)?\d{1,2}\s*$',
     ]
     for pat in institutional_pats:
         text = re.sub(pat, '', text, flags=re.IGNORECASE)

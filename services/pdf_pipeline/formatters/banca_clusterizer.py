@@ -65,6 +65,9 @@ BANCA_MAPPING: Dict[str, BancaFamily] = {
     "IGEDUC": BancaFamily.MUNICIPAL_PREFIXED,
     "OBJETIVA": BancaFamily.MUNICIPAL_PREFIXED,
     "OBJETIVA CONCURSOS": BancaFamily.MUNICIPAL_PREFIXED,
+    "IBAM": BancaFamily.MUNICIPAL_PREFIXED,
+    "INSTITUTO BRASILEIRO DE ADMINISTRACAO MUNICIPAL": BancaFamily.MUNICIPAL_PREFIXED,
+    "INSTITUTO BRASILEIRO DE ADMINISTRAÇÃO MUNICIPAL": BancaFamily.MUNICIPAL_PREFIXED,
 }
 
 
@@ -113,7 +116,7 @@ def detect_banca_family(exam_text: str = "", declared_banca: str = "") -> BancaF
     if any(b in sample_text for b in ["FGV", "VUNESP", "CARLOS CHAGAS", "FEPESE", "FUMARC", "CONSULPLAN"]):
         return BancaFamily.STANDARD_ACADEMIC
 
-    if any(b in sample_text for b in ["IDCAP", "IDECAN", "AVANÇA SP", "AVANCA SP", "ITAME", "INSTITUTO MAIS", "AOCP", "IBFC"]):
+    if any(b in sample_text for b in ["IDCAP", "IDECAN", "AVANÇA SP", "AVANCA SP", "ITAME", "INSTITUTO MAIS", "AOCP", "IBFC", "IBAM"]):
         return BancaFamily.MUNICIPAL_PREFIXED
 
     return BancaFamily.UNIVERSAL

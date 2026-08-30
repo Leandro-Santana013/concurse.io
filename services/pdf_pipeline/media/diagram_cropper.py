@@ -49,7 +49,10 @@ IMAGE_TRIGGER_PATTERN = (
     r'ilustra[çc][ãa]o|mapa|esquema|imagem|paqu[íi]metro|'
     r'planta|fluxograma|fotografia|foto|tira|tirinha|charge|'
     r'cartum|organograma|histograma|exemplo|casinha|vilarejo|estrada|malha|'
-    r'circuito\s+(?:abaixo|acima|a\s+seguir|da\s+figura)|diagrama\s+de\s+circuito'
+    r'circuito\s+(?:abaixo|acima|a\s+seguir|da\s+figura)|diagrama\s+de\s+circuito|'
+    r'regi[ãa]o\s+(?:plana\s+)?representada\s+(?:abaixo|acima|a\s+seguir)|'
+    r'representad[ao]\s+(?:abaixo|acima|a\s+seguir)|'
+    r'conforme\s+(?:o|a|os|as)?\s*(?:desenho|esquema|figura|imagem|gr[áa]fico|tabela|planta)'
     r')\b'
 )
 

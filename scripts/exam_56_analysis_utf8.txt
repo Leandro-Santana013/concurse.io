@@ -1,0 +1,292 @@
+warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+Total pages: 6
+
+==================== PAGE 1 ====================
+Rect: Rect(0.0, 0.0, 612.0, 792.0)
+Drawings: 17 | Images: 5
+Tables found by PyMuPDF: 0
+Ordered text blocks (1):
+--- Block 0 (bbox: N/A) ---
+ESTADO DO PARANÁ PREFEITURA MUNICIPAL DE CÂNDIDO DE ABREU
+EDITAL PS Nº 01/2017 Processo Seletivo Público para
+Agente Comunitário de Saúde
+Caderno de Provas  Conhecimentos Técnico-profissionais  Matemática  Português <u>http://www.ibam-concursos.org.br</u>
+
+==================== PAGE 2 ====================
+Rect: Rect(0.0, 0.0, 612.0, 792.0)
+Drawings: 52 | Images: 5
+Tables found by PyMuPDF: 0
+Ordered text blocks (3):
+--- Block 0 (bbox: N/A) ---
+Processo Seletivo Público para a
+Prefeitura Municipal de Cândido de Abreu - PR
+Nível Fundamental Completo – Duração: 3 horas
+Você recebeu o seguinte material:
+ Um **caderno de provas** , contendo 30 (trinta) questões de múltipla escolha,
+numeradas sequencialmente, cada uma apresentando 4 (quatro) alternativas: **A, B, C** e **D** . As questões estão assim distribuídas: **01 a 10 – Conhecimentos Técnico**- **profissionais, 11 a 20 – Matemática e 21 a 30 – Português** .
+ Um **cartão de respostas** .
+Instruções  Verifique se o seu nome e o seu número de inscrição estão corretos no cartão de
+respostas.
+**Se houver erro, notifique o fiscal** .
+ Assine o cartão de respostas com caneta azul ou preta.
+ Verifique se a impressão e a numeração das questões estão corretas.
+**Caso ocorra qualquer erro, comunique o fiscal** .
+ O caderno de provas pode ser utilizado para suas anotações e cálculos.
+ Não é permitido o uso de calculadora.
+ Leia atentamente cada questão e escolha a alternativa que mais adequadamente
+responde a cada uma delas. Marque sua resposta no **cartão de respostas** , onde
+será efetuada a correção.
+ O **cartão de respostas** não pode ser dobrado, amassado, rasurado ou manchado,
+nem conter qualquer registro além das respostas assinaladas e de sua assinatura.
+ O **cartão de respostas** não será substituído em hipótese alguma. **Exceto** quando
+for comprovado erro do fiscal na entrega do cartão.
+ O **cartão de respostas** deve ser marcado com **caneta esferográfica azul ou** **preta** e o espaço correspondente à letra assinalada totalmente coberto, conforme o
+--- Block 1 (bbox: N/A) ---
+modelo abaixo:
+*Correto*:
+A B letra.
+prova objetiva no dia de aplicação do concurso.
+de outubro de 2017.
+devidamente preenchido e assinado.
+--- Block 2 (bbox: N/A) ---
+D **Outras formas de marcação** , diferentes da que está determinada acima, **farão com que as** **questões sejam anuladas** . **Não use lápis ou lapiseira** no cartão de respostas antes de
+utilizar a caneta esferográfica, pois isto também anulará suas respostas. A leitora de marcas
+não registrará as respostas em que houver falta de nitidez e/ou marcação de mais de uma
+Conforme consta no Edital, o candidato não poderá levar o caderno de questões da
+O caderno de prova será disponibilizado no site www.ibam-concursos.org.br no dia 31
+Após o término da prova, entregue ao fiscal **o caderno de prova e o** **cartão de respostas** *BOA PROVA*!
+
+==================== PAGE 3 ====================
+Rect: Rect(0.0, 0.0, 612.0, 792.0)
+Drawings: 14 | Images: 5
+Tables found by PyMuPDF: 0
+Ordered text blocks (2):
+--- Block 0 (bbox: N/A) ---
+CONHECIMENTOS TÉCNICO-PROFISSIONAIS
+Questão 01 Uma agente comunitária de saúde realiza visita a
+uma criança com 25 dias de vida. Nessa visita, a
+vacina contra a seguinte doença deve estar
+anotada no cartão de vacinação da criança:
+A ( ) poliomielite B ( ) hepatite B C ( ) catapora D ( ) sarampo
+Questão 02 A diretriz do Sistema Único de Saúde que
+favorece a organização dos serviços e ações para
+atender às diferentes necessidades de saúde da
+população denomina-se:
+A ( ) hierarquização B ( ) universalidade C ( ) regionalização D ( ) equidade
+Questão 03 Os direitos adquiridos pelo Estatuto do Idoso são
+garantidos a todas as pessoas com idade, em
+anos, igual ou superior a:
+A ( ) 55 B ( ) 60 C ( ) 65 D ( ) 70
+Questão 04 A Estratégia Saúde da Família é a grande
+expressão da Atenção Primária à Saúde (APS) no
+Brasil. A seguinte alternativa <u>**não**</u> representa um
+atributo da APS:
+A ( ) coordenação do cuidado
+B ( ) primeiro contato
+C ( ) regionalização D ( ) longitudinalidade
+Questão 05 A idade mínima para que uma pessoa possa
+adotar uma criança, segundo o Estatuto da
+Criança e do Adolescente é, em anos, igual a:
+A ( ) 18 B ( ) 21 C ( ) 24 D ( ) 35
+--- Block 1 (bbox: N/A) ---
+Questão 06 De acordo com o Ministério da Saúde, a atividade
+mais importante do trabalho do agente
+comunitário é:
+A ( ) o diagnóstico local
+B ( ) o cadastramento das famílias
+C ( ) a marcação de consulta
+D ( ) a visita domiciliar
+Questão 07 “Ao realizar uma atividade na comunidade, o
+agente comunitário de saúde percebeu sinais de
+violência contra uma criança e entrou em contato
+com o conselho tutelar,
+que tomou as providências necessárias.”
+O relato acima representa um exemplo de:
+A ( ) equidade B ( ) vinculação C ( ) integralidade D ( ) intersetorialidade
+Questão 08 Entre as ferramentas de trabalho do agente
+comunitário de saúde estão as fichas de
+informação. A ficha representada pela letra “A” é
+apropriada para a seguinte ação:
+A ( ) cartão das crianças
+B ( ) acompanhamento das gestantes
+C ( ) cadastramento das famílias
+D ( ) acompanhamento de hipertensos
+Questão 09 A alternativa que apresenta a vacina que as
+pessoas idosas devem receber anualmente é:
+A ( ) influenza B ( ) pneumocócica C ( ) antitetânica D ( ) febre amarela
+Questão 10 O agente comunitário visitou uma senhora que se
+queixou de estar perdendo muito peso, urinando
+mais que o normal, apresentando muita fome
+todos os dias e sentindo-se muito fraca. Ele então
+agendou uma consulta para ela no dia seguinte
+porque pensou se tratar de um caso de:
+A ( ) pressão alta B ( ) diabetes C ( ) tuberculose D ( ) infarto
+
+==================== PAGE 4 ====================
+Rect: Rect(0.0, 0.0, 612.0, 792.0)
+Drawings: 62 | Images: 5
+Tables found by PyMuPDF: 1
+   Table 0 bbox: (322.31895446777344, 410.16004943847656, 561.2994613647461, 454.32005310058594)
+   Table 0 markdown:
+|Col1|Semana<br>1|Semana<br>2|Semana<br>3|Semana<br>4|
+|---|---|---|---|---|
+|**Consumo**<br>**em litros**|**126**|**157**|**118**|**130**|
+
+
+Ordered text blocks (2):
+--- Block 0 (bbox: N/A) ---
+MATEMÁTICA
+Questão 11 Admita que em 2016 a população de Cândido de
+Abreu era de 16.655 habitantes e que, desse
+total, 8.543 eram homens. A população feminina
+de Cândido de Abreu em 2016 era igual a:
+A ( ) 8.022 B ( ) 8.082 C ( ) 8.112 D ( ) 8.152
+Questão 12 Um pátio retangular com 42,5 metros de comprimento e 32,4 metros de largura é usado
+como estacionamento de máquinas pesadas. A área desse pátio, em metros quadrados, equivale
+a:
+A ( ) 1.377 B ( ) 1.387 C ( ) 1.477 D ( ) 1.487
+Questão 13 Seis vezes por dia, um vigia percorre todo o
+contorno da região plana representada abaixo.
+A distância diária percorrida por esse vigia, em
+metros, corresponde a:
+A ( ) 476 B ( ) 492 C ( ) 512 D ( ) 546
+Questão 14 No mês de julho de 2017 uma oficina mecânica
+recebeu 36 carros. No mês seguinte, esse
+número cresceu 50%. Logo, a alternativa que
+apresenta o número de carros recebidos por essa
+oficina em agosto de 2017 é:
+A ( ) 45 B ( ) 54 C ( ) 63 D ( ) 86
+--- Block 1 (bbox: N/A) ---
+Questão 15 Um operador de máquinas pesadas deve colocar
+512 latas em galpões do mesmo tamanho. Se em
+cada galpão cabem exatamente 32 latas, o
+número de galpões necessários corresponde a:
+A ( ) 13 B ( ) 14 C ( ) 15 D ( ) 16
+Questão 16 Um motorista iniciou uma viagem às 8h23min e
+terminou às 10h15min. A duração dessa viagem,
+em minutos, corresponde a:
+A ( ) 110 B ( ) 111 C ( ) 112 D ( ) 113
+Questão 17 Um motorista anotou na tabela abaixo a
+quantidade de litros de gasolina consumidos por
+um automóvel durante quatro semanas.
+| | Semana 1 | Semana 2 | Semana 3 | Semana 4 |
+| --- | --- | --- | --- | --- |
+| Consumo em litros | 126 | 157 | 118 | 130 |
+Esse automóvel consumiu uma quantidade de
+litros igual a um múltiplo de 5 na seguinte
+semana:
+A ( ) 1 B ( ) 2 C ( ) 3 D ( ) 4
+Questão 18 Um mecânico colocou (x + 6) parafusos na caixa
+A e (x – 10) parafusos na caixa B. Considere que
+o total de parafusos colocados nessas duas
+caixas é igual a 96. A quantidade de parafusos
+que foi colocada na caixa B é:
+A ( ) 55 B ( ) 50 C ( ) 45 D ( ) 40
+
+==================== PAGE 5 ====================
+Rect: Rect(0.0, 0.0, 612.0, 792.0)
+Drawings: 13 | Images: 5
+Tables found by PyMuPDF: 0
+Ordered text blocks (2):
+--- Block 0 (bbox: N/A) ---
+Questão 19 Admita que a distância entre o Município de
+Cândido de Abreu e Curitiba seja de 284 km.
+Certo dia João percorreu 3/4 dessa distância de ônibus, e o restante de automóvel. A distância
+percorrida de ônibus, em km, corresponde a:
+A ( ) 213 B ( ) 214 C ( ) 215 D ( ) 216
+Questão 20 Um concurso público ofereceu 92 vagas para
+apenas três cargos: A, B e C. O gráfico abaixo foi
+construído levando-se em consideração o número
+de vagas oferecidas para cada cargo.
+O número de vagas oferecidas para o cargo A é
+igual a:
+A ( ) 21 B ( ) 22 C ( ) 23 D ( ) 24
+--- Block 1 (bbox: N/A) ---
+PORTUGUÊS TEXTO: FURACÃO IRMA CHEGA A ILHAS DO
+SUL DA FLÓRIDA O olho do furacão Irma, agora de
+categoria 4, chegou à região da Flórida
+neste domingo, com rajadas de vento de
+215 km/hora. Segundo o Serviço
+5 Meteorológico Nacional, é uma situação ímpar, extremamente perigosa e potencialmente letal. O órgão fazia apelo às
+pessoas que ignoraram os alertas de
+evacuação para que procurassem refúgio
+10 “para proteger suas vidas”.
+Cerca de 430 mil pessoas ficaram
+sem luz em razão do furacão. Autoridades
+da Flórida pediram que 6,3 milhões de
+pessoas deixassem suas casas, criando
+15 engarrafamentos em estradas e superlotação em abrigos.
+A tormenta também levou problemas para Miami no
+meio da madrugada deste domingo. Uma
+em cada dez casas ou empresas no sul do
+20 estado ficou no escuro.
+Sabe-se que o furacão Irma já deixou 25
+mortos nas ilhas do Caribe. Lá, as equipes
+de emergência trabalham contra o tempo
+para ajudar os traumatizados habitantes
+25 antes da chegada de outro poderoso
+furacão. Em Cuba, a destruição ao longo da
+costa norte central foi semelhante à sofrida
+por outras ilhas da região durante a
+semana. É a primeira vez que o olho de
+30 uma tempestade de categoria 5 atinge a
+terra em Cuba desde 1932, conforme os
+meios de comunicação. O governo ordenou
+a evacuação de mais de 1 milhão de
+pessoas.
+Adaptado de g1.globo.com, 10/09/2017.
+Questão 21 Por suas características, o texto lido denomina-se:
+A ( ) notícia B ( ) crônica C ( ) editorial D ( ) publicidade
+
+==================== PAGE 6 ====================
+Rect: Rect(0.0, 0.0, 612.0, 792.0)
+Drawings: 75 | Images: 5
+Tables found by PyMuPDF: 0
+Ordered text blocks (2):
+--- Block 0 (bbox: N/A) ---
+Questão 22 *Segundo o Serviço Meteorológico Nacional, é* *uma situação ímpar*, *extremamente perigosa*
+(l. 4-6) Nesse trecho, o uso da palavra “segundo” tem o
+objetivo de introduzir:
+A ( ) indagação B ( ) exemplo C ( ) citação D ( ) ordem
+Questão 23 *Autoridades da Flórida pediram que 6,3 milhões* *de pessoas deixassem suas casas, criando* <u>*engarrafamentos em estradas e superlotação em*</u> <u>*abrigos*</u>. (l. 12-16)
+Em relação ao início da frase, o trecho sublinhado
+indica sentido de:
+A ( ) oposição B ( ) condição C ( ) finalidade D ( ) consequência
+Questão 24 Uma palavra em linguagem
+figurada está presente em:
+A ( ) chegou à região da Flórida neste
+domingo, com rajadas de vento de 215
+km/hora. (l. 2-4) B ( ) Cerca de 430 mil pessoas ficaram sem
+luz em razão do furacão. (l. 11-12)
+C ( ) as equipes de emergência trabalham
+contra o tempo para ajudar os traumatizados habitantes (l. 22-24)
+D ( ) É a primeira vez que o olho de uma
+tempestade de categoria 5 atinge a
+terra em Cuba (l. 29-31)
+Questão 25 *potencialmente letal* (l. 7)
+O significado da palavra sublinhada se relaciona
+com a ideia de:
+A ( ) possibilidade B ( ) simplicidade C ( ) dificuldade D ( ) agilidade
+--- Block 1 (bbox: N/A) ---
+Questão 26 *A tormenta também levou problemas para Miami* *no meio da madrugada deste domingo. Uma em* *cada dez casas ou empresas no sul do estado* *ficou no escuro*. (l. 16-20)
+Sem alterar o sentido do trecho, no lugar do
+ponto-final que separa as frases, poderia ser
+utilizado o seguinte sinal:
+A ( ) reticências B ( ) dois-pontos C ( ) ponto de exclamação
+D ( ) ponto de interrogação
+Questão 27 A palavra “meteorológico” é acentuada por ser
+proparoxítona.
+Outra palavra do texto acentuada em função da
+mesma regra é:
+A ( ) ímpar B ( ) órgão C ( ) Flórida D ( ) também
+Com base na frase abaixo, responda às
+questões 28, 29 e 30.
+*Em Cuba, a destruição ao longo da costa norte* *central foi semelhante à sofrida por outras ilhas* *da região durante a semana*. (l. 26-29)
+Questão 28 A palavra sublinhada é uma forma do verbo “ser”
+no tempo passado. Outro exemplo do verbo “ser”
+no passado está em:
+A ( ) for B ( ) era C ( ) seja D ( ) seria
+Questão 29 Uma palavra classificada como adjetivo é:
+A ( ) Cuba B ( ) outras C ( ) destruição D ( ) semelhante
+Questão 30 Uma palavra que <u>**não**</u> possui forma plural é:
+A ( ) durante B ( ) sofrida C ( ) norte D ( ) costa

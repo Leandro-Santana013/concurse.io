@@ -24,12 +24,12 @@ CONTEXT_TEXT_HEADER_REGEX = re.compile(
     r'[Pp]ara\s+(?:responder\s+(?:[àa\ufffd\?]?s\s+)?|as\s+)?quest[oõa\ufffd\?]?es|'
     r'[Ll]eia\s+o\s+texto(?:\s+\d+)?\s*(?:para\s+responder|(?:a\s+seguir|abaixo))?|'
     r'[Aa]s\s+quest[oõa\ufffd\?]?es(?:\s+de)?|'
-    r'[Cc]onsidere\s+(?:o\s+texto|a\s+situa[cç][aã\ufffd\?]?o\s+hipot[eé\ufffd\?]?tica|o\s+caso)\s*(?:(?:a\s+seguir|abaixo))?|'
-    r'[Cc]om\s+base\s+no\s+texto\s*(?:(?:abaixo|a\s+seguir))?\s*,\s*responda|'
+    r'[Cc]onsidere\s+(?:o\s+texto|a\s+frase|a\s+situa[cç][aã\ufffd\?]?o\s+hipot[eé\ufffd\?]?tica|o\s+caso)\s*(?:(?:a\s+seguir|abaixo))?|'
+    r'[Cc]om\s+base\s+n[oa]\s+(?:texto|frase|situa[cç][aã\ufffd\?]?o|artigo)\s*(?:(?:abaixo|a\s+seguir))?\s*,\s*responda(?:\s+[àa\ufffd\?]?s)?|'
     r'[Tt]exto\s+(?:I|II|III|1|2|3)?\s*(?:\(?[^)]*\))?\s*[-–—:]?\s*(?:para\s+(?:as\s+)?quest[oõa\ufffd\?]?es|base\s+para\s+as\s+quest[oõa\ufffd\?]?es)'
     r')'
     r'[^\.\:]{0,100}?'
-    r'quest[oõa\ufffd\?]?es?\s*(?:de\s+n[úu]meros?\s+|de\s+)?(0*\d{1,3})\s*(?:a|e|ao?|at[eé\ufffd\?]?|\be\b|,|\-)\s*(?:a\s+)?(0*\d{1,3})'
+    r'quest[oõa\ufffd\?]?es?\s*(?:de\s+n[úu]meros?\s+|de\s+)?((?:0*\d{1,3}\s*(?:,|e|a|ao?|at[eé\ufffd\?]?|-)\s*)+0*\d{1,3})'
     r'[\.\:\–\—]?'
     r')',
     re.IGNORECASE
@@ -206,6 +206,17 @@ def normalize_paragraph_flow(text_str: str) -> str:
         if not line_clean:
             continue
             
+        if line_clean.startswith('|'):
+            if current_buf:
+                combined_lines.append(' '.join(current_buf))
+                current_buf = []
+            combined_lines.append(line_clean)
+            continue
+        elif current_buf and current_buf[-1].startswith('|'):
+            combined_lines.append(current_buf[-1])
+            current_buf = [line_clean]
+            continue
+
         if block_start_pat.match(line_clean):
             if current_buf:
                 combined_lines.append(' '.join(current_buf))
@@ -620,8 +631,9 @@ def detect_layout_and_ordered_blocks(
 
 def extract_context_blocks(full_text: str, found_positions: Optional[List[Tuple[int, int, int]]] = None) -> List[Tuple[int, int, str, int]]:
     """
-    Identifica blocos de textos de apoio compartilhados ('Texto para as questões X a Y')
-    e mapeia os intervalos de questões afetados. Retorna: [(q_min, q_max, text_content, banner_start_pos), ...]
+    Identifica blocos de textos de apoio compartilhados ('Texto para as questões X a Y', 'Com base na frase... responda às questões X, Y e Z')
+    e textos motivadores de abertura de seção ('TEXTO: <TÍTULO>').
+    Retorna: [(q_min, q_max, text_content, banner_start_pos), ...]
     """
     context_blocks = []
     matches = list(CONTEXT_TEXT_HEADER_REGEX.finditer(full_text))
@@ -629,34 +641,57 @@ def extract_context_blocks(full_text: str, found_positions: Optional[List[Tuple[
     
     for m in matches:
         try:
-            q_min = int(m.group(2))
-            q_max = int(m.group(3))
-            if q_min > q_max or q_max - q_min > 50:
-                continue
-                
-            banner_start = m.start()
-            banner_end = m.end()
-
-            # 1. Se temos a posição exata da questão de início do bloco via scanner de cabeçalhos
-            q_target_start = q_map.get(q_min)
-            if q_target_start and q_target_start > banner_end:
-                text_body = full_text[banner_end:q_target_start].strip()
-                if len(text_body) >= 10:
-                    context_blocks.append((q_min, q_max, text_body, banner_start))
+            banner_text = m.group(0)
+            nums = [int(n) for n in re.findall(r'\b\d{1,3}\b', banner_text) if 1 <= int(n) <= 200]
+            if len(nums) >= 2:
+                q_min = min(nums)
+                q_max = max(nums)
+                if q_min > q_max or q_max - q_min > 50:
                     continue
-            
-            # 2. Fallback por regex estrito de início de questão (exigindo prefixo QUESTÃO ou início de linha isolado)
-            q_pattern = rf'(?:^|\n)[ \t]*(?:QUEST[AÃ\ufffd\?]?O\s+|ITEM\s+)0*{q_min}\b'
-            m_q = re.search(q_pattern, full_text[banner_end:], re.IGNORECASE)
-            if not m_q:
-                q_pattern = rf'(?:^|\n)[ \t]*0*{q_min}\s*[\.\-\–\—\:\)]'
+                    
+                banner_start = m.start()
+                banner_end = m.end()
+
+                # 1. Se temos a posição exata da questão de início do bloco via scanner de cabeçalhos
+                q_target_start = q_map.get(q_min)
+                if q_target_start and q_target_start > banner_end:
+                    text_body = full_text[banner_end:q_target_start].strip()
+                    if len(text_body) >= 10:
+                        context_blocks.append((q_min, q_max, text_body, banner_start))
+                        continue
+                
+                # 2. Fallback por regex estrito de início de questão
+                q_pattern = rf'(?:^|\n)[ \t]*(?:QUEST[AÃ\ufffd\?]?O\s+|ITEM\s+)0*{q_min}\b'
                 m_q = re.search(q_pattern, full_text[banner_end:], re.IGNORECASE)
-            
-            if m_q:
-                text_body = full_text[banner_end:banner_end + m_q.start()].strip()
-                if len(text_body) >= 10:
-                    context_blocks.append((q_min, q_max, text_body, banner_start))
+                if not m_q:
+                    q_pattern = rf'(?:^|\n)[ \t]*0*{q_min}\s*[\.\-\–\—\:\)]'
+                    m_q = re.search(q_pattern, full_text[banner_end:], re.IGNORECASE)
+                
+                if m_q:
+                    text_body = full_text[banner_end:banner_end + m_q.start()].strip()
+                    if len(text_body) >= 10:
+                        context_blocks.append((q_min, q_max, text_body, banner_start))
         except Exception:
             continue
+
+    # 3. Padrão de seção com TEXTO: <TÍTULO> antes de uma questão (ex: "PORTUGUÊS TEXTO: FURACÃO IRMA...")
+    section_text_pat = re.compile(
+        r'(?:^|\n)\s*(?:(?:PORTUGU[ÊE]S|L[ÍI]NGUA\s+PORTUGUESA)\s+)?TEXTO\s*(?:\([^\)]*\)|[I|V|X\d]+)?\s*[:\-–—]\s*([A-ZÁ-Ú\s0-9\-\.\,]{4,60})(?=\n|$)',
+        re.IGNORECASE
+    )
+    for sm in section_text_pat.finditer(full_text):
+        b_start = sm.start()
+        m_next_q = re.search(r'(?:^|\n)\s*(?:QUEST[AÃ\ufffd\?]?O\s+|ITEM\s+)(0*\d{1,3})\b', full_text[sm.end():], re.IGNORECASE)
+        if m_next_q:
+            first_q_num = int(m_next_q.group(1))
+            text_body = full_text[sm.start():sm.end() + m_next_q.start()].strip()
+            text_body = re.sub(r'^(?:PORTUGU[ÊE]S|L[ÍI]NGUA\s+PORTUGUESA)\s+', '', text_body, flags=re.IGNORECASE).strip()
+            
+            max_q = first_q_num + 6
+            for c in context_blocks:
+                if c[0] > first_q_num and c[0] <= max_q:
+                    max_q = c[0] - 1
+            if len(text_body) >= 50 and not any(c[0] == first_q_num for c in context_blocks):
+                context_blocks.append((first_q_num, max_q, text_body, b_start))
             
     return context_blocks

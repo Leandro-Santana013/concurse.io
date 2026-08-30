@@ -122,13 +122,18 @@ def parse_gabarito_from_text(raw_text):
         return gabarito
 
     # 5. Padrão sequencial de letras em coluna (banca IBAM / Vunesp / FCC)
-    # Detecta blocos contínuos de letras únicas (ex: 40 respostas A..E de um cargo)
+    # Detecta blocos contínuos de letras únicas (ex: 30/40 respostas A..E de um cargo)
     current_chunk = []
     best_chunk = []
     for line in lines:
         t = line.strip().upper()
         if len(t) == 1 and t in ['A', 'B', 'C', 'D', 'E', 'X', 'N', '*']:
             current_chunk.append('X' if t in ['*', 'N'] else t)
+        elif len(t) > 1 and t.split() and t.split()[-1] in ['A', 'B', 'C', 'D', 'E', 'X', 'N', '*'] and not re.search(r'\d', t):
+            # Linha de cargo que termina com a primeira letra da resposta (ex: "Agente Comunitário de Saúde B")
+            if len(current_chunk) > len(best_chunk):
+                best_chunk = current_chunk
+            current_chunk = ['X' if t.split()[-1] in ['*', 'N'] else t.split()[-1]]
         else:
             if len(current_chunk) > len(best_chunk):
                 best_chunk = current_chunk
@@ -253,24 +258,42 @@ def parse_gabarito_from_pdf(pdf_input, cargo_or_title: Optional[str] = None, tip
                         if not extracted or len(extracted) < 2:
                             continue
 
-                        # A) Extração Matricial Horizontal (Padrão IBAM: cabeçalho '01 02 ... 40', linhas com cargos e respostas)
-                        header_row = extracted[0]
+                        # A) Extração Matricial Horizontal (Padrão IBAM: linha de números '1 2 3 ... 30/40', linhas com cargos e respostas)
+                        header_row_idx = -1
                         q_cols = []
-                        for col_i, cell in enumerate(header_row):
-                            c_str = str(cell or '').strip()
-                            if c_str.isascii() and c_str.isdigit():
-                                q_cols.append((col_i, int(c_str)))
+                        for r_idx, r_candidate in enumerate(extracted):
+                            row_q_cols = []
+                            for col_i, cell in enumerate(r_candidate):
+                                c_str = str(cell or '').strip()
+                                if c_str.isascii() and c_str.isdigit() and 1 <= int(c_str) <= 200:
+                                    row_q_cols.append((col_i, int(c_str)))
+                            if len(row_q_cols) >= 5:
+                                header_row_idx = r_idx
+                                q_cols = row_q_cols
+                                break
                         
-                        if len(q_cols) >= 5:
-                            for row in extracted[1:]:
-                                if not any(row):
+                        if header_row_idx != -1 and len(q_cols) >= 5:
+                            best_row = None
+                            if cargo_or_title:
+                                clean_kw = [w.lower() for w in re.sub(r'[^a-zA-Z0-9\s]', ' ', cargo_or_title).split() if len(w) >= 4 and w.lower() not in ['para', 'com', 'pelo', 'sobre', 'geral', 'ibam', 'pref', 'prefeitura', 'completo']]
+                                for row in extracted[header_row_idx + 1:]:
+                                    row_text = ' '.join(str(c or '') for c in row).lower()
+                                    if any(kw in row_text for kw in clean_kw):
+                                        best_row = row
+                                        break
+                            
+                            candidate_rows = [best_row] if best_row else extracted[header_row_idx + 1:]
+                            for row in candidate_rows:
+                                if not row or not any(row):
                                     continue
+                                row_ans_map = {}
                                 for col_i, q_num in q_cols:
                                     if col_i < len(row):
                                         ans_val = str(row[col_i] or '').strip().upper()
                                         if ans_val in ['A', 'B', 'C', 'D', 'E', 'X', 'N', '*']:
-                                            gabarito[q_num] = 'X' if ans_val in ['*', 'N'] else ans_val
-                                if len(gabarito) >= 5:
+                                            row_ans_map[q_num] = 'X' if ans_val in ['*', 'N'] else ans_val
+                                if len(row_ans_map) >= 5:
+                                    gabarito.update(row_ans_map)
                                     return gabarito
 
                         # B) Extração por Pares Colunares (Padrão Questão / Resposta: '1' | 'A' | '2' | 'B')
