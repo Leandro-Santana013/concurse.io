@@ -19,8 +19,7 @@ from .fallbacks.subject_classifier import SUBJECT_REGEX, format_subject_title, _
 from services.gabarito.gabarito_service import extract_gabarito_from_doc, _extract_gabarito_from_doc
 from services.crawlers.html_exam_parser import clean_text_artifacts
 from .native.rust_bridge import rust_scan_question_headers, rust_process_exam_text, is_rust_available
-from .formatters.banca_clusterizer import detect_banca_family, get_specialized_patterns, BancaFamily
-from .fallbacks.typography_restorer import restore_exam_typography
+from .fallbacks.typography_restorer import restore_exam_typography, format_markdown_tables_in_text
 
 def extract_heuristic_options(chunk: str) -> Tuple[Optional[Dict[str, str]], str]:
     """
@@ -133,18 +132,29 @@ def parse_exam_document(
     q_spatial_map: Dict[int, Tuple[int, float, float]] = {}
 
     # Mapeia coordenadas físicas dos cabeçalhos na página para anexamento espacial exato
-    # Passo 1: Cabeçalhos com palavra-chave explícita (QUESTÃO 10, ITEM 15)
+    # Passo 1: Busca física exata com search_for (coordenada pontual precisa do texto)
     for p_idx in range(start_page, total_pages):
         page = doc[p_idx]
-        for b in page.get_text('blocks'):
-            bx0, by0, bx1, by1, b_text = b[:5]
-            for hm in re.finditer(r'(?:^|\n)\s*(?:QUEST[AÃ\ufffd\?]?O|ITEM)\s*(0*\d{1,3})\b', b_text, re.IGNORECASE):
-                try:
-                    num_val = int(hm.group(1))
-                    if 1 <= num_val <= 200 and num_val not in q_spatial_map:
-                        q_spatial_map[num_val] = (p_idx, bx0, by0)
-                except ValueError:
-                    pass
+        for q_num in range(1, 201):
+            if q_num in q_spatial_map:
+                continue
+            queries = [
+                f"Questão {q_num:02d}",
+                f"Questão {q_num}",
+                f"QUESTÃO {q_num:02d}",
+                f"QUESTÃO {q_num}",
+                f"ITEM {q_num:02d}",
+                f"ITEM {q_num}",
+                f"Questão\n{q_num:02d}",
+                f"Questão\n{q_num}",
+            ]
+            for q_str in queries:
+                rects = page.search_for(q_str)
+                if rects:
+                    rects.sort(key=lambda r: r.y0)
+                    r = rects[0]
+                    q_spatial_map[q_num] = (p_idx, r.x0, r.y0)
+                    break
 
     # Passo 2: Cabeçalhos com pontuação (ex: "10. ", "10) ", "10 - ") no início de bloco ou linha
     for p_idx in range(start_page, total_pages):
@@ -224,7 +234,9 @@ def parse_exam_document(
         doc.close()
         return []
 
-    # 4.1 Normalização resiliente de cabeçalhos gerados por OCR degradado
+    # 4.1 Normalização resiliente de cabeçalhos gerados por OCR degradado e remoção de números de página
+    full_text = re.sub(r'(?m)^\s*(?:[A-ZÁ-Ú\s\-]+[–—\-]\s*)?\d{1,2}\s*$', '', full_text)
+    full_text = re.sub(r'(?m)^\s*[A-ZÁ-Ú\s]{3,35}\s*[-–—]\s*\d+\s*$', '', full_text)
     full_text = re.sub(r'(?:\b|(?<=[\s\n]))(\d{1,3})\s*[\,\"\']+[ \t]*(?=[\.\,\:\'\`\~\s]*[A-Za-z\u00C0-\u00DC\"\'\(\[])', r'\n\1. ', full_text)
     full_text = re.sub(r'(?:\b|(?<=[\s\n]))[íI!|](\d)\s*[\.\,\:\-\"\']+[ \t]*(?=[\.\,\:\'\`\~\s]*[A-Za-z\u00C0-\u00DC\"\'\(\[])', r'\n1\1. ', full_text)
     full_text = re.sub(r'(?:\b|(?<=[\s\n]))3[üuU]\s*[\.\,\:\-\"\']+[ \t]*(?=[\.\,\:\'\`\~\s]*[A-Za-z\u00C0-\u00DC\"\'\(\[])', r'\n30. ', full_text)
@@ -233,21 +245,57 @@ def parse_exam_document(
     full_text = re.sub(r'(?m)^([ \t]*\d{1,2}\.)([^\s\d])', r'\1 \2', full_text)
     # Sanitização de rodapés institucionais residuais entre blocos (ex: ADMINISTRADOR - 1)
     full_text = re.sub(r'(?m)^[ \t]*[A-Za-z\u00C0-\u00DC\s\-]{3,}\s*[-–—]\s*\d+[ \t]*$\n*', '\n', full_text)
+    full_text = re.sub(r'\n{3,}', '\n\n', full_text)
 
     # 5. Execução Unificada em Rust (Zero Ping-Pong) com Fallback Resiliente
     rust_questions = rust_process_exam_text(full_text)
     if rust_questions and len(rust_questions) >= 3:
+        rust_found_positions = []
+        for rq in rust_questions:
+            try:
+                qn = int(rq['numero_questao'])
+                m_h = re.search(rf'(?:^|\n)\s*(?:QUEST[AÃ\ufffd\?]?O\s+|ITEM\s+)0*{qn}\b', full_text, re.IGNORECASE)
+                if m_h:
+                    rust_found_positions.append((qn, m_h.start(), m_h.end()))
+            except Exception:
+                pass
+        rust_context_blocks = extract_context_blocks(full_text, rust_found_positions)
+
         questions = []
         for rq in rust_questions:
             q_num = int(rq['numero_questao'])
             formatted_enunciado = rq['enunciado']
+
+            # Injeção de Texto de Apoio Compartilhado em rust_questions
+            matching_context = None
+            for q_min, q_max, ctx_text, _ in rust_context_blocks:
+                if q_min <= q_num <= q_max:
+                    matching_context = (q_min, q_max, ctx_text)
+                    break
+
+            if matching_context:
+                q_min, q_max, ctx_text = matching_context
+                cleaned_ctx = restore_exam_typography(ctx_text)
+                if cleaned_ctx[:30] not in formatted_enunciado:
+                    formatted_enunciado = f"📖 **Texto de Apoio (Questões {q_min} a {q_max}):**\n\n{cleaned_ctx}\n\n---\n\n{formatted_enunciado}"
+
             formatted_enunciado, has_latex_enunciado = format_latex_formulas(formatted_enunciado)
             formatted_enunciado = restore_exam_typography(formatted_enunciado)
+            formatted_enunciado = format_markdown_tables_in_text(formatted_enunciado)
             
             raw_options = rq.get('opcoes', {})
             options = {}
             for let, opt_text in raw_options.items():
-                opt_clean = restore_exam_typography(opt_text, is_option=True)
+                opt_clean = str(opt_text).strip()
+                opt_clean = re.sub(r'^[A-Ea-e]\s*[\(\[]\s*[\)\]]\s*', '', opt_clean)
+                opt_clean = re.sub(r'^\(?[A-Ea-e]\s*[\)\.\-–—:]\s*', '', opt_clean)
+                opt_clean = re.sub(r'^\(\s*\)\s*', '', opt_clean)
+                opt_clean = re.sub(r'\s*(?:<[^\s>]+>|\*{1,3}|_{1,3})*\s*(?:Conhecimentos\s+Espec[íi\ufffd\?]?ficos|Conhecimentos\s+Gerais|Conhecimentos\s+B[áa\ufffd\?]?sicos|L[íi\ufffd\?]?ngua\s+Portuguesa|Portugu[êe]s|Matem[áa]tica|No[çc\ufffd\?][õo\ufffd\?]?es\s+de\s+[^\n<]+|Racioc[íi\ufffd\?]?nio\s+L[óo\ufffd\?]?gico[^\n<]*|Legisla[çc\ufffd\?][ãa\ufffd\?]?o[^\n<]*|Inform[áa\ufffd\?]?tica|Direito\s+[^\n<]+|TEXTO:\s*[^\n<]+)[^\n]*$', '', opt_clean, flags=re.IGNORECASE)
+                opt_lines = opt_clean.splitlines()
+                while opt_lines and SUBJECT_REGEX.match(opt_lines[-1].strip()):
+                    opt_lines.pop()
+                opt_clean = '\n'.join(opt_lines).strip()
+                opt_clean = restore_exam_typography(opt_clean, is_option=True)
                 opt_formatted, _ = format_latex_formulas(opt_clean)
                 options[let] = opt_formatted
 
@@ -504,11 +552,13 @@ def parse_exam_document(
                 s_val = om.end()
                 e_val = valid_seq[o_idx + 1].start() if o_idx + 1 < len(valid_seq) else len(chunk)
                 opt_content = chunk[s_val:e_val].strip()
+                opt_content = re.sub(r'^[A-Ea-e]\s*[\(\[]\s*[\)\]]\s*', '', opt_content)
+                opt_content = re.sub(r'^\(?[A-Ea-e]\s*[\)\.\-–—:]\s*', '', opt_content)
                 opt_content = re.sub(r'^\(\s*\)\s*', '', opt_content)
                 opt_content = clean_text_artifacts(opt_content)
                 if o_idx == len(valid_seq) - 1:
                     # Remove cabeçalho de disciplina colado no final da última alternativa (ex: '4-C <u>Conhecimentos Específicos</u>')
-                    opt_content = re.sub(r'\s*(?:<[^\s>]+>|\*{1,3}|_{1,3})*\s*(?:Conhecimentos\s+Espec[íi\ufffd\?]?ficos|Conhecimentos\s+Gerais|Conhecimentos\s+B[áa\ufffd\?]?sicos|L[íi\ufffd\?]?ngua\s+Portuguesa|No[çc\ufffd\?][õo\ufffd\?]?es\s+de\s+[^\n<]+|Racioc[íi\ufffd\?]?nio\s+L[óo\ufffd\?]?gico[^\n<]*|Legisla[çc\ufffd\?][ãa\ufffd\?]?o[^\n<]*|Inform[áa\ufffd\?]?tica|Direito\s+[^\n<]+)[^\n]*$', '', opt_content, flags=re.IGNORECASE)
+                    opt_content = re.sub(r'\s*(?:<[^\s>]+>|\*{1,3}|_{1,3})*\s*(?:Conhecimentos\s+Espec[íi\ufffd\?]?ficos|Conhecimentos\s+Gerais|Conhecimentos\s+B[áa\ufffd\?]?sicos|L[íi\ufffd\?]?ngua\s+Portuguesa|Portugu[êe]s|Matem[áa]tica|No[çc\ufffd\?][õo\ufffd\?]?es\s+de\s+[^\n<]+|Racioc[íi\ufffd\?]?nio\s+L[óo\ufffd\?]?gico[^\n<]*|Legisla[çc\ufffd\?][ãa\ufffd\?]?o[^\n<]*|Inform[áa\ufffd\?]?tica|Direito\s+[^\n<]+|TEXTO:\s*[^\n<]+)[^\n]*$', '', opt_content, flags=re.IGNORECASE)
                     opt_lines = opt_content.splitlines()
                     while opt_lines and SUBJECT_REGEX.match(opt_lines[-1].strip()):
                         opt_lines.pop()
@@ -549,6 +599,7 @@ def parse_exam_document(
 
         # Restauração Tipográfica e de Parágrafos Editorial
         formatted_enunciado = restore_exam_typography(formatted_enunciado)
+        formatted_enunciado = format_markdown_tables_in_text(formatted_enunciado)
 
         # Determinação da Resposta Oficial
         final_answer = master_gabarito.get(q_num) or embedded_ans

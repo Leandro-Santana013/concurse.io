@@ -645,6 +645,12 @@ def restore_exam_typography(text: str, is_option: bool = False) -> str:
                 continue
             prev_line = current_sub[-1]
             
+            # Se a linha atual é tabela markdown ou a anterior era tabela markdown, isola em parágrafos separados
+            if line.startswith('|') or prev_line.startswith('|'):
+                final_paras.append(" ".join(current_sub))
+                current_sub = [line]
+                continue
+
             # Se a linha anterior termina com conjunção, preposição ou pontuação incompleta, NUNCA quebra parágrafo
             is_prev_incomplete = bool(re.search(r'(?:,|;\s*$|\b(?:e|ou|de|do|da|dos|das|em|com|para|por|que|apenas|somente|todas|todos|nenhum|nenhuma|como|onde|ao|aos|na|nas|no|nos|pelo|pela|pelos|pelas|opção|opções|with|match)\s*$)', prev_line, re.IGNORECASE))
             
@@ -670,6 +676,54 @@ def restore_exam_typography(text: str, is_option: bool = False) -> str:
     # 17. Limpeza final de espaçamentos residuais
     result = re.sub(r"[ \t]+", " ", result)
     result = re.sub(r"\n{3,}", "\n\n", result)
+    result = format_markdown_tables_in_text(result)
 
     return result.strip()
+
+
+def format_markdown_tables_in_text(text: str) -> str:
+    """Restaura a estrutura de tabelas Markdown (| col | col |\n| --- | --- |\n...) em enunciados."""
+    m = re.search(r'(\|(?:\s*---+\s*\|)+)', text)
+    if not m:
+        return text
+    
+    sep_block = m.group(1).strip()
+    col_count = sep_block.count('---')
+    if col_count < 2:
+        return text
+
+    before_sep = text[:m.start()]
+    after_sep = text[m.end():]
+
+    pre_pipes = list(re.finditer(r'\|', before_sep))
+    if len(pre_pipes) >= col_count + 1:
+        start_idx = pre_pipes[-(col_count + 1)].start()
+        lead_text = before_sep[:start_idx].strip()
+        header_row = before_sep[start_idx:].strip()
+    else:
+        lead_text = before_sep.strip()
+        header_row = ''
+
+    data_rows = []
+    trail_text = after_sep.strip()
+    while True:
+        m_row = re.match(r'^\s*(\|(?:\s*[^\|\n]+\s*\|){' + str(col_count) + r'})', trail_text)
+        if m_row:
+            data_rows.append(m_row.group(1).strip())
+            trail_text = trail_text[m_row.end():].strip()
+        else:
+            break
+
+    if header_row and data_rows:
+        table_md = '\n'.join([header_row, sep_block] + data_rows)
+        parts = []
+        if lead_text:
+            parts.append(lead_text)
+        parts.append(table_md)
+        if trail_text:
+            parts.append(trail_text)
+        return '\n\n'.join(parts)
+    
+    return text
+
 

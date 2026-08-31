@@ -1,0 +1,346 @@
+warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+Total extracted questions: 30
+==================== Q#1 ====================
+ENUNCIADO:
+Uma agente comunitária de saúde realiza visita a uma criança com 25 dias de vida. Nessa visita, a vacina contra a seguinte doença deve estar anotada no cartão de vacinação da criança:
+OPÇÕES:
+  (A) poliomielite
+  (B) hepatite B
+  (C) catapora
+  (D) sarampo
+IMAGES: None
+GABARITO: A
+
+==================== Q#2 ====================
+ENUNCIADO:
+A diretriz do Sistema Único de Saúde que favorece a organização dos serviços e ações para atender às diferentes necessidades de saúde da população denomina-se:
+OPÇÕES:
+  (A) hierarquização
+  (B) universalidade
+  (C) regionalização
+  (D) equidade
+IMAGES: None
+GABARITO: A
+
+==================== Q#3 ====================
+ENUNCIADO:
+Os direitos adquiridos pelo Estatuto do Idoso são garantidos a todas as pessoas com idade, em anos, igual ou superior
+OPÇÕES:
+  (A) A ( ) 55
+  (B) 60
+  (C) 65
+  (D) 70
+IMAGES: None
+GABARITO: A
+
+==================== Q#4 ====================
+ENUNCIADO:
+A Estratégia Saúde da Família é a grande expressão da Atenção Primária à Saúde (APS) no Brasil. A seguinte alternativa <u>**não**</u> representa um atributo da APS:
+OPÇÕES:
+  (A) coordenação do cuidado
+  (B) primeiro contato
+  (C) regionalização
+  (D) longitudinalidade
+IMAGES: None
+GABARITO: B
+
+==================== Q#5 ====================
+ENUNCIADO:
+A idade mínima para que uma pessoa possa adotar uma criança, segundo o Estatuto da Criança e do Adolescente é, em anos, igual
+OPÇÕES:
+  (A) A ( ) 18
+  (B) 21
+  (C) 24
+  (D) 35
+IMAGES: None
+GABARITO: A
+
+==================== Q#6 ====================
+ENUNCIADO:
+De acordo com o Ministério da Saúde, a atividade mais importante do trabalho do agente comunitário é:
+OPÇÕES:
+  (A) o diagnóstico local
+  (B) o cadastramento das famílias
+  (C) a marcação de consulta
+  (D) a visita domiciliar
+IMAGES: None
+GABARITO: A
+
+==================== Q#7 ====================
+ENUNCIADO:
+“Ao realizar uma atividade na comunidade, o agente comunitário de saúde percebeu sinais de violência contra uma criança e entrou em contato com o conselho tutelar, que tomou as providências necessárias.” O relato acima representa um exemplo de:
+OPÇÕES:
+  (A) equidade
+  (B) vinculação
+  (C) integralidade
+  (D) intersetorialidade
+IMAGES: None
+GABARITO: A
+
+==================== Q#8 ====================
+ENUNCIADO:
+Entre as ferramentas de trabalho do agente comunitário de saúde estão as fichas de informação. A ficha representada pela letra “A” é apropriada para a seguinte ação:
+OPÇÕES:
+  (A) cartão das crianças
+  (B) acompanhamento das gestantes
+  (C) cadastramento das famílias
+  (D) acompanhamento de hipertensos
+IMAGES: None
+GABARITO: A
+
+==================== Q#9 ====================
+ENUNCIADO:
+A alternativa que apresenta a vacina que as pessoas idosas devem receber anualmente é:
+OPÇÕES:
+  (A) influenza
+  (B) pneumocócica
+  (C) antitetânica
+  (D) febre amarela
+IMAGES: None
+GABARITO: A
+
+==================== Q#10 ====================
+ENUNCIADO:
+O agente comunitário visitou uma senhora que se queixou de estar perdendo muito peso, urinando mais que o normal, apresentando muita fome todos os dias e sentindo-se muito fraca. Ele então agendou uma consulta para ela no dia seguinte porque pensou se tratar de um caso de:
+OPÇÕES:
+  (A) pressão alta
+  (B) diabetes
+  (C) tuberculose
+  (D) infarto MATEMÁTICA
+IMAGES: None
+GABARITO: A
+
+==================== Q#11 ====================
+ENUNCIADO:
+Admita que em 2016 a população de Cândido de Abreu era de 16.655 habitantes e que, desse total, 8.543 eram homens. A população feminina de Cândido de Abreu em 2016 era igual
+OPÇÕES:
+  (A) A ( ) 8.022
+  (B) 8.082
+  (C) 8.112
+  (D) 8.152
+IMAGES: None
+GABARITO: A
+
+==================== Q#12 ====================
+ENUNCIADO:
+Um pátio retangular com 42,5 metros de comprimento e 32,4 metros de largura é usado como estacionamento de máquinas pesadas. A área desse pátio, em metros quadrados, equivale
+OPÇÕES:
+  (A) A ( ) 1.377
+  (B) 1.387
+  (C) 1.477
+  (D) 1.487
+IMAGES: None
+GABARITO: C
+
+==================== Q#13 ====================
+ENUNCIADO:
+Seis vezes por dia, um vigia percorre todo o contorno da região plana representada abaixo.
+
+A distância diária percorrida por esse vigia, em metros, corresponde
+OPÇÕES:
+  (A) A ( ) 476
+  (B) 492
+  (C) 512
+  (D) 546
+IMAGES: None
+GABARITO: A
+
+==================== Q#14 ====================
+ENUNCIADO:
+No mês de julho de 2017 uma oficina mecânica recebeu 36 carros. No mês seguinte, esse número cresceu 50%. Logo, a alternativa que apresenta o número de carros recebidos por essa oficina em agosto de 2017 é:
+OPÇÕES:
+  (A) 45
+  (B) 54
+  (C) 63
+  (D) 86
+IMAGES: None
+GABARITO: A
+
+==================== Q#15 ====================
+ENUNCIADO:
+Um operador de máquinas pesadas deve colocar 512 latas em galpões do mesmo tamanho. Se em cada galpão cabem exatamente 32 latas, o número de galpões necessários corresponde
+OPÇÕES:
+  (A) A ( ) 13
+  (B) 14
+  (C) 15
+  (D) 16
+IMAGES: None
+GABARITO: A
+
+==================== Q#16 ====================
+ENUNCIADO:
+Um motorista iniciou uma viagem às 8h23min e terminou às 10h15min. A duração dessa viagem, em minutos, corresponde
+OPÇÕES:
+  (A) A ( ) 110
+  (B) 111
+  (C) 112
+  (D) 113
+IMAGES: None
+GABARITO: A
+
+==================== Q#17 ====================
+ENUNCIADO:
+Um motorista anotou na tabela abaixo a quantidade de litros de gasolina consumidos por um automóvel durante quatro semanas.
+
+| | Semana 1 | Semana 2 | Semana 3 | Semana 4 | | --- | --- | --- | --- | --- | | Consumo em litros | 126 | 157 | 118 | 130 | Esse automóvel consumiu uma quantidade de litros igual a um múltiplo de 5 na seguinte semana:
+OPÇÕES:
+  (A) 1
+  (B) 2
+  (C) 3
+  (D) 4
+IMAGES: None
+GABARITO: A
+
+==================== Q#18 ====================
+ENUNCIADO:
+Um mecânico colocou (x + 6) parafusos na caixa A e (x – 10) parafusos na caixa
+
+B. Considere que o total de parafusos colocados nessas duas caixas é igual a 96. A quantidade de parafusos que foi colocada na caixa B é:
+OPÇÕES:
+  (A) 55
+  (B) 50
+  (C) 45
+  (D) 40
+IMAGES: None
+GABARITO: A
+
+==================== Q#19 ====================
+ENUNCIADO:
+Admita que a distância entre o Município de Cândido de Abreu e Curitiba seja de 284 km.
+
+Certo dia João percorreu $\frac{3}{4}$ dessa distância de ônibus, e o restante de automóvel. A distância percorrida de ônibus, em km, corresponde
+OPÇÕES:
+  (A) A ( ) 213
+  (B) 214
+  (C) 215
+  (D) 216
+IMAGES: None
+GABARITO: A
+
+==================== Q#20 ====================
+ENUNCIADO:
+Um concurso público ofereceu 92 vagas para apenas três cargos: A, B e
+
+C. O gráfico abaixo foi construído levando-se em consideração o número de vagas oferecidas para cada cargo.
+
+O número de vagas oferecidas para o cargo A é igual
+OPÇÕES:
+  (A) A ( ) 21
+  (B) 22
+  (C) 23
+  (D) 24 PORTUGUÊS TEXTO: FURACÃO IRMA CHEGA A ILHAS DO SUL DA FLÓRIDA O olho do furacão Irma, agora de categoria 4. chegou à região da Flórida neste domingo, com rajadas de vento de 215 km/hora. Segundo o Serviço 5 Meteorológico Nacional, é uma situação ímpar, extremamente perigosa e potencialmente letal. O órgão fazia apelo às pessoas que ignoraram os alertas de evacuação para que procurassem refúgio 10 “para proteger suas vidas”. Cerca de 430 mil pessoas ficaram sem luz em razão do furacão. Autoridades da Flórida pediram que 6,3 milhões de pessoas deixassem suas casas, criando 15 engarrafamentos em estradas e superlotação em abrigos. A tormenta também levou problemas para Miami no meio da madrugada deste domingo. Uma em cada dez casas ou empresas no sul do 20 estado ficou no escuro. Sabe-se que o furacão Irma já deixou 25 mortos nas ilhas do Caribe. Lá, as equipes de emergência trabalham contra o tempo para ajudar os traumatizados habitantes 25 antes da chegada de outro poderoso furacão. Em Cuba, a destruição ao longo da costa norte central foi semelhante à sofrida por outras ilhas da região durante a semana. É a primeira vez que o olho de 30 uma tempestade de categoria 5 atinge a terra em Cuba desde 1932, conforme os meios de comunicação. O governo ordenou a evacuação de mais de 1 milhão de pessoas. Adaptado de g1.globo.com, 10/09/2017.
+IMAGES: ['/static/images/questions/qimg_exam0_q20_1.png']
+GABARITO: A
+
+==================== Q#21 ====================
+ENUNCIADO:
+Por suas características, o texto lido denomina-se:
+OPÇÕES:
+  (A) notícia
+  (B) crônica
+  (C) editorial
+  (D) publicidade
+IMAGES: None
+GABARITO: A
+
+==================== Q#22 ====================
+ENUNCIADO:
+*Segundo o Serviço Meteorológico Nacional, é* *uma situação ímpar*, *extremamente perigosa* (l. 4-6) Nesse trecho, o uso da palavra “segundo” tem o objetivo de introduzir:
+OPÇÕES:
+  (A) indagação
+  (B) exemplo
+  (C) citação
+  (D) ordem
+IMAGES: None
+GABARITO: A
+
+==================== Q#23 ====================
+ENUNCIADO:
+*Autoridades da Flórida pediram que 6,3 milhões* *de pessoas deixassem suas casas, criando* <u>*engarrafamentos em estradas e superlotação em*</u> <u>*abrigos*</u>. (l. 12-16) Em relação ao início da frase, o trecho sublinhado indica sentido de:
+OPÇÕES:
+  (A) oposição
+  (B) condição
+  (C) finalidade
+  (D) consequência
+IMAGES: None
+GABARITO: A
+
+==================== Q#24 ====================
+ENUNCIADO:
+Uma palavra em linguagem figurada está presente em:
+OPÇÕES:
+  (A) chegou à região da Flórida neste domingo, com rajadas de vento de 215 km/hora. (l. 2-4)
+  (B) Cerca de 430 mil pessoas ficaram sem luz em razão do furacão. (l. 11-12)
+  (C) as equipes de emergência trabalham contra o tempo para ajudar os traumatizados habitantes (l. 22-24)
+  (D) É a primeira vez que o olho de uma tempestade de categoria 5 atinge a terra em Cuba (l. 29-31)
+IMAGES: None
+GABARITO: D
+
+==================== Q#25 ====================
+ENUNCIADO:
+*potencialmente letal* (l
+
+7. O significado da palavra sublinhada se relaciona com a ideia de:
+OPÇÕES:
+  (A) possibilidade
+  (B) simplicidade
+  (C) dificuldade
+  (D) agilidade
+IMAGES: None
+GABARITO: A
+
+==================== Q#26 ====================
+ENUNCIADO:
+*A tormenta também levou problemas para Miami* *no meio da madrugada deste domingo. Uma em* *cada dez casas ou empresas no sul do estado* *ficou no escuro*. (l. 16-20) Sem alterar o sentido do trecho, no lugar do ponto-final que separa as frases, poderia ser utilizado o seguinte sinal:
+OPÇÕES:
+  (A) reticências
+  (B) dois-pontos
+  (C) ponto de exclamação
+  (D) ponto de interrogação
+IMAGES: None
+GABARITO: A
+
+==================== Q#27 ====================
+ENUNCIADO:
+A palavra “meteorológico” é acentuada por ser proparoxítona. Outra palavra do texto acentuada em função da mesma regra é:
+OPÇÕES:
+  (A) ímpar
+  (B) órgão
+  (C) Flórida
+  (D) também Com base na frase abaixo, responda às questões 28, 29 e 30. *Em Cuba, a destruição ao longo da costa norte* *central foi semelhante à sofrida por outras ilhas* *da região durante a semana*. (l. 26-29)
+IMAGES: None
+GABARITO: A
+
+==================== Q#28 ====================
+ENUNCIADO:
+A palavra sublinhada é uma forma do verbo “ser” no tempo passado. Outro exemplo do verbo “ser” no passado está em:
+OPÇÕES:
+  (A) for
+  (B) era
+  (C) seja
+  (D) seria
+IMAGES: None
+GABARITO: A
+
+==================== Q#29 ====================
+ENUNCIADO:
+Uma palavra classificada como adjetivo é:
+OPÇÕES:
+  (A) Cuba
+  (B) outras
+  (C) destruição
+  (D) semelhante
+IMAGES: None
+GABARITO: E
+
+==================== Q#30 ====================
+ENUNCIADO:
+Uma palavra que <u>**não**</u> possui forma plural é:
+OPÇÕES:
+  (A) durante
+  (B) sofrida
+  (C) norte
+  (D) costa
+IMAGES: None
+GABARITO: A
+
