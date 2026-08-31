@@ -5,7 +5,7 @@ use regex::Regex;
 /// Regex universal de cabeçalhos de questões estrito no início de linha
 pub static HEADER_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
-        r##"(?i)(?:^|\n)[ \t]*(?:(?:QUEST[AÃ\?]?O\s+|ITEM\s+)(0*\d{1,3})[ \t]*(?:[\.\-–—:\)]|\n+|[ \t]+)|(0*\d{1,3})[ \t]*(?:[\.\-–—:\)]|\n+|\t+|[ \t]+(?:\p{Alphabetic}|["'“”‘’(\[«\*_<]))|\((0*\d{1,3})\)[ \t]+)"##
+        r##"(?i)(?:^|\n)[ \t]*(?:(?:QUEST[AÃ\u{fffd}\?]?O\s+|ITEM\s+)(0*\d{1,3})[ \t]*(?:[\.\-–—:\)]|\n+|[ \t]+)|(0*\d{1,3})[ \t]*(?:[\.\-–—:\)]|\n+[ \t]*(?:\p{Alphabetic}|["'“”‘’(\[«\*_<])|[ \t]+(?:\p{Alphabetic}|["'“”‘’(\[«\*_<]))|\((0*\d{1,3})\)[ \t]+)"##
     ).unwrap()
 });
 

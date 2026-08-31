@@ -65,7 +65,7 @@ def download_pdf_file(url: str, dest_path: str, timeout: int = 30) -> bool:
     }
     try:
         response = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True, verify=False)
-        if response.status_code == 200 and len(response.content) > 500:
+        if response.status_code == 200 and len(response.content) > 500 and response.content[:4] == b'%PDF':
             os.makedirs(os.path.dirname(dest_path), exist_ok=True)
             with open(dest_path, 'wb') as f:
                 f.write(response.content)
@@ -107,10 +107,20 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
 
         # 1. Resolução Determinística e Download do Arquivo Exato
         is_html_source = False
-        html_data = None
+        # 1. Verifica se já existe um PDF válido localmente na pasta pdfs/
+        existing_local = [f for f in os.listdir('pdfs') if f.startswith(f"{exam_id}_") and not f.startswith(f"{exam_id}_gab_") and f.endswith('.pdf')]
+        if existing_local:
+            local_candidate = os.path.join('pdfs', existing_local[0])
+            if os.path.exists(local_candidate) and os.path.getsize(local_candidate) > 5000:
+                try:
+                    with open(local_candidate, 'rb') as f_chk:
+                        if f_chk.read(4) == b'%PDF':
+                            pdf_path = local_candidate
+                except Exception:
+                    pass
 
-        # Se a URL for página do PCI Concursos, extrai diretamente os PDFs oficiais daquela página
-        if source_url and ('pciconcursos.com.br' in source_url) and not source_url.lower().endswith('.pdf') and ('arquivo.pciconcursos.com.br' not in source_url):
+        # 2. Se a URL for página do PCI Concursos, extrai diretamente os PDFs oficiais daquela página
+        if not os.path.exists(pdf_path) and source_url and ('pciconcursos.com.br' in source_url) and not source_url.lower().endswith('.pdf') and ('arquivo.pciconcursos.com.br' not in source_url):
             set_exam_progress(exam_id, "Obtendo PDF oficial direto do PCI Concursos...", 15)
             pci_prova, pci_gab, pci_title = extract_pci_page_pdfs(source_url)
             if pci_prova:
@@ -125,7 +135,7 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
                         clean_title = ex_update.title
                         session.commit()
 
-        if source_url and source_url.startswith('http'):
+        if not os.path.exists(pdf_path) and source_url and source_url.startswith('http'):
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf,*/*;q=0.8',
@@ -137,8 +147,8 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
                     if resp.content[:4] == b'%PDF':
                         with open(pdf_path, 'wb') as f:
                             f.write(resp.content)
-                    elif b'<html' in resp.content[:300].lower() or b'<!doctype' in resp.content[:300].lower():
-                        # É uma página HTML com questões/simulado
+                    elif (b'<html' in resp.content[:300].lower() or b'<!doctype' in resp.content[:300].lower()) and (b'verificac' not in resp.content[:1000].lower() and b'cloudflare' not in resp.content[:1000].lower()):
+                        # É uma página HTML real com questões/simulado
                         is_html_source = True
                         html_data = resp.content
             except Exception as e:
@@ -146,12 +156,6 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
 
         elif source_url and os.path.exists(source_url):
             pdf_path = source_url
-        elif os.path.exists(pdf_path):
-            pass
-        else:
-            existing = [f for f in os.listdir('pdfs') if f.startswith(f"{exam_id}_") and f.endswith('.pdf')]
-            if existing:
-                pdf_path = os.path.join('pdfs', existing[0])
 
         extracted_questions = []
         gabarito_dict = {}
@@ -198,14 +202,21 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
             gab_pdf_path = os.path.join('pdfs', f"{exam_id}_gab_{ts}.pdf")
             if gabarito_url.startswith('http'):
                 if download_pdf_file(gabarito_url, gab_pdf_path):
-                    gabarito_dict = parse_gabarito_from_pdf(gab_pdf_path)
+                    gabarito_dict = parse_gabarito_from_pdf(gab_pdf_path, cargo_or_title=clean_title)
                     answer_source = "attached_pdf"
+                else:
+                    # Tenta reaproveitar PDF de gabarito local existente
+                    existing_gab = [f for f in os.listdir('pdfs') if f.startswith(f"{exam_id}_gab_") and f.endswith('.pdf')]
+                    if existing_gab:
+                        gabarito_dict = parse_gabarito_from_pdf(os.path.join('pdfs', existing_gab[0]), cargo_or_title=clean_title)
+                        if gabarito_dict:
+                            answer_source = "attached_pdf"
             elif os.path.exists(gabarito_url):
-                gabarito_dict = parse_gabarito_from_pdf(gabarito_url)
+                gabarito_dict = parse_gabarito_from_pdf(gabarito_url, cargo_or_title=clean_title)
                 answer_source = "attached_pdf"
 
         if not gabarito_dict and not is_html_source and os.path.exists(pdf_path):
-            gabarito_dict = parse_gabarito_from_pdf(pdf_path)
+            gabarito_dict = parse_gabarito_from_pdf(pdf_path, cargo_or_title=clean_title)
             if gabarito_dict:
                 answer_source = "embedded_pdf"
 

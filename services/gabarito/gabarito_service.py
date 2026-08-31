@@ -186,11 +186,112 @@ def parse_fgv_vertical_gabarito(text: str) -> Dict[int, str]:
             
     return gabarito
 
+def _compute_cargo_match_score(exam_title: str, candidate_cargo: str, target_tipo: Optional[str], candidate_tipo: Optional[str]) -> float:
+    if not candidate_cargo:
+        return 0.0
+    score = 0.0
+    t_clean = re.sub(r'\[\d+\]', '', exam_title).lower()
+    c_clean = candidate_cargo.lower()
+    
+    stop_words = {'para', 'com', 'pelo', 'pela', 'sobre', 'geral', 'tarde', 'manha', 'tipo', 'prova', 'edital', 'concurso', 'prefeitura', 'pref', 'banca', 'ibam', 'fgv', 'vunesp', 'cebraspe', 'fcc'}
+    keywords = [w for w in re.findall(r'[a-z\u00C0-\u00FC]{4,}', t_clean) if w not in stop_words]
+    
+    matched_kws = [kw for kw in keywords if kw in c_clean]
+    if keywords:
+        score += (len(matched_kws) / len(keywords)) * 100.0
+        
+    nums_in_title = re.findall(r'\b\d{4}\b', t_clean)
+    nums_in_cand = re.findall(r'\b\d{4}\b', c_clean)
+    if any(n in nums_in_cand for n in nums_in_title):
+        score += 50.0
+        
+    if target_tipo and candidate_tipo:
+        t_target_clean = re.sub(r'\D', '', target_tipo)
+        t_cand_clean = re.sub(r'\D', '', candidate_tipo)
+        if t_target_clean and t_cand_clean and t_target_clean == t_cand_clean:
+            score += 30.0
+            
+    return score
+
+def extract_all_matrix_gabaritos(gab_doc) -> List[Dict[str, Any]]:
+    """
+    Extrai todos os gabaritos em formato matricial horizontal (IBAM, Vunesp, etc.) de todas as páginas do PDF.
+    """
+    results = []
+    for pno, page in enumerate(gab_doc):
+        words = page.get_text("words")
+        if not words:
+            continue
+            
+        lines_dict = {}
+        for w in words:
+            y = round(w[1] / 3.5) * 3.5
+            matched_y = next((k for k in lines_dict if abs(k - y) <= 3.5), None)
+            if matched_y is None:
+                matched_y = y
+                lines_dict[matched_y] = []
+            lines_dict[matched_y].append(w)
+            
+        sorted_y = sorted(lines_dict.keys())
+        current_tipo = "1"
+        
+        for i, y in enumerate(sorted_y):
+            row_words = sorted(lines_dict[y], key=lambda w: w[0])
+            row_text = " ".join(w[4] for w in row_words)
+            
+            m_tipo = re.search(r'\b(?:PROVA|TIPO)\s*0*([1-9])\b', row_text, re.I)
+            if m_tipo:
+                current_tipo = m_tipo.group(1)
+                
+            num_words = []
+            for w in row_words:
+                if w[4].isascii() and w[4].isdigit():
+                    try:
+                        n_val = int(w[4])
+                        if 1 <= n_val <= 100:
+                            num_words.append((w[0], n_val))
+                    except ValueError:
+                        pass
+            if len(num_words) >= 5:
+                for next_y_idx in range(i + 1, min(len(sorted_y), i + 6)):
+                    ans_y = sorted_y[next_y_idx]
+                    ans_row_words = sorted(lines_dict[ans_y], key=lambda w: w[0])
+                    
+                    ans_candidates = [w for w in ans_row_words if w[4].upper() in ['A', 'B', 'C', 'D', 'E', 'X', 'N', '*']]
+                    if len(ans_candidates) >= 10:
+                        min_col_x = min(x for x, _ in num_words) - 10
+                        cargo_words = []
+                        for cy_idx in range(i, next_y_idx + 2):
+                            if cy_idx < len(sorted_y):
+                                cy = sorted_y[cy_idx]
+                                cargo_words.extend([w[4] for w in lines_dict[cy] if w[0] < min_col_x])
+                        cargo_str = " ".join(cargo_words).strip()
+                        cargo_str = re.sub(r'\b(?:N[º°]?\s*Conc\.?|CARGO|PROVA\s*\d+)\b', '', cargo_str, flags=re.I).strip()
+                        
+                        row_gab = {}
+                        for ans_w in ans_candidates:
+                            ans_x = ans_w[0]
+                            ans_val = ans_w[4].upper()
+                            closest_q = min(num_words, key=lambda item: abs(item[0] - ans_x))
+                            if abs(closest_q[0] - ans_x) <= 18:
+                                row_gab[closest_q[1]] = 'X' if ans_val in ['*', 'N'] else ans_val
+                                
+                        if len(row_gab) >= 10:
+                            results.append({
+                                'cargo': cargo_str,
+                                'tipo': current_tipo,
+                                'page': pno + 1,
+                                'total_q': len(row_gab),
+                                'gabarito': row_gab
+                            })
+                            
+    return results
+
 def parse_gabarito_from_pdf(pdf_input, cargo_or_title: Optional[str] = None, tipo: Optional[str] = None):
     """
     Extrai gabarito oficial de um arquivo PDF avulso ou folha de respostas.
-    Suporta filtragem por cargo/tipo para PDFs com múltiplos cargos (como FGV e FCC),
-    extração estruturada de tabelas (find_tables), varredura vertical e OCR.
+    Suporta filtragem por cargo/tipo para PDFs com múltiplos cargos (como IBAM, FGV e FCC),
+    extração estruturada de matrizes horizontais, varredura vertical e OCR.
     """
     doc = None
     should_close = False
@@ -209,10 +310,24 @@ def parse_gabarito_from_pdf(pdf_input, cargo_or_title: Optional[str] = None, tip
     try:
         gabarito = {}
 
-        # 0. Se houver cargo/título de prova especificado, procura pela página exata do cargo
+        # 0. Extração de Gabaritos Matriciais Multi-Cargo (Padrão IBAM / VUNESP / Quadrix)
+        matrix_gabs = extract_all_matrix_gabaritos(doc)
+        if matrix_gabs:
+            if cargo_or_title:
+                scored = []
+                target_tipo = tipo or "1"
+                for g in matrix_gabs:
+                    score = _compute_cargo_match_score(cargo_or_title, g['cargo'], target_tipo, g['tipo'])
+                    scored.append((score, g))
+                scored.sort(key=lambda x: x[0], reverse=True)
+                if scored and scored[0][0] > 0:
+                    return scored[0][1]['gabarito']
+            elif len(matrix_gabs) == 1:
+                return matrix_gabs[0]['gabarito']
+
+        # 1. Se houver cargo/título de prova especificado, procura pela página exata do cargo (Padrão FGV)
         if cargo_or_title:
             clean_kw = re.sub(r'\[\d+\]', '', cargo_or_title).strip()
-            # Pega palavras-chave significativas do cargo (ex: 'Contabilidade', 'Analista', etc.)
             keywords = [w.lower() for w in clean_kw.split() if len(w) >= 4 and w.lower() not in ['para', 'com', 'pelo', 'sobre', 'geral', 'tarde', 'manha', 'branca']]
             
             best_page_text = None
@@ -220,14 +335,11 @@ def parse_gabarito_from_pdf(pdf_input, cargo_or_title: Optional[str] = None, tip
                 p_text = page.get_text()
                 p_lower = p_text.lower()
                 if any(kw in p_lower for kw in keywords):
-                    # Se tiver tipo específico (ex: TIPO 1), filtra a seção correspondente
                     target_tipo = tipo or "1"
                     if f"tipo  {target_tipo}" in p_lower or f"tipo {target_tipo}" in p_lower:
-                        # Corta o texto para o bloco do tipo correspondente
                         m_start = re.search(rf'TIPO\s*{target_tipo}\b', p_text, re.I)
                         if m_start:
                             sub_text = p_text[m_start.start():]
-                            # Procura o próximo tipo para delimitar o fim
                             next_tipo = str(int(target_tipo) + 1) if target_tipo.isdigit() else "2"
                             m_next = re.search(rf'TIPO\s*{next_tipo}\b', sub_text, re.I)
                             if m_next:

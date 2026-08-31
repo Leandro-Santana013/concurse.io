@@ -243,10 +243,32 @@ class ExamImageExtractor:
                     if not any(u.contains(vc) for u in useful_rects):
                         useful_rects.append(vc)
 
+        # 3. Detecção Automática de Ilustrações em PDFs Escaneados (Visual Gap Detection)
+        if not useful_rects and text_blocks:
+            sorted_tb = sorted([b for b in text_blocks if len(b) >= 5 and b[4].strip()], key=lambda b: b[1])
+            for i in range(len(sorted_tb) - 1):
+                b_curr = sorted_tb[i]
+                b_next = sorted_tb[i + 1]
+                curr_txt = b_curr[4]
+                next_txt = b_next[4]
+                
+                has_trigger = bool(IMAGE_TRIGGER_REGEX.search(curr_txt) or IMAGE_TRIGGER_REGEX.search(next_txt))
+                gap_y0 = b_curr[3] + 4
+                gap_y1 = b_next[1] - 4
+                gap_h = gap_y1 - gap_y0
+                
+                if (has_trigger and gap_h >= 25) or (gap_h >= 80):
+                    gap_x0 = max(25.0, min(b_curr[0], b_next[0]) - 10)
+                    gap_x1 = min(page_w - 25.0, max(b_curr[2], b_next[2], page_w * 0.75) + 10)
+                    gap_rect = fitz.Rect(gap_x0, gap_y0, gap_x1, gap_y1)
+                    
+                    if gap_rect.y1 <= dead_zone_bottom and gap_rect.y0 >= dead_zone_top:
+                        useful_rects.append(gap_rect)
+
         if not useful_rects:
             return []
 
-        # 3. Agrupamento Geométrico Estrito por Proximidade (sem misturar colunas)
+        # 4. Agrupamento Geométrico Estrito por Proximidade (sem misturar colunas)
         clusters: List[fitz.Rect] = []
         for r in useful_rects:
             merged = False

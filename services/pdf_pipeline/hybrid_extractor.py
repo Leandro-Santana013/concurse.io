@@ -202,10 +202,22 @@ def parse_exam_document(
                 page_diagrams[p_idx] = clusters
 
     full_text = '\n\n'.join(raw_blocks)
-    if len(full_text.strip()) < 500 or force_ocr:
+    
+    # Detecção automática se o documento necessita de Vision OCR de alta fidelidade:
+    # 1. Menos de 500 caracteres ou force_ocr explícito
+    # 2. Em exames multipáginas, se a camada embutida for degradada / scan corrompido
+    needs_vision_ocr = len(full_text.strip()) < 500 or force_ocr
+    if not needs_vision_ocr and total_pages >= 3:
+        test_rq = rust_process_exam_text(full_text)
+        if not test_rq or len(test_rq) < (total_pages - 1) * 2:
+            needs_vision_ocr = True
+        elif sum(1 for q in test_rq if len(q.get('opcoes', {})) <= 2) > max(3, len(test_rq) * 0.2):
+            needs_vision_ocr = True
+
+    if needs_vision_ocr:
         from .media.vision_pipeline import extract_exam_via_vision_ocr
         ocr_text = extract_exam_via_vision_ocr(doc, dpi=200, watermarks=watermarks)
-        if len(ocr_text.strip()) > len(full_text.strip()):
+        if len(ocr_text.strip()) > 50:
             full_text = ocr_text
 
     if len(full_text.strip()) < 50:
@@ -219,6 +231,8 @@ def parse_exam_document(
     full_text = re.sub(r'(?:\b|(?<=[\s\n]))[íI!|]0\s*[\.\,\:\-\"\']+[ \t]*(?=[\.\,\:\'\`\~\s]*[A-Za-z\u00C0-\u00DC\"\'\(\[])', r'\n10. ', full_text)
     full_text = re.sub(r'(?m)^[ \t]*1\.\s+(?=A\s*pesar|A\s*rea|A\s*ssegurar|Pagou|Um\s+professor)', 'I. ', full_text)
     full_text = re.sub(r'(?m)^([ \t]*\d{1,2}\.)([^\s\d])', r'\1 \2', full_text)
+    # Sanitização de rodapés institucionais residuais entre blocos (ex: ADMINISTRADOR - 1)
+    full_text = re.sub(r'(?m)^[ \t]*[A-Za-z\u00C0-\u00DC\s\-]{3,}\s*[-–—]\s*\d+[ \t]*$\n*', '\n', full_text)
 
     # 5. Execução Unificada em Rust (Zero Ping-Pong) com Fallback Resiliente
     rust_questions = rust_process_exam_text(full_text)
@@ -276,7 +290,7 @@ def parse_exam_document(
     found_positions = []
 
     header_pat = re.compile(
-        r'(?i)(?:^|\n|\.\s+|\s{2,})(?:(?:QUEST[AÃ\?]?O\s+|ITEM\s+)(0*\d{1,3})[ \t]*(?:[\.\-–—:\)]|\n+|[ \t]+)|(0*\d{1,3})[ \t]*(?:[\.\-–—:\)]|\n+|\t+|[ \t]+(?=[A-Za-z\u00C0-\u00DC\"\'\u201c\u201d\u2018\u2019\(\[«]))[ \t]*|\((0*\d{1,3})\)[ \t]+|(?<=\n)\s*(0*\d{1,3})\s*(?=\n|\t))'
+        r'(?i)(?:^|\n|\.\s+|\s{2,})(?:(?:QUEST[AÃ\ufffd\?]?O\s+|ITEM\s+)(0*\d{1,3})[ \t]*(?:[\.\-–—:\)]|\n+|[ \t]+)|(0*\d{1,3})[ \t]*(?:[\.\-–—:\)]|\n+[ \t]*(?=[A-Za-z\u00C0-\u00DC\"\'\u201c\u201d\u2018\u2019\(\[«])|[ \t]+(?=[A-Za-z\u00C0-\u00DC\"\'\u201c\u201d\u2018\u2019\(\[«]))[ \t]*|\((0*\d{1,3})\)[ \t]+)'
     )
 
     py_found_positions = []

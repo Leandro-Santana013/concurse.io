@@ -465,17 +465,25 @@ def detect_layout_and_ordered_blocks(
                 lx0, ly0, lx1, ly1 = line['bbox']
 
                 # Filtros de margem e ruídos institucionais
-                if ly0 < 18 or ly1 > height - 32:
+                if ly0 < 18 or ly1 > height - 28:
                     continue
                 lt_lower = line_text.lower()
                 if 'pcimarkpci' in lt_lower or 'pciconcursos.com.br' in lt_lower or 'qconcursos.com' in lt_lower or 'confidencial at' in lt_lower or 'tjsp2301' in lt_lower:
                     continue
                 if 'PROVA' in line_text.upper() and len(line_text) < 25 and any(f'PROVA {k}' in line_text.upper() for k in range(10)):
                     continue
-                if ly1 > height - 52 and any(kw in lt_lower for kw in ['tipo ', 'página', 'pagina', 'tarde', 'manhã', 'manha', 'noite', 'ati -', 'fgv', 'dataprev', 'analista', 'cargo']):
-                    continue
-                if ly0 < 52 and any(kw in lt_lower for kw in ['dataprev', 'empresa de tecnologia', 'fgv conhecimento', 'caderno de prova']):
-                    continue
+                if ly1 > height - 55:
+                    if any(kw in lt_lower for kw in ['tipo ', 'página', 'pagina', 'tarde', 'manhã', 'manha', 'noite', 'ati -', 'fgv', 'dataprev', 'analista', 'cargo', 'ibam']):
+                        continue
+                    if re.match(r'^\s*(?:p[aá]g(?:ina)?\.?\s*)?\d+(?:\s*(?:de|\/|\-)\s*\d+)?\s*$', line_text.strip(), re.IGNORECASE):
+                        continue
+                    if re.match(r'^[A-Za-z\u00C0-\u00DC\s\-]+\s*[-–—]\s*\d+\s*$', line_text.strip()):
+                        continue
+                if ly0 < 52:
+                    if any(kw in lt_lower for kw in ['dataprev', 'empresa de tecnologia', 'fgv conhecimento', 'caderno de prova']):
+                        continue
+                    if re.match(r'^\s*\d+\s*$', line_text.strip()):
+                        continue
 
                 cleaned = clean_marginal_line_numbers(line_text)
                 if not cleaned.strip():

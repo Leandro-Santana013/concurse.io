@@ -337,9 +337,11 @@ def ingest_exam_from_url(
     if not url:
         raise HTTPException(status_code=400, detail="URL da prova é obrigatória.")
 
+    force_reprocess = bool(payload.get("force") or payload.get("reprocess"))
+
     # Verifica se já existe
     existing = db.query(Exam).filter_by(source_url=url).first()
-    if existing and existing.status == 'Aprovada' and not gabarito_url:
+    if existing and existing.status == 'Aprovada' and not gabarito_url and not force_reprocess and len(existing.questions) >= 5:
         return {"exam_id": existing.id, "status": "Aprovada", "message": "Prova já cadastrada e processada."}
 
     if not existing:
