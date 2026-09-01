@@ -1,32 +1,587 @@
-import React, { useEffect, useState } from 'react';
-import { useExam } from '../../context/ExamContext';
-import { useUI } from '../../context/UIContext';
-import { MathRenderer } from './MathRenderer';
+import React, {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import clsx from 'clsx';
 import {
-  Clock,
   ArrowLeft,
   ArrowRight,
-  Maximize2,
-  Minimize2,
   Bookmark,
   CheckCircle2,
-  XCircle,
-  RotateCcw,
-  Sparkles,
-  Award,
+  Clock3,
   Eye,
-  Zap,
-  Scissors,
-  LayoutGrid,
-  Type,
   HelpCircle,
+  LayoutGrid,
+  Maximize2,
+  Minimize2,
+  Pause,
+  Play,
+  RotateCcw,
+  Scissors,
+  Settings2,
   X,
+  XCircle,
 } from 'lucide-react';
+import { useExam } from '../../context/ExamContext';
+import { useUI } from '../../context/UIContext';
+import type { AttemptResult, ExamDetail, Question } from '../../types/exam';
+import { MathRenderer } from './MathRenderer';
 
 interface ExamSimulatorProps {
   onBackToDashboard?: () => void;
   onOpenNotebook?: () => void;
 }
+
+interface AccessibleDialogProps {
+  open: boolean;
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+  placement?: 'center' | 'bottom';
+  panelClassName?: string;
+  dismissDisabled?: boolean;
+}
+
+interface QuestionMapProps {
+  questions: Question[];
+  currentIdx: number;
+  answers: Record<string, string>;
+  flaggedQuestions: Record<string, boolean>;
+  onSelect: (idx: number) => void;
+}
+
+interface ExamResultsProps {
+  exam: ExamDetail;
+  result: AttemptResult;
+  filter: 'all' | 'errors' | 'correct';
+  onFilterChange: (filter: 'all' | 'errors' | 'correct') => void;
+  formatTime: (seconds: number) => string;
+  onBack: () => void;
+  onRedo: () => void;
+  onOpenNotebook?: () => void;
+  onOpenImage: (src: string) => void;
+}
+
+const focusRing =
+  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]';
+const quietButton = clsx(
+  'inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[var(--border)]',
+  'bg-[var(--surface)] px-3 text-sm font-semibold text-[var(--text)]',
+  'transition-colors duration-150 hover:bg-[var(--surface-hover)] disabled:cursor-not-allowed disabled:opacity-45',
+  focusRing,
+);
+const primaryButton = clsx(
+  'inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[var(--primary)]',
+  'bg-[var(--primary)] px-4 text-sm font-semibold text-[var(--primary-contrast)]',
+  'transition-opacity duration-150 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45',
+  focusRing,
+);
+
+const FOCUSABLE_SELECTOR = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+const AccessibleDialog: React.FC<AccessibleDialogProps> = ({
+  open,
+  title,
+  onClose,
+  children,
+  placement = 'center',
+  panelClassName,
+  dismissDisabled = false,
+}) => {
+  const titleId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    previousFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const frame = window.requestAnimationFrame(() => {
+      const panel = panelRef.current;
+      const initialTarget =
+        panel?.querySelector<HTMLElement>('[data-autofocus]') ||
+        panel?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR) ||
+        panel;
+      initialTarget?.focus();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.body.style.overflow = previousOverflow;
+      previousFocusRef.current?.focus();
+    };
+  }, [open]);
+
+  if (!open) return null;
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      if (!dismissDisabled) onClose();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+
+    const panel = panelRef.current;
+    if (!panel) return;
+    const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+      (element) => !element.hasAttribute('disabled') && element.getAttribute('aria-hidden') !== 'true',
+    );
+    if (focusable.length === 0) {
+      event.preventDefault();
+      panel.focus();
+      return;
+    }
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === panel)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
+  return (
+    <div
+      className={clsx(
+        'fixed inset-0 z-[70] flex bg-[var(--scrim)] p-4',
+        placement === 'bottom' ? 'items-end sm:items-center sm:justify-center' : 'items-center justify-center',
+      )}
+      onMouseDown={(event) => {
+        if (!dismissDisabled && event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleKeyDown}
+        className={clsx(
+          'w-full border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] shadow-xl',
+          placement === 'bottom'
+            ? 'max-h-[82vh] rounded-t-xl sm:max-w-lg sm:rounded-xl'
+            : 'max-h-[90vh] max-w-lg rounded-xl',
+          panelClassName,
+          focusRing,
+        )}
+      >
+        <div className="flex min-h-14 items-center justify-between gap-4 border-b border-[var(--border)] px-5">
+          <h2 id={titleId} className="text-base font-semibold">
+            {title}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={dismissDisabled}
+            aria-label={'Fechar ' + title.toLowerCase()}
+            className={clsx('grid h-11 w-11 place-items-center rounded-lg hover:bg-[var(--surface-hover)]', focusRing)}
+          >
+            <X aria-hidden="true" className="h-5 w-5" />
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+};
+
+const QuestionMap: React.FC<QuestionMapProps> = ({
+  questions,
+  currentIdx,
+  answers,
+  flaggedQuestions,
+  onSelect,
+}) => (
+  <nav aria-label="Mapa de questões">
+    <div className="mb-4 grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-[var(--text-muted)]">
+      <span className="flex items-center gap-2">
+        <span aria-hidden="true" className="h-3 w-3 rounded-sm border-2 border-[var(--primary)]" />
+        Atual
+      </span>
+      <span className="flex items-center gap-2">
+        <CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5 text-[var(--success)]" />
+        Respondida
+      </span>
+      <span className="flex items-center gap-2">
+        <span aria-hidden="true" className="h-3 w-3 rounded-full border border-[var(--border)]" />
+        Em branco
+      </span>
+      <span className="flex items-center gap-2">
+        <Bookmark aria-hidden="true" className="h-3.5 w-3.5 text-[var(--warning)]" />
+        Marcada
+      </span>
+    </div>
+    <ol className="grid grid-cols-5 gap-2">
+      {questions.map((question, idx) => {
+        const questionNumber = question.numero_questao || String(idx + 1);
+        const isCurrent = idx === currentIdx;
+        const isAnswered = Boolean(answers[questionNumber]);
+        const isFlagged = Boolean(flaggedQuestions[questionNumber]);
+        const states = [
+          isCurrent ? 'atual' : '',
+          isAnswered ? 'respondida' : 'em branco',
+          isFlagged ? 'marcada para revisão' : '',
+        ].filter(Boolean);
+
+        return (
+          <li key={(question.id || questionNumber) + '-' + idx}>
+            <button
+              type="button"
+              onClick={() => onSelect(idx)}
+              aria-current={isCurrent ? 'step' : undefined}
+              aria-label={'Questão ' + questionNumber + ': ' + states.join(', ')}
+              title={'Questão ' + questionNumber + ': ' + states.join(', ')}
+              className={clsx(
+                'relative flex h-11 w-full items-center justify-center rounded-lg border bg-[var(--surface)]',
+                'font-mono text-xs font-semibold text-[var(--text-muted)] transition-colors duration-150',
+                'hover:bg-[var(--surface-hover)]',
+                isAnswered && 'border-[var(--success)] bg-[var(--success-subtle)] text-[var(--success)]',
+                isFlagged && 'border-[var(--warning)]',
+                isCurrent && 'outline outline-2 outline-offset-1 outline-[var(--primary)]',
+                focusRing,
+              )}
+            >
+              {questionNumber}
+              <span aria-hidden="true" className="absolute bottom-0.5 right-0.5 flex gap-0.5">
+                {isAnswered && <CheckCircle2 className="h-2.5 w-2.5 text-[var(--success)]" />}
+                {isFlagged && <Bookmark className="h-2.5 w-2.5 fill-current text-[var(--warning)]" />}
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ol>
+  </nav>
+);
+
+const ImagePreviewDialog: React.FC<{
+  src: string | null;
+  onClose: () => void;
+}> = ({ src, onClose }) => (
+  <AccessibleDialog
+    open={Boolean(src)}
+    title="Visualização ampliada da imagem"
+    onClose={onClose}
+    panelClassName="max-w-5xl overflow-auto"
+  >
+    <div className="p-4">
+      {src && (
+        <img
+          src={src}
+          alt="Imagem da questão em tamanho ampliado"
+          className="mx-auto max-h-[75vh] max-w-full object-contain"
+        />
+      )}
+    </div>
+  </AccessibleDialog>
+);
+
+const ExamResults: React.FC<ExamResultsProps> = ({
+  exam,
+  result,
+  filter,
+  onFilterChange,
+  formatTime,
+  onBack,
+  onRedo,
+  onOpenNotebook,
+  onOpenImage,
+}) => {
+  const filteredEntries = Object.entries(result.detailed_answers).filter(([, data]) => {
+    if (filter === 'errors') return !data.is_correct;
+    if (filter === 'correct') return data.is_correct;
+    return true;
+  });
+  const averageSeconds = Math.round(result.elapsed_seconds / Math.max(result.total, 1));
+  const passedReference = result.percentage >= 70;
+
+  return (
+    <main className="min-h-screen bg-[var(--background)] px-4 py-8 text-[var(--text)] sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-5xl space-y-8">
+        <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 sm:p-8">
+          <p className="text-sm font-medium text-[var(--text-muted)]">Resultado do simulado</p>
+          <h1 className="mt-1 text-2xl font-semibold sm:text-3xl">{exam.title}</h1>
+          <p
+            className={clsx(
+              'mt-4 inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold',
+              passedReference
+                ? 'bg-[var(--success-subtle)] text-[var(--success)]'
+                : 'bg-[var(--warning-subtle)] text-[var(--warning)]',
+            )}
+          >
+            {passedReference ? (
+              <CheckCircle2 aria-hidden="true" className="h-4 w-4" />
+            ) : (
+              <RotateCcw aria-hidden="true" className="h-4 w-4" />
+            )}
+            {passedReference ? 'Bom desempenho' : 'Continue praticando'}
+          </p>
+
+          <dl className="mt-7 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--border)] lg:grid-cols-4">
+            {[
+              ['Nota', result.percentage + '%'],
+              ['Acertos', result.score + ' de ' + result.total],
+              ['Tempo', formatTime(result.elapsed_seconds)],
+              ['Média por questão', averageSeconds + 's'],
+            ].map(([label, value]) => (
+              <div key={label} className="bg-[var(--surface)] p-4 sm:p-5">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                  {label}
+                </dt>
+                <dd className="mt-2 font-mono text-xl font-semibold sm:text-2xl">{value}</dd>
+              </div>
+            ))}
+          </dl>
+
+          <div className="mt-6 flex flex-wrap gap-3">
+            <button type="button" onClick={onBack} className={quietButton}>
+              <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+              Voltar à biblioteca
+            </button>
+            <button type="button" onClick={onRedo} className={primaryButton}>
+              <RotateCcw aria-hidden="true" className="h-4 w-4" />
+              Refazer simulado
+            </button>
+            {onOpenNotebook && (
+              <button type="button" onClick={onOpenNotebook} className={quietButton}>
+                <Bookmark aria-hidden="true" className="h-4 w-4" />
+                Caderno de erros
+              </button>
+            )}
+          </div>
+        </section>
+
+        <section aria-labelledby="subject-performance-title">
+          <h2 id="subject-performance-title" className="text-lg font-semibold">
+            Desempenho por disciplina
+          </h2>
+          <div className="mt-3 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+            {Object.entries(result.feedback_per_subject).map(([subject, stats], idx) => (
+              <div
+                key={subject}
+                className={clsx(
+                  'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-4 sm:px-5',
+                  idx > 0 && 'border-t border-[var(--border)]',
+                )}
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{subject}</p>
+                  <p className="mt-1 text-sm text-[var(--text-muted)]">
+                    {stats.correct} de {stats.total} corretas
+                  </p>
+                </div>
+                <span className="font-mono text-lg font-semibold">{stats.percentage}%</span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section aria-labelledby="review-title">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 id="review-title" className="text-lg font-semibold">
+                Revisão das questões
+              </h2>
+              <p className="mt-1 text-sm text-[var(--text-muted)]">
+                Abra uma questão para conferir enunciado, resposta e gabarito.
+              </p>
+            </div>
+            <div
+              role="group"
+              aria-label="Filtrar questões da revisão"
+              className="inline-flex w-fit rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1"
+            >
+              {[
+                ['all', 'Todas', result.total],
+                ['errors', 'Erros', result.total - result.score],
+                ['correct', 'Acertos', result.score],
+              ].map(([value, label, count]) => (
+                <button
+                  key={String(value)}
+                  type="button"
+                  aria-pressed={filter === value}
+                  onClick={() => onFilterChange(value as 'all' | 'errors' | 'correct')}
+                  className={clsx(
+                    'min-h-10 rounded-md px-3 text-sm font-medium transition-colors duration-150',
+                    filter === value
+                      ? 'bg-[var(--primary)] text-[var(--primary-contrast)]'
+                      : 'text-[var(--text-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]',
+                    focusRing,
+                  )}
+                >
+                  {label} ({count})
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {filteredEntries.map(([questionNumber, data]) => {
+              const originalQuestion =
+                exam.questions.find(
+                  (question) =>
+                    (question.numero_questao || String(question.id)) === questionNumber,
+                ) || exam.questions.find((question) => question.id === data.question_id);
+              if (!originalQuestion) return null;
+
+              return (
+                <details
+                  key={questionNumber}
+                  className="group rounded-xl border border-[var(--border)] bg-[var(--surface)]"
+                >
+                  <summary
+                    className={clsx(
+                      'flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 rounded-xl px-4 py-3',
+                      'hover:bg-[var(--surface-hover)] [&::-webkit-details-marker]:hidden',
+                      focusRing,
+                    )}
+                  >
+                    <span className="flex min-w-0 items-center gap-3">
+                      {data.is_correct ? (
+                        <CheckCircle2 aria-hidden="true" className="h-5 w-5 shrink-0 text-[var(--success)]" />
+                      ) : (
+                        <XCircle aria-hidden="true" className="h-5 w-5 shrink-0 text-[var(--danger)]" />
+                      )}
+                      <span>
+                        <span className="block font-semibold">Questão {questionNumber}</span>
+                        <span className="block truncate text-xs text-[var(--text-muted)]">
+                          {data.subject || originalQuestion.subject} ·{' '}
+                          {data.is_correct ? 'Resposta correta' : 'Resposta incorreta'}
+                        </span>
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-sm text-[var(--text-muted)] group-open:hidden">
+                      Abrir
+                    </span>
+                    <span className="hidden shrink-0 text-sm text-[var(--text-muted)] group-open:inline">
+                      Fechar
+                    </span>
+                  </summary>
+
+                  <div className="border-t border-[var(--border)] px-4 py-5 sm:px-6">
+                    <div className="mb-5 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+                      <span>
+                        <span className="text-[var(--text-muted)]">Sua resposta: </span>
+                        <strong>{data.user_answer || 'Em branco'}</strong>
+                      </span>
+                      <span>
+                        <span className="text-[var(--text-muted)]">Gabarito: </span>
+                        <strong>{data.correct_answer}</strong>
+                      </span>
+                    </div>
+
+                    {originalQuestion.context_text && (
+                      <section className="mb-5 rounded-lg border border-[var(--border)] bg-[var(--surface-subtle)] p-4">
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                          Texto de apoio
+                        </p>
+                        <div className="font-reading leading-[1.7]">
+                          <MathRenderer content={originalQuestion.context_text} />
+                        </div>
+                      </section>
+                    )}
+
+                    <div className="font-reading leading-[1.7]">
+                      <MathRenderer content={originalQuestion.statement} />
+                    </div>
+
+                    {originalQuestion.images && originalQuestion.images.length > 0 && (
+                      <div className="mt-5 grid gap-3">
+                        {originalQuestion.images.map((src, imageIdx) => (
+                          <button
+                            key={src + imageIdx}
+                            type="button"
+                            onClick={() => onOpenImage(src)}
+                            className={clsx(
+                              'group/image relative overflow-hidden rounded-lg border border-[var(--border)]',
+                              'bg-[var(--surface-subtle)] p-2 text-center',
+                              focusRing,
+                            )}
+                          >
+                            <img
+                              src={src}
+                              alt={'Imagem da questão ' + questionNumber}
+                              className="mx-auto max-h-72 object-contain"
+                            />
+                            <span className="mt-2 inline-flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                              <Eye aria-hidden="true" className="h-3.5 w-3.5" />
+                              Ampliar imagem
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="mt-6 space-y-2">
+                      {Object.entries(originalQuestion.options).map(([key, text]) => {
+                        const isCorrect = data.correct_answer === key;
+                        const isUserAnswer = data.user_answer === key;
+                        return (
+                          <div
+                            key={key}
+                            className={clsx(
+                              'flex items-start gap-3 rounded-lg border p-3',
+                              isCorrect
+                                ? 'border-[var(--success)] bg-[var(--success-subtle)]'
+                                : isUserAnswer
+                                  ? 'border-[var(--danger)] bg-[var(--danger-subtle)]'
+                                  : 'border-[var(--border)]',
+                            )}
+                          >
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-current font-mono text-xs font-semibold">
+                              {key}
+                            </span>
+                            <div className="min-w-0 flex-1 font-reading text-sm leading-[1.65]">
+                              <MathRenderer content={text} />
+                              {(isCorrect || isUserAnswer) && (
+                                <p
+                                  className={clsx(
+                                    'mt-2 text-xs font-semibold',
+                                    isCorrect ? 'text-[var(--success)]' : 'text-[var(--danger)]',
+                                  )}
+                                >
+                                  {isCorrect ? 'Alternativa correta' : 'Sua alternativa'}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </details>
+              );
+            })}
+            {filteredEntries.length === 0 && (
+              <p className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 text-sm text-[var(--text-muted)]">
+                Nenhuma questão corresponde a este filtro.
+              </p>
+            )}
+          </div>
+        </section>
+      </div>
+    </main>
+  );
+};
 
 export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
   onBackToDashboard,
@@ -36,7 +591,6 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
     activeExam,
     currentIdx,
     currentQuestion,
-    currentQuestionNum,
     totalQuestions,
     progressPercentage,
     answers,
@@ -54,728 +608,921 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
     setQuestionIdx,
     nextQuestion,
     prevQuestion,
-    tickTimer,
     toggleTimer,
     toggleImmediateFeedback,
     toggleZenMode,
     submitExamAttempt,
     resetExam,
+    startExam,
     formatTime,
   } = useExam();
-
-  const { fontSize, setFontSize, navigateTo, showToast } = useUI();
+  const {
+    fontSize,
+    setFontSize,
+    theme,
+    setTheme,
+    enableEliminationMode,
+    toggleEliminationMode,
+    navigateTo,
+    showToast,
+  } = useUI();
 
   const [selectedImageZoom, setSelectedImageZoom] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resultFilter, setResultFilter] = useState<'all' | 'errors' | 'correct'>('all');
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  const [isMobileMapOpen, setIsMobileMapOpen] = useState(false);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [isSubmitDialogOpen, setIsSubmitDialogOpen] = useState(false);
+  const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
 
-  // Timer Tick
+  const questionHeadingRef = useRef<HTMLHeadingElement>(null);
+  const desktopMapRef = useRef<HTMLElement>(null);
+  const preferencesRef = useRef<HTMLDivElement>(null);
+  const preferencesButtonRef = useRef<HTMLButtonElement>(null);
+
+  const questions = activeExam?.questions || [];
+  const currentQ = questions[currentIdx] || currentQuestion;
+  const qNum = currentQ?.numero_questao || String(currentIdx + 1);
+  const qEliminated = eliminatedOptions[qNum] || {};
+  const answeredCount = questions.reduce((count, question, idx) => {
+    const number = question.numero_questao || String(idx + 1);
+    return count + (answers[number] ? 1 : 0);
+  }, 0);
+
+  const unansweredQuestions = useMemo(
+    () =>
+      questions
+        .map((question, idx) => ({
+          idx,
+          number: question.numero_questao || String(idx + 1),
+        }))
+        .filter((question) => !answers[question.number]),
+    [answers, questions],
+  );
+  const markedQuestions = useMemo(
+    () =>
+      questions
+        .map((question, idx) => ({
+          idx,
+          number: question.numero_questao || String(idx + 1),
+        }))
+        .filter((question) => flaggedQuestions[question.number]),
+    [flaggedQuestions, questions],
+  );
+
+  const handleBack = onBackToDashboard || (() => navigateTo('folders'));
+  const overlayOpen =
+    Boolean(selectedImageZoom) ||
+    isMobileMapOpen ||
+    isShortcutsOpen ||
+    isSubmitDialogOpen ||
+    isPreferencesOpen;
+
+  const openQuestionMap = useCallback(() => {
+    if (window.matchMedia('(min-width: 1024px)').matches) {
+      desktopMapRef.current?.focus();
+    } else {
+      setIsMobileMapOpen(true);
+    }
+  }, []);
+
   useEffect(() => {
-    if (!isTimerRunning || isFinished) return;
-    const interval = setInterval(() => {
-      tickTimer();
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [isTimerRunning, isFinished, tickTimer]);
+    if (!activeExam || isFinished || !currentQ) return;
+    const frame = window.requestAnimationFrame(() => {
+      questionHeadingRef.current?.focus({ preventScroll: true });
+      questionHeadingRef.current?.scrollIntoView({ block: 'start' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeExam, currentIdx, currentQ, isFinished]);
 
-  // Keyboard Shortcuts
   useEffect(() => {
-    if (isFinished || !activeExam) return;
+    if (!isPreferencesOpen) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!preferencesRef.current?.contains(event.target as Node)) {
+        setIsPreferencesOpen(false);
+      }
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsPreferencesOpen(false);
+        preferencesButtonRef.current?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isPreferencesOpen]);
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
+  useEffect(() => {
+    if (isFinished || !activeExam || overlayOpen) return;
 
-      const q = activeExam.questions[currentIdx];
-      if (!q) return;
-      const qNum = q.numero_questao || String(currentIdx + 1);
-      const optionKeys = Object.keys(q.options);
-      const key = e.key.toUpperCase();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.isContentEditable ||
+        target?.closest(
+          'input, textarea, select, button, a, [contenteditable="true"], [role="dialog"], [role="menu"]',
+        )
+      ) {
+        return;
+      }
 
-      // Options 1-5 or A-E
-      if (['1', 'A'].includes(key) && optionKeys.length >= 1) {
-        selectAnswer(qNum, optionKeys[0]);
-      } else if (['2', 'B'].includes(key) && optionKeys.length >= 2) {
-        selectAnswer(qNum, optionKeys[1]);
-      } else if (['3', 'C'].includes(key) && optionKeys.length >= 3) {
-        selectAnswer(qNum, optionKeys[2]);
-      } else if (['4', 'D'].includes(key) && optionKeys.length >= 4) {
-        selectAnswer(qNum, optionKeys[3]);
-      } else if (['5', 'E'].includes(key) && optionKeys.length >= 5) {
-        selectAnswer(qNum, optionKeys[4]);
-      } else if (e.key === 'ArrowRight') {
+      const question = activeExam.questions[currentIdx];
+      if (!question) return;
+      const number = question.numero_questao || String(currentIdx + 1);
+      const optionKeys = Object.keys(question.options);
+      const key = event.key.toUpperCase();
+      if (event.repeat && (event.code === 'Space' || key === 'Z' || key === 'G' || event.key === '?')) {
+        return;
+      }
+      const optionIndex = ['1', '2', '3', '4', '5'].indexOf(key);
+      const letterIndex = ['A', 'B', 'C', 'D', 'E'].indexOf(key);
+      const selectedIndex = optionIndex >= 0 ? optionIndex : letterIndex;
+
+      if (selectedIndex >= 0 && optionKeys[selectedIndex]) {
+        event.preventDefault();
+        selectAnswer(number, optionKeys[selectedIndex]);
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
         nextQuestion();
-      } else if (e.key === 'ArrowLeft') {
+      } else if (event.key === 'ArrowLeft') {
+        event.preventDefault();
         prevQuestion();
-      } else if (e.code === 'Space') {
-        e.preventDefault();
-        toggleFlagQuestion(qNum);
-      } else if (e.key === 'z' || e.key === 'Z') {
+      } else if (event.code === 'Space') {
+        event.preventDefault();
+        toggleFlagQuestion(number);
+      } else if (key === 'Z') {
+        event.preventDefault();
         toggleZenMode();
-      } else if (e.key === 'g' || e.key === 'G') {
-        setIsDrawerOpen((prev) => !prev);
-      } else if (e.key === '?') {
-        setShowShortcutsModal((prev) => !prev);
+      } else if (key === 'G') {
+        event.preventDefault();
+        openQuestionMap();
+      } else if (event.key === '?') {
+        event.preventDefault();
+        setIsShortcutsOpen(true);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeExam, currentIdx, isFinished, selectAnswer, nextQuestion, prevQuestion, toggleFlagQuestion, toggleZenMode]);
+  }, [
+    activeExam,
+    currentIdx,
+    isFinished,
+    nextQuestion,
+    openQuestionMap,
+    overlayOpen,
+    prevQuestion,
+    selectAnswer,
+    toggleFlagQuestion,
+    toggleZenMode,
+  ]);
 
-  const handleBack = onBackToDashboard || (() => navigateTo('folders'));
-
-  if (!activeExam) {
-    return (
-      <div className="flex h-96 flex-col items-center justify-center text-slate-400 p-6">
-        <p className="font-heading text-lg font-bold text-slate-300">Nenhum simulado ativo no momento.</p>
-        <p className="text-xs text-slate-400 mt-1">Escolha uma prova na sua biblioteca para começar a praticar.</p>
-        <button
-          onClick={handleBack}
-          className="mt-6 flex items-center gap-2 rounded-2xl glass-btn-primary px-6 py-3 font-heading font-bold text-sm text-white"
-        >
-          <ArrowLeft className="h-4 w-4" /> Ir para Minhas Pastas
-        </button>
-      </div>
-    );
-  }
-
-  const questions = activeExam.questions;
-  const currentQ = questions[currentIdx] || currentQuestion;
-  const qNum = currentQ ? (currentQ.numero_questao || String(currentIdx + 1)) : '1';
-
-  const handleFinish = async () => {
+  const submitAttempt = async () => {
     if (isSubmitting) return;
-    const unansweredCount = questions.length - Object.keys(answers).filter((k) => answers[k]).length;
-    if (unansweredCount > 0) {
-      const confirm = window.confirm(
-        `Você ainda possui ${unansweredCount} questão(ões) sem resposta. Deseja realmente finalizar o simulado?`
-      );
-      if (!confirm) return;
-    }
-
     setIsSubmitting(true);
     try {
       await submitExamAttempt();
-      showToast('success', 'Simulado Concluído!', 'Confira sua nota e o gabarito detalhado.');
-    } catch (e: any) {
-      showToast('error', 'Erro ao finalizar simulado', e.message);
+      showToast('success', 'Simulado concluído', 'Sua correção já está disponível.');
+    } catch (error) {
+      showToast(
+        'error',
+        'Não foi possível entregar o simulado',
+        error instanceof Error ? error.message : 'Tente novamente em alguns instantes.',
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // --- RESULTS VIEW ---
-  if (isFinished && attemptResult) {
-    const filteredEntries = Object.entries(attemptResult.detailed_answers).filter(([_, data]) => {
-      if (resultFilter === 'errors') return !data.is_correct;
-      if (resultFilter === 'correct') return data.is_correct;
-      return true;
-    });
+  const goToQuestion = (idx: number) => {
+    setIsMobileMapOpen(false);
+    setIsSubmitDialogOpen(false);
+    setQuestionIdx(idx);
+  };
 
-    const avgSecondsPerQ = Math.round(attemptResult.elapsed_seconds / (attemptResult.total || 1));
+  const normalizedTheme = String(theme) === 'paper' ? 'light' : String(theme);
+  const setThemeValue = (value: 'light' | 'dark' | 'oled') => {
+    setTheme(value as Parameters<typeof setTheme>[0]);
+  };
+  const fontSizeClass =
+    fontSize === 'sm'
+      ? 'text-[1rem] leading-[1.65]'
+      : fontSize === 'lg'
+        ? 'text-[1.1875rem] leading-[1.75]'
+        : 'text-[1.0625rem] leading-[1.7]';
 
+  if (!activeExam) {
     return (
-      <div className="mx-auto max-w-6xl animate-fadeIn p-4 sm:p-6 lg:p-8 space-y-8">
-        {/* Score Glass Card */}
-        <div className="glass-card relative overflow-hidden p-6 sm:p-10 text-center">
-          <div className="absolute -top-24 -left-24 h-56 w-56 rounded-full bg-indigo-500/20 blur-3xl pointer-events-none" />
-          <div className="absolute -bottom-24 -right-24 h-56 w-56 rounded-full bg-emerald-500/20 blur-3xl pointer-events-none" />
-
-          <div className="inline-flex h-20 w-20 items-center justify-center rounded-3xl glass-pill-indigo text-indigo-300 shadow-inner">
-            <Award className="h-10 w-10 text-indigo-400" />
-          </div>
-
-          <h1 className="mt-4 font-heading text-3xl font-black text-white">Simulado Concluído!</h1>
-          <p className="mt-1 text-sm font-semibold text-slate-300 max-w-xl mx-auto truncate">{activeExam.title}</p>
-
-          {/* KPI Metrics Grid */}
-          <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <div className="glass-card p-4">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Nota Final</span>
-              <p className={`mt-1 font-mono text-3xl sm:text-4xl font-black ${attemptResult.percentage >= 70 ? 'text-emerald-400' : 'text-amber-400'}`}>
-                {attemptResult.percentage}%
-              </p>
-            </div>
-            <div className="glass-card p-4">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Total de Acertos</span>
-              <p className="mt-1 font-mono text-3xl sm:text-4xl font-black text-emerald-400">
-                {attemptResult.score} <span className="text-lg text-slate-400 font-sans">/ {attemptResult.total}</span>
-              </p>
-            </div>
-            <div className="glass-card p-4">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Tempo Total</span>
-              <p className="mt-1 font-mono text-3xl sm:text-4xl font-black text-indigo-300">
-                {formatTime(attemptResult.elapsed_seconds)}
-              </p>
-            </div>
-            <div className="glass-card p-4">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Média p/ Questão</span>
-              <p className="mt-1 font-mono text-3xl sm:text-4xl font-black text-cyan-300">
-                {avgSecondsPerQ}s
-              </p>
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <button
-              onClick={() => {
-                resetExam();
-                handleBack();
-              }}
-              className="flex items-center gap-2 rounded-2xl glass-btn-secondary px-6 py-3.5 font-heading font-bold text-sm text-slate-200 hover:text-white"
-            >
-              <ArrowLeft className="h-4 w-4" /> Voltar às Pastas
-            </button>
-            <button
-              onClick={() => {
-                const examToRedo = { ...activeExam };
-                resetExam();
-                useExam().startExam(examToRedo);
-              }}
-              className="flex items-center gap-2 rounded-2xl glass-btn-primary px-6 py-3.5 font-heading font-bold text-sm text-white"
-            >
-              <RotateCcw className="h-4 w-4" /> Refazer Simulado
-            </button>
-            {onOpenNotebook && (
-              <button
-                onClick={onOpenNotebook}
-                className="flex items-center gap-2 rounded-2xl glass-pill-rose px-6 py-3.5 font-heading font-bold text-sm hover:bg-rose-500/20 transition"
-              >
-                <Bookmark className="h-4 w-4" /> Ver no Caderno de Erros
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Subject Breakdown Glass Card */}
-        <div className="glass-card p-6 sm:p-8">
-          <h2 className="font-heading text-lg font-bold text-white mb-4">Desempenho por Disciplina</h2>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {Object.entries(attemptResult.feedback_per_subject).map(([subject, stats]) => (
-              <div key={subject} className="flex items-center justify-between rounded-2xl glass-pill p-4">
-                <div>
-                  <p className="font-heading font-bold text-slate-200">{subject}</p>
-                  <p className="text-xs text-slate-400 font-medium">
-                    {stats.correct} de {stats.total} questões corretas
-                  </p>
-                </div>
-                <span className={`font-mono text-xl font-black ${stats.percentage >= 70 ? 'text-emerald-400' : 'text-amber-400'}`}>
-                  {stats.percentage}%
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Detailed Question Review List */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-heading text-lg font-bold text-white">Gabarito e Revisão Detalhada</h2>
-            <div className="flex gap-1.5 rounded-2xl glass-pill p-1">
-              <button
-                onClick={() => setResultFilter('all')}
-                className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition ${resultFilter === 'all' ? 'glass-btn-primary text-white' : 'text-slate-400 hover:text-white'}`}
-              >
-                Todas ({attemptResult.total})
-              </button>
-              <button
-                onClick={() => setResultFilter('errors')}
-                className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition ${resultFilter === 'errors' ? 'bg-rose-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
-              >
-                Erros ({attemptResult.total - attemptResult.score})
-              </button>
-              <button
-                onClick={() => setResultFilter('correct')}
-                className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition ${resultFilter === 'correct' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
-              >
-                Acertos ({attemptResult.score})
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            {filteredEntries.map(([qIdxStr, data]) => {
-              const originalQ = questions.find((q) => (q.numero_questao || String(q.id)) === qIdxStr);
-              if (!originalQ) return null;
-
-              return (
-                <div
-                  key={qIdxStr}
-                  className={`rounded-3xl border p-6 transition-all ${
-                    data.is_correct
-                      ? 'border-emerald-500/30 bg-emerald-950/20 backdrop-blur-md'
-                      : 'border-rose-500/30 bg-rose-950/20 backdrop-blur-md'
-                  }`}
-                >
-                  <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                    <div className="flex items-center gap-3">
-                      {data.is_correct ? (
-                        <div className="flex h-8 w-8 items-center justify-center rounded-xl glass-pill-emerald text-emerald-400">
-                          <CheckCircle2 className="h-4 w-4" />
-                        </div>
-                      ) : (
-                        <div className="flex h-8 w-8 items-center justify-center rounded-xl glass-pill-rose text-rose-400">
-                          <XCircle className="h-4 w-4" />
-                        </div>
-                      )}
-                      <span className="font-heading font-bold text-white">Questão {qIdxStr}</span>
-                      <span className="rounded-lg glass-pill px-2.5 py-0.5 text-xs text-slate-300">
-                        {data.subject || originalQ.subject}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-3 text-xs font-mono font-bold">
-                      <span className="text-slate-400">Sua resposta: <span className={data.is_correct ? 'text-emerald-400' : 'text-rose-400'}>{data.user_answer || 'Em branco'}</span></span>
-                      <span className="text-slate-400">Gabarito: <span className="text-emerald-400">{data.correct_answer}</span></span>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 text-sm font-reading text-slate-200">
-                    <MathRenderer content={originalQ.statement} />
-                  </div>
-
-                  {/* Embedded Diagrams in Review */}
-                  {originalQ.images && originalQ.images.length > 0 && (
-                    <div className="mt-4 space-y-2">
-                      {originalQ.images.map((imgSrc, imgIdx) => (
-                        <div
-                          key={imgIdx}
-                          onClick={() => setSelectedImageZoom(imgSrc)}
-                          className="group relative cursor-zoom-in overflow-hidden rounded-2xl border border-white/10 bg-black/40 p-2 text-center"
-                        >
-                          <img
-                            src={imgSrc}
-                            alt={`Diagrama da Questão ${qIdxStr}`}
-                            className="mx-auto max-h-72 rounded-lg object-contain transition group-hover:scale-[1.01]"
-                          />
-                          <div className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-xl bg-black/80 px-2.5 py-1 text-xs text-white opacity-0 group-hover:opacity-100 transition">
-                            <Eye className="h-3.5 w-3.5" /> Ampliar Imagem
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="mt-4 space-y-2">
-                    {Object.entries(originalQ.options).map(([k, text]) => {
-                      const isUser = data.user_answer === k;
-                      const isCorrect = data.correct_answer === k;
-                      let badge = 'glass-option-default text-slate-300';
-                      if (isCorrect) badge = 'glass-option-correct text-emerald-100 font-bold';
-                      else if (isUser) badge = 'glass-option-wrong text-rose-100';
-
-                      return (
-                        <div key={k} className={`flex items-start gap-3 rounded-2xl p-3.5 text-xs ${badge}`}>
-                          <span className="font-mono font-extrabold px-1.5 py-0.5 rounded-lg bg-black/40 shrink-0">{k}</span>
-                          <div className="flex-1 font-reading">
-                            <MathRenderer content={text} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+      <main className="grid min-h-[60vh] place-items-center bg-[var(--background)] px-4 text-[var(--text)]">
+        <section className="max-w-md rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center">
+          <h1 className="text-xl font-semibold">Nenhum simulado em andamento</h1>
+          <p className="mt-2 text-sm leading-relaxed text-[var(--text-muted)]">
+            Escolha uma prova na biblioteca para começar a estudar.
+          </p>
+          <button type="button" onClick={handleBack} className={clsx(primaryButton, 'mt-6')}>
+            <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+            Ir para a biblioteca
+          </button>
+        </section>
+      </main>
     );
   }
 
-  // --- SOLVING VIEW ---
-  const fontSizeClass =
-    fontSize === 'sm' ? 'font-scale-sm' : fontSize === 'lg' ? 'font-scale-lg' : 'font-scale-base';
+  if (isFinished && attemptResult) {
+    const examToRedo = { ...activeExam, questions: [...activeExam.questions] };
+    return (
+      <>
+        <ExamResults
+          exam={activeExam}
+          result={attemptResult}
+          filter={resultFilter}
+          onFilterChange={setResultFilter}
+          formatTime={formatTime}
+          onBack={() => {
+            resetExam();
+            handleBack();
+          }}
+          onRedo={() => {
+            resetExam();
+            startExam(examToRedo);
+          }}
+          onOpenNotebook={onOpenNotebook}
+          onOpenImage={setSelectedImageZoom}
+        />
+        <ImagePreviewDialog src={selectedImageZoom} onClose={() => setSelectedImageZoom(null)} />
+      </>
+    );
+  }
 
-  const qEliminated = eliminatedOptions[qNum] || {};
+  if (!currentQ) {
+    return (
+      <main className="grid min-h-[60vh] place-items-center bg-[var(--background)] px-4 text-[var(--text)]">
+        <section className="max-w-md rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center">
+          <h1 className="text-xl font-semibold">Esta prova não possui questões</h1>
+          <p className="mt-2 text-sm text-[var(--text-muted)]">
+            Volte à biblioteca e escolha outra prova.
+          </p>
+          <button type="button" onClick={handleBack} className={clsx(quietButton, 'mt-6')}>
+            <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+            Voltar
+          </button>
+        </section>
+      </main>
+    );
+  }
 
   return (
-    <div className={`mx-auto max-w-6xl animate-fadeIn p-4 sm:p-6 lg:p-8 ${isZenMode ? 'max-w-4xl' : ''}`}>
-      {/* Top Header Toolbar with Glass Pill Controls */}
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
-        <div className="flex items-center gap-3">
+    <div className="min-h-screen bg-[var(--background)] text-[var(--text)]">
+      <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--surface)]">
+        <div className="mx-auto flex min-h-14 max-w-[1280px] items-center gap-2 px-3 sm:px-5">
           <button
+            type="button"
             onClick={handleBack}
-            className="flex h-10 w-10 items-center justify-center rounded-2xl glass-btn-secondary text-slate-300 hover:text-white"
-            title="Voltar às Pastas"
+            aria-label="Voltar à biblioteca"
+            className={clsx('grid h-11 w-11 shrink-0 place-items-center rounded-lg hover:bg-[var(--surface-hover)]', focusRing)}
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft aria-hidden="true" className="h-5 w-5" />
           </button>
-          <div>
-            <span className="rounded-md glass-pill-indigo px-2 py-0.5 text-[10px] font-mono font-bold">
-              SIMULADO ATIVO
-            </span>
-            <h1 className="font-heading text-sm sm:text-base font-bold text-white truncate max-w-xs sm:max-w-md" title={activeExam.title}>
+
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-sm font-semibold sm:text-base" title={activeExam.title}>
               {activeExam.title}
             </h1>
-          </div>
-        </div>
-
-        {/* Controls Toolbar */}
-        <div className="flex items-center gap-2 sm:gap-2.5">
-          {/* Question Grid Drawer Toggle */}
-          <button
-            onClick={() => setIsDrawerOpen((prev) => !prev)}
-            className={`flex items-center gap-1.5 rounded-2xl px-3 py-2 text-xs font-bold transition ${
-              isDrawerOpen
-                ? 'glass-btn-primary text-white'
-                : 'glass-btn-secondary text-slate-300 hover:text-white'
-            }`}
-            title="Abrir Mapa de Questões (Atalho: G)"
-          >
-            <LayoutGrid className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Mapa ({currentIdx + 1}/{totalQuestions})</span>
-          </button>
-
-          {/* Font Scale Adjuster */}
-          <div className="flex items-center rounded-2xl glass-pill p-0.5">
-            {(['sm', 'base', 'lg'] as const).map((size) => (
-              <button
-                key={size}
-                onClick={() => setFontSize(size)}
-                className={`rounded-xl px-2.5 py-1 text-xs font-bold transition ${
-                  fontSize === size ? 'glass-btn-primary text-white' : 'text-slate-400 hover:text-white'
-                }`}
-                title={`Tamanho de fonte: ${size.toUpperCase()}`}
-              >
-                {size === 'sm' ? 'A-' : size === 'lg' ? 'A+' : 'A'}
-              </button>
-            ))}
+            <p className="text-xs text-[var(--text-muted)]">
+              {answeredCount} de {totalQuestions} respondidas
+            </p>
           </div>
 
-          {/* Immediate Feedback Toggle */}
           <button
-            onClick={toggleImmediateFeedback}
-            className={`flex items-center gap-1.5 rounded-2xl px-3 py-2 text-xs font-bold transition ${
-              isImmediateFeedback
-                ? 'glass-pill-emerald text-emerald-300'
-                : 'glass-btn-secondary text-slate-400 hover:text-slate-200'
-            }`}
-            title="Modo Gabarito Imediato: Mostra se acertou na hora"
-          >
-            <Zap className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Gabarito Imediato</span>
-          </button>
-
-          {/* Timer Clock */}
-          <button
+            type="button"
             onClick={toggleTimer}
-            className={`flex items-center gap-1.5 rounded-2xl px-3.5 py-2 font-mono text-xs font-bold transition ${
-              isTimerRunning
-                ? 'glass-pill-indigo text-indigo-300'
-                : 'glass-pill-amber text-amber-300 animate-pulse'
-            }`}
-            title="Pausar / Continuar Cronômetro"
+            aria-label={
+              (isTimerRunning ? 'Pausar' : 'Retomar') +
+              ' cronômetro. Tempo atual: ' +
+              formatTime(elapsedSeconds)
+            }
+            className={clsx(
+              'inline-flex h-11 items-center gap-2 rounded-lg px-2 font-mono text-xs font-semibold',
+              'text-[var(--text)] hover:bg-[var(--surface-hover)] sm:px-3 sm:text-sm',
+              !isTimerRunning && 'text-[var(--warning)]',
+              focusRing,
+            )}
           >
-            <Clock className="h-3.5 w-3.5" />
+            {isTimerRunning ? (
+              <Pause aria-hidden="true" className="h-4 w-4" />
+            ) : (
+              <Play aria-hidden="true" className="h-4 w-4" />
+            )}
             <span>{formatTime(elapsedSeconds)}</span>
           </button>
 
-          {/* Zen Mode */}
-          <button
-            onClick={toggleZenMode}
-            className={`flex items-center rounded-2xl p-2 text-xs font-bold transition ${
-              isZenMode
-                ? 'glass-btn-primary text-white'
-                : 'glass-btn-secondary text-slate-400 hover:text-white'
-            }`}
-            title="Modo Zen (Atalho: Z)"
-          >
-            {isZenMode ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          </button>
+          {!isZenMode && (
+            <button
+              type="button"
+              onClick={openQuestionMap}
+              aria-label="Abrir mapa de questões"
+              aria-expanded={isMobileMapOpen}
+              className={clsx('grid h-11 w-11 place-items-center rounded-lg hover:bg-[var(--surface-hover)]', focusRing)}
+            >
+              <LayoutGrid aria-hidden="true" className="h-5 w-5" />
+            </button>
+          )}
 
-          {/* Finish Button */}
+          <div ref={preferencesRef} className="relative">
+            <button
+              ref={preferencesButtonRef}
+              type="button"
+              onClick={() => setIsPreferencesOpen((open) => !open)}
+              aria-label="Preferências de leitura"
+              aria-expanded={isPreferencesOpen}
+              aria-controls="exam-reading-preferences"
+              className={clsx(
+                'inline-flex h-11 min-w-11 items-center justify-center gap-1 rounded-lg px-2 hover:bg-[var(--surface-hover)]',
+                focusRing,
+              )}
+            >
+              <span aria-hidden="true" className="font-serif text-sm font-semibold">
+                Aa
+              </span>
+              <Settings2 aria-hidden="true" className="h-3.5 w-3.5 text-[var(--text-muted)]" />
+            </button>
+
+            {isPreferencesOpen && (
+              <div
+                id="exam-reading-preferences"
+                role="region"
+                aria-label="Preferências de leitura"
+                className="absolute right-0 top-12 z-50 w-[min(18rem,calc(100vw-2rem))] rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-xl"
+              >
+                <fieldset>
+                  <legend className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                    Tema
+                  </legend>
+                  <div className="mt-2 grid grid-cols-3 gap-2">
+                    {[
+                      ['light', 'Claro'],
+                      ['dark', 'Escuro'],
+                      ['oled', 'OLED'],
+                    ].map(([value, label]) => (
+                      <label
+                        key={value}
+                        className={clsx(
+                          'flex min-h-11 cursor-pointer items-center justify-center rounded-lg border text-xs font-semibold',
+                          normalizedTheme === value
+                            ? 'border-[var(--primary)] bg-[var(--surface-subtle)] text-[var(--primary)]'
+                            : 'border-[var(--border)] hover:bg-[var(--surface-hover)]',
+                          focusRing,
+                        )}
+                      >
+                        <input
+                          type="radio"
+                          name="exam-theme"
+                          value={value}
+                          checked={normalizedTheme === value}
+                          onChange={() => setThemeValue(value as 'light' | 'dark' | 'oled')}
+                          className="sr-only"
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+
+                <fieldset className="mt-5">
+                  <legend className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                    Tamanho do texto
+                  </legend>
+                  <div className="mt-2 grid grid-cols-3 gap-2">
+                    {(['sm', 'base', 'lg'] as const).map((size) => (
+                      <button
+                        key={size}
+                        type="button"
+                        aria-pressed={fontSize === size}
+                        onClick={() => setFontSize(size)}
+                        className={clsx(
+                          'min-h-11 rounded-lg border text-sm font-semibold',
+                          fontSize === size
+                            ? 'border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-contrast)]'
+                            : 'border-[var(--border)] hover:bg-[var(--surface-hover)]',
+                          focusRing,
+                        )}
+                      >
+                        {size === 'sm' ? 'A−' : size === 'lg' ? 'A+' : 'A'}
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
+
+                <div className="mt-5 space-y-2 border-t border-[var(--border)] pt-4">
+                  {[
+                    {
+                      label: 'Gabarito imediato',
+                      checked: isImmediateFeedback,
+                      onChange: toggleImmediateFeedback,
+                    },
+                    {
+                      label: 'Modo Zen',
+                      checked: isZenMode,
+                      onChange: toggleZenMode,
+                    },
+                    {
+                      label: 'Eliminar alternativas',
+                      checked: enableEliminationMode,
+                      onChange: toggleEliminationMode,
+                    },
+                  ].map((preference) => (
+                    <button
+                      key={preference.label}
+                      type="button"
+                      role="switch"
+                      aria-checked={preference.checked}
+                      onClick={preference.onChange}
+                      className={clsx(
+                        'flex min-h-11 w-full items-center justify-between rounded-lg px-2 text-left text-sm',
+                        'hover:bg-[var(--surface-hover)]',
+                        focusRing,
+                      )}
+                    >
+                      {preference.label}
+                      <span
+                        aria-hidden="true"
+                        className={clsx(
+                          'relative h-6 w-11 rounded-full border transition-colors duration-150',
+                          preference.checked
+                            ? 'border-[var(--primary)] bg-[var(--primary)]'
+                            : 'border-[var(--border)] bg-[var(--surface-subtle)]',
+                        )}
+                      >
+                        <span
+                          className={clsx(
+                            'absolute top-0.5 h-4 w-4 rounded-full bg-[var(--primary-contrast)] transition-[left] duration-150',
+                            preference.checked ? 'left-5' : 'left-1',
+                          )}
+                        />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           <button
-            onClick={handleFinish}
+            type="button"
+            onClick={() => setIsSubmitDialogOpen(true)}
             disabled={isSubmitting}
-            className="flex items-center gap-1.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 font-heading font-bold text-xs text-white shadow-lg shadow-emerald-600/30 hover:from-emerald-500 hover:to-teal-500 border border-white/20 transition disabled:opacity-50"
+            aria-label="Entregar simulado"
+            className={clsx(primaryButton, 'shrink-0 px-3 sm:px-4')}
           >
-            <CheckCircle2 className="h-4 w-4" />
-            <span className="hidden sm:inline">Entregar Prova</span>
+            <CheckCircle2 aria-hidden="true" className="h-4 w-4" />
+            <span className="hidden sm:inline">Entregar</span>
           </button>
+        </div>
+
+        <div
+          role="progressbar"
+          aria-label="Progresso de respostas"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(progressPercentage)}
+          className="h-1 bg-[var(--surface-subtle)]"
+        >
+          <div
+            className="h-full bg-[var(--primary)] transition-[width] duration-150"
+            style={{ width: progressPercentage + '%' }}
+          />
         </div>
       </header>
 
-      {/* Main Layout (Question Card + Question Drawer) */}
-      <div className="mt-6 grid gap-6 lg:grid-cols-4">
-        {/* Question Area */}
-        <div className={isZenMode || !isDrawerOpen ? 'col-span-full' : 'lg:col-span-3'}>
-          {/* Progress Bar */}
-          <div className="mb-4">
-            <div className="flex items-center justify-between text-xs font-bold text-slate-400">
-              <span className="font-heading">Questão {currentIdx + 1} de {totalQuestions}</span>
-              <span className="font-mono text-indigo-400">{Math.round(progressPercentage)}% concluído</span>
+      <main
+        className={clsx(
+          'mx-auto w-full max-w-[1180px] px-4 pb-32 pt-6 sm:px-6 lg:pb-12 lg:pt-8',
+          !isZenMode && 'lg:grid lg:grid-cols-[minmax(0,1fr)_17rem] lg:gap-8',
+        )}
+      >
+        <article
+          className={clsx(
+            'mx-auto w-full max-w-[72ch] rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-8',
+            isZenMode && 'lg:max-w-[72ch]',
+          )}
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--border)] pb-4">
+            <div className="min-w-0">
+              <h2
+                ref={questionHeadingRef}
+                tabIndex={-1}
+                className={clsx('scroll-mt-24 text-lg font-semibold', focusRing)}
+              >
+                Questão {qNum}
+              </h2>
+              <p className="mt-1 text-sm text-[var(--text-muted)]">
+                {currentQ.subject || 'Conhecimentos gerais'} · {currentIdx + 1} de {totalQuestions}
+              </p>
             </div>
-            <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-900 border border-white/10">
-              <div
-                className="h-full bg-gradient-to-r from-indigo-500 via-violet-500 to-cyan-400 transition-all duration-300 shadow-sm"
-                style={{ width: `${progressPercentage}%` }}
+            <button
+              type="button"
+              onClick={() => toggleFlagQuestion(qNum)}
+              aria-pressed={Boolean(flaggedQuestions[qNum])}
+              className={clsx(
+                quietButton,
+                'px-3',
+                flaggedQuestions[qNum] &&
+                  'border-[var(--warning)] bg-[var(--warning-subtle)] text-[var(--warning)]',
+              )}
+            >
+              <Bookmark
+                aria-hidden="true"
+                className={clsx('h-4 w-4', flaggedQuestions[qNum] && 'fill-current')}
               />
-            </div>
+              {flaggedQuestions[qNum] ? 'Marcada' : 'Marcar'}
+            </button>
           </div>
 
-          {/* High-Contrast Reading Shield Question Box */}
-          <div className="glass-reading-shield p-6 sm:p-8">
-            {/* Header tags */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
-              <div className="flex items-center gap-2.5">
-                <span className="rounded-xl glass-pill-indigo px-3 py-1 font-mono text-sm font-black">
-                  Questão {qNum}
-                </span>
-                <span className="rounded-xl glass-pill px-3 py-1 text-xs font-semibold text-slate-300">
-                  {currentQ?.subject || 'Conhecimentos Gerais'}
-                </span>
+          {currentQ.context_text && (
+            <aside
+              aria-label="Texto de apoio"
+              className="mt-6 rounded-lg border-l-4 border-[var(--primary)] bg-[var(--surface-subtle)] px-4 py-4"
+            >
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                Texto de apoio
+              </p>
+              <div className={clsx('font-reading', fontSizeClass)}>
+                <MathRenderer content={currentQ.context_text} />
               </div>
+            </aside>
+          )}
 
-              {/* Bookmark Flag */}
-              <button
-                onClick={() => toggleFlagQuestion(qNum)}
-                className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition ${
-                  flaggedQuestions[qNum]
-                    ? 'glass-pill-amber font-bold'
-                    : 'glass-btn-secondary text-slate-400 hover:text-slate-200'
-                }`}
-                title="Marcar questão para revisão (Atalho: Barra de Espaço)"
-              >
-                <Bookmark className="h-3.5 w-3.5" />
-                <span>{flaggedQuestions[qNum] ? 'Marcada para Revisão' : 'Marcar Dúvida'}</span>
-              </button>
+          {currentQ.images && currentQ.images.length > 0 && (
+            <div className="mt-6 grid gap-3">
+              {currentQ.images.map((src, imageIdx) => (
+                <button
+                  key={src + imageIdx}
+                  type="button"
+                  onClick={() => setSelectedImageZoom(src)}
+                  className={clsx(
+                    'rounded-lg border border-[var(--border)] bg-[var(--surface-subtle)] p-2 text-center',
+                    'hover:bg-[var(--surface-hover)]',
+                    focusRing,
+                  )}
+                >
+                  <img
+                    src={src}
+                    alt={'Imagem da questão ' + qNum}
+                    className="mx-auto max-h-96 max-w-full object-contain"
+                  />
+                  <span className="mt-2 inline-flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                    <Eye aria-hidden="true" className="h-3.5 w-3.5" />
+                    Ampliar imagem
+                  </span>
+                </button>
+              ))}
             </div>
+          )}
 
-            {/* Embedded Diagrams (Renderizado no topo do card para visibilidade imediata) */}
-            {currentQ?.images && currentQ.images.length > 0 && (
-              <div className="mt-5 space-y-3">
-                {currentQ.images.map((imgSrc, imgIdx) => (
-                  <div
-                    key={imgIdx}
-                    onClick={() => setSelectedImageZoom(imgSrc)}
-                    className="group relative cursor-zoom-in overflow-hidden rounded-2xl border border-white/10 bg-black/40 p-2 text-center"
-                  >
-                    <img
-                      src={imgSrc}
-                      alt={`Diagrama da Questão ${qNum}`}
-                      className="mx-auto max-h-96 rounded-lg object-contain transition group-hover:scale-[1.01]"
-                    />
-                    <div className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-xl bg-black/80 px-2.5 py-1 text-xs text-white opacity-0 group-hover:opacity-100 transition">
-                      <Eye className="h-3.5 w-3.5" /> Ampliar Imagem
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Statement / Enunciado */}
-            <div className={`mt-6 ${fontSizeClass} font-reading text-slate-100`}>
-              <MathRenderer content={currentQ?.statement || ''} />
-            </div>
-
-            {/* Options List */}
-            <div className="mt-8 space-y-3">
-              {currentQ &&
-                Object.entries(currentQ.options).map(([optKey, optText]) => {
-                  const isSelected = answers[qNum] === optKey;
-                  const isCorrect = currentQ.correct_answer === optKey;
-                  const isEliminated = Boolean(qEliminated[optKey]);
-
-                  let stateClass = 'glass-option-default text-slate-200';
-                  if (isSelected) {
-                    stateClass = 'glass-option-selected text-white font-medium';
-                  }
-
-                  if (isImmediateFeedback && isSelected) {
-                    stateClass = isCorrect
-                      ? 'glass-option-correct text-emerald-100'
-                      : 'glass-option-wrong text-rose-100';
-                  }
-
-                  return (
-                    <div
-                      key={optKey}
-                      className={`group relative flex items-start gap-3 rounded-2xl p-4 transition-all duration-200 ${stateClass} ${
-                        isEliminated ? 'eliminated-option' : ''
-                      }`}
-                    >
-                      {/* Main Option Click Area */}
-                      <button
-                        onClick={() => selectAnswer(qNum, optKey)}
-                        className="flex flex-1 items-start gap-3.5 text-left focus:outline-none"
-                      >
-                        <span
-                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl font-mono text-xs font-black transition ${
-                            isSelected
-                              ? 'bg-indigo-600 text-white shadow-md'
-                              : 'bg-white/10 text-slate-300 group-hover:bg-white/20'
-                          }`}
-                        >
-                          {optKey}
-                        </span>
-                        <div className={`flex-1 ${fontSizeClass} font-reading pt-0.5`}>
-                          <MathRenderer content={optText} />
-                        </div>
-                      </button>
-
-                      {/* Strikethrough / Elimination Tool Button */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleEliminateOption(qNum, optKey);
-                        }}
-                        className={`p-1.5 rounded-xl border transition ${
-                          isEliminated
-                            ? 'glass-pill-rose text-rose-400'
-                            : 'border-transparent text-slate-500 hover:border-white/10 hover:bg-white/10 hover:text-slate-300'
-                        }`}
-                        title={isEliminated ? 'Restaurar alternativa' : 'Riscar alternativa (Eliminar hipótese)'}
-                      >
-                        <Scissors className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  );
-                })}
-            </div>
-
-            {/* Bottom Nav Buttons */}
-            <div className="mt-8 flex items-center justify-between border-t border-white/10 pt-6">
-              <button
-                onClick={prevQuestion}
-                disabled={currentIdx === 0}
-                className="flex items-center gap-2 rounded-2xl glass-btn-secondary px-5 py-3 font-heading font-bold text-xs text-slate-300 hover:text-white transition disabled:opacity-40"
-              >
-                <ArrowLeft className="h-4 w-4" /> Questão Anterior
-              </button>
-
-              <button
-                onClick={() => setShowShortcutsModal(true)}
-                className="hidden sm:flex items-center gap-1.5 text-xs text-slate-400 hover:text-indigo-300 transition"
-              >
-                <HelpCircle className="h-3.5 w-3.5" /> Atalhos de Teclado (?)
-              </button>
-
-              <button
-                onClick={nextQuestion}
-                disabled={currentIdx === totalQuestions - 1}
-                className="flex items-center gap-2 rounded-2xl glass-btn-primary px-5 py-3 font-heading font-bold text-xs text-white transition disabled:opacity-40"
-              >
-                Próxima Questão <ArrowRight className="h-4 w-4" />
-              </button>
-            </div>
+          <div className={clsx('mt-7 font-reading', fontSizeClass)}>
+            <MathRenderer content={currentQ.statement} />
           </div>
-        </div>
 
-        {/* Question Navigator Drawer / Sidebar Grid */}
-        {isDrawerOpen && !isZenMode && (
-          <div className="glass-card p-5 h-fit space-y-4 lg:col-span-1">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <h3 className="font-heading text-xs font-bold uppercase tracking-wider text-slate-300">
-                Mapa da Prova
-              </h3>
-              <button
-                onClick={() => setIsDrawerOpen(false)}
-                className="text-slate-400 hover:text-white lg:hidden"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Quick Status Legend */}
-            <div className="grid grid-cols-2 gap-1.5 text-[10px] text-slate-400 font-semibold">
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-indigo-600 shadow-sm" /> Respondida
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-amber-500 shadow-sm" /> Dúvida
-              </span>
-            </div>
-
-            {/* Numbers Grid */}
-            <div className="grid grid-cols-5 gap-2 max-h-96 overflow-y-auto pr-1">
-              {questions.map((q, idx) => {
-                const qNumber = q.numero_questao || String(idx + 1);
-                const isCurrent = idx === currentIdx;
-                const isAnswered = Boolean(answers[qNumber]);
-                const isFlagged = Boolean(flaggedQuestions[qNumber]);
-
-                let btnStyle = 'glass-btn-secondary text-slate-400';
-                if (isAnswered) btnStyle = 'glass-pill-indigo font-bold text-white';
-                if (isFlagged) btnStyle = 'glass-pill-amber font-bold text-white';
-                if (isCurrent) btnStyle = 'glass-btn-primary text-white font-black ring-2 ring-indigo-400/50';
+          <fieldset className="mt-8 min-w-0">
+            <legend className="mb-3 text-sm font-semibold text-[var(--text-muted)]">
+              Escolha uma alternativa
+            </legend>
+            <div className="space-y-3">
+              {Object.entries(currentQ.options).map(([optionKey, optionText], optionIdx) => {
+                const isSelected = answers[qNum] === optionKey;
+                const isCorrect = currentQ.correct_answer === optionKey;
+                const isEliminated =
+                  enableEliminationMode && Boolean(qEliminated[optionKey]);
+                const showCorrectFeedback = isImmediateFeedback && isSelected && isCorrect;
+                const showWrongFeedback = isImmediateFeedback && isSelected && !isCorrect;
+                const statusId = 'question-' + currentIdx + '-option-' + optionIdx + '-status';
 
                 return (
-                  <button
-                    key={idx}
-                    onClick={() => setQuestionIdx(idx)}
-                    className={`h-9 rounded-xl font-mono text-xs transition flex items-center justify-center ${btnStyle}`}
+                  <div
+                    key={optionKey}
+                    className={clsx(
+                      'flex items-stretch rounded-xl border bg-[var(--surface)] transition-colors duration-150',
+                      isSelected
+                        ? 'border-[var(--primary)] bg-[var(--surface-subtle)]'
+                        : 'border-[var(--border)] hover:bg-[var(--surface-hover)]',
+                      showCorrectFeedback &&
+                        'border-[var(--success)] bg-[var(--success-subtle)]',
+                      showWrongFeedback && 'border-[var(--danger)] bg-[var(--danger-subtle)]',
+                      isEliminated && 'opacity-65',
+                      focusRing,
+                    )}
                   >
-                    {qNumber}
-                  </button>
+                    <label className="flex min-h-14 min-w-0 flex-1 cursor-pointer items-start gap-3 px-4 py-4">
+                      <input
+                        type="radio"
+                        name={'question-' + currentIdx}
+                        value={optionKey}
+                        checked={isSelected}
+                        aria-describedby={
+                          isEliminated || showCorrectFeedback || showWrongFeedback
+                            ? statusId
+                            : undefined
+                        }
+                        onChange={() => selectAnswer(qNum, optionKey)}
+                        className="mt-1 h-5 w-5 shrink-0 accent-[var(--primary)]"
+                      />
+                      <span
+                        aria-hidden="true"
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[var(--border)] font-mono text-xs font-semibold"
+                      >
+                        {optionKey}
+                      </span>
+                      <span
+                        className={clsx(
+                          'min-w-0 flex-1 font-reading',
+                          fontSizeClass,
+                          isEliminated && 'line-through',
+                        )}
+                      >
+                        <MathRenderer content={optionText} />
+                        {(isEliminated || showCorrectFeedback || showWrongFeedback) && (
+                          <span
+                            id={statusId}
+                            className={clsx(
+                              'mt-2 block text-xs font-semibold no-underline',
+                              showCorrectFeedback && 'text-[var(--success)]',
+                              showWrongFeedback && 'text-[var(--danger)]',
+                              isEliminated &&
+                                !showCorrectFeedback &&
+                                !showWrongFeedback &&
+                                'text-[var(--text-muted)]',
+                            )}
+                          >
+                            {showCorrectFeedback
+                              ? 'Resposta correta'
+                              : showWrongFeedback
+                                ? 'Resposta incorreta'
+                                : 'Alternativa eliminada'}
+                          </span>
+                        )}
+                      </span>
+                    </label>
+
+                    {enableEliminationMode && (
+                      <button
+                        type="button"
+                        onClick={() => toggleEliminateOption(qNum, optionKey)}
+                        aria-pressed={isEliminated}
+                        aria-label={
+                          (isEliminated ? 'Restaurar' : 'Eliminar') +
+                          ' alternativa ' +
+                          optionKey
+                        }
+                        className={clsx(
+                          'm-1.5 grid min-h-11 w-11 shrink-0 place-items-center rounded-lg',
+                          'text-[var(--text-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]',
+                          isEliminated &&
+                            'bg-[var(--danger-subtle)] text-[var(--danger)]',
+                          focusRing,
+                        )}
+                      >
+                        <Scissors aria-hidden="true" className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
                 );
               })}
             </div>
-          </div>
-        )}
-      </div>
+          </fieldset>
 
-      {/* Image Zoom Lightbox Modal */}
-      {selectedImageZoom && (
-        <div
-          onClick={() => setSelectedImageZoom(null)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-md cursor-zoom-out"
-        >
-          <div className="relative max-h-[90vh] max-w-[90vw]">
-            <img src={selectedImageZoom} alt="Zoom" className="max-h-[85vh] rounded-2xl object-contain shadow-2xl" />
-            <p className="mt-2 text-center text-xs text-slate-400">Clique em qualquer lugar para fechar</p>
+          <div className="mt-8 hidden items-center justify-between border-t border-[var(--border)] pt-6 lg:flex">
+            <button
+              type="button"
+              onClick={prevQuestion}
+              disabled={currentIdx === 0}
+              className={quietButton}
+            >
+              <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+              Anterior
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsShortcutsOpen(true)}
+              className={clsx(
+                'inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-xs text-[var(--text-muted)]',
+                'hover:bg-[var(--surface-hover)] hover:text-[var(--text)]',
+                focusRing,
+              )}
+            >
+              <HelpCircle aria-hidden="true" className="h-4 w-4" />
+              Atalhos (?)
+            </button>
+            <button
+              type="button"
+              onClick={nextQuestion}
+              disabled={currentIdx === totalQuestions - 1}
+              className={primaryButton}
+            >
+              Próxima
+              <ArrowRight aria-hidden="true" className="h-4 w-4" />
+            </button>
           </div>
-        </div>
-      )}
+        </article>
 
-      {/* Shortcuts Help Modal */}
-      {showShortcutsModal && (
-        <div
-          onClick={() => setShowShortcutsModal(false)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="glass-card max-w-md w-full p-6 space-y-4 shadow-2xl"
+        {!isZenMode && (
+          <aside
+            ref={desktopMapRef}
+            tabIndex={-1}
+            aria-label="Mapa da prova"
+            className={clsx(
+              'sticky top-24 hidden max-h-[calc(100vh-7rem)] self-start overflow-y-auto rounded-xl',
+              'border border-[var(--border)] bg-[var(--surface)] p-4 lg:block',
+              focusRing,
+            )}
           >
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <h3 className="font-heading text-sm font-bold text-white">Atalhos de Teclado</h3>
-              <button onClick={() => setShowShortcutsModal(false)} className="text-slate-400 hover:text-white">
-                <X className="h-4 w-4" />
-              </button>
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold">Mapa da prova</h2>
+                <p className="mt-1 text-xs text-[var(--text-muted)]">
+                  {answeredCount} de {totalQuestions} respondidas
+                </p>
+              </div>
+              <LayoutGrid aria-hidden="true" className="h-4 w-4 text-[var(--text-muted)]" />
             </div>
-            <div className="space-y-2.5 text-xs text-slate-300">
-              <div className="flex items-center justify-between">
-                <span>Selecionar alternativas</span>
-                <span className="font-mono glass-pill px-2 py-0.5 rounded text-indigo-300">[A–E] ou [1–5]</span>
+            <QuestionMap
+              questions={questions}
+              currentIdx={currentIdx}
+              answers={answers}
+              flaggedQuestions={flaggedQuestions}
+              onSelect={setQuestionIdx}
+            />
+          </aside>
+        )}
+      </main>
+
+      <nav
+        aria-label="Navegação entre questões"
+        className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-3 gap-2 border-t border-[var(--border)] bg-[var(--surface)] px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:hidden"
+      >
+        <button
+          type="button"
+          onClick={prevQuestion}
+          disabled={currentIdx === 0}
+          className={quietButton}
+        >
+          <ArrowLeft aria-hidden="true" className="h-5 w-5" />
+          <span className="sr-only sm:not-sr-only">Anterior</span>
+        </button>
+        <button type="button" onClick={openQuestionMap} className={quietButton}>
+          <LayoutGrid aria-hidden="true" className="h-5 w-5" />
+          <span>{currentIdx + 1}/{totalQuestions}</span>
+        </button>
+        <button
+          type="button"
+          onClick={nextQuestion}
+          disabled={currentIdx === totalQuestions - 1}
+          className={primaryButton}
+        >
+          <span className="sr-only sm:not-sr-only">Próxima</span>
+          <ArrowRight aria-hidden="true" className="h-5 w-5" />
+        </button>
+      </nav>
+
+      <AccessibleDialog
+        open={isMobileMapOpen}
+        title="Mapa da prova"
+        onClose={() => setIsMobileMapOpen(false)}
+        placement="bottom"
+        panelClassName="lg:hidden"
+      >
+        <div className="max-h-[65vh] overflow-y-auto p-5">
+          <QuestionMap
+            questions={questions}
+            currentIdx={currentIdx}
+            answers={answers}
+            flaggedQuestions={flaggedQuestions}
+            onSelect={goToQuestion}
+          />
+        </div>
+      </AccessibleDialog>
+
+      <AccessibleDialog
+        open={isSubmitDialogOpen}
+        title="Entregar simulado?"
+        onClose={() => {
+          if (!isSubmitting) setIsSubmitDialogOpen(false);
+        }}
+        dismissDisabled={isSubmitting}
+        panelClassName="overflow-y-auto"
+      >
+        <div className="space-y-5 p-5" aria-busy={isSubmitting}>
+          <p className="text-sm leading-relaxed text-[var(--text-muted)]">
+            Você respondeu {answeredCount} de {totalQuestions} questões. Depois da entrega,
+            as respostas não poderão ser alteradas.
+          </p>
+
+          <section aria-labelledby="unanswered-title">
+            <h3 id="unanswered-title" className="text-sm font-semibold">
+              Em branco ({unansweredQuestions.length})
+            </h3>
+            {unansweredQuestions.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {unansweredQuestions.map((question) => (
+                  <button
+                    key={'blank-' + question.idx}
+                    type="button"
+                    onClick={() => goToQuestion(question.idx)}
+                    disabled={isSubmitting}
+                    aria-label={'Ir para questão ' + question.number + ' em branco'}
+                    className={quietButton}
+                  >
+                    {question.number}
+                  </button>
+                ))}
               </div>
-              <div className="flex items-center justify-between">
-                <span>Próxima questão</span>
-                <span className="font-mono glass-pill px-2 py-0.5 rounded text-indigo-300">[Seta Direita →]</span>
+            ) : (
+              <p className="mt-1 text-sm text-[var(--success)]">Todas foram respondidas.</p>
+            )}
+          </section>
+
+          <section aria-labelledby="marked-title">
+            <h3 id="marked-title" className="text-sm font-semibold">
+              Marcadas para revisão ({markedQuestions.length})
+            </h3>
+            {markedQuestions.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {markedQuestions.map((question) => (
+                  <button
+                    key={'marked-' + question.idx}
+                    type="button"
+                    onClick={() => goToQuestion(question.idx)}
+                    disabled={isSubmitting}
+                    aria-label={'Ir para questão ' + question.number + ' marcada para revisão'}
+                    className={clsx(
+                      quietButton,
+                      'border-[var(--warning)] text-[var(--warning)]',
+                    )}
+                  >
+                    <Bookmark aria-hidden="true" className="h-3.5 w-3.5 fill-current" />
+                    {question.number}
+                  </button>
+                ))}
               </div>
-              <div className="flex items-center justify-between">
-                <span>Questão anterior</span>
-                <span className="font-mono glass-pill px-2 py-0.5 rounded text-indigo-300">[Seta Esquerda ←]</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Marcar para revisão</span>
-                <span className="font-mono glass-pill px-2 py-0.5 rounded text-indigo-300">[Barra de Espaço]</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Alternar Modo Zen</span>
-                <span className="font-mono glass-pill px-2 py-0.5 rounded text-indigo-300">[Z]</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Abrir/Fechar Mapa da Prova</span>
-                <span className="font-mono glass-pill px-2 py-0.5 rounded text-indigo-300">[G]</span>
-              </div>
-            </div>
+            ) : (
+              <p className="mt-1 text-sm text-[var(--text-muted)]">Nenhuma questão marcada.</p>
+            )}
+          </section>
+
+          <div className="flex flex-col-reverse gap-2 border-t border-[var(--border)] pt-4 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              data-autofocus
+              onClick={() => setIsSubmitDialogOpen(false)}
+              disabled={isSubmitting}
+              className={quietButton}
+            >
+              Continuar prova
+            </button>
+            <button
+              type="button"
+              onClick={submitAttempt}
+              disabled={isSubmitting}
+              className={primaryButton}
+            >
+              <CheckCircle2 aria-hidden="true" className="h-4 w-4" />
+              {isSubmitting ? 'Entregando…' : 'Confirmar entrega'}
+            </button>
           </div>
         </div>
-      )}
+      </AccessibleDialog>
+
+      <AccessibleDialog
+        open={isShortcutsOpen}
+        title="Atalhos de teclado"
+        onClose={() => setIsShortcutsOpen(false)}
+      >
+        <dl className="space-y-3 p-5 text-sm">
+          {[
+            ['A–E ou 1–5', 'Selecionar alternativa'],
+            ['← / →', 'Questão anterior ou próxima'],
+            ['Espaço', 'Marcar para revisão'],
+            ['Z', 'Alternar modo Zen'],
+            ['G', 'Abrir o mapa da prova'],
+            ['?', 'Abrir esta ajuda'],
+          ].map(([keys, description]) => (
+            <div key={keys} className="flex items-center justify-between gap-5">
+              <dt className="text-[var(--text-muted)]">{description}</dt>
+              <dd>
+                <kbd className="rounded border border-[var(--border)] bg-[var(--surface-subtle)] px-2 py-1 font-mono text-xs">
+                  {keys}
+                </kbd>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </AccessibleDialog>
+
+      <ImagePreviewDialog src={selectedImageZoom} onClose={() => setSelectedImageZoom(null)} />
     </div>
   );
 };

@@ -12,6 +12,9 @@ import re
 from typing import List, Dict, Tuple, Optional, Any
 
 
+DEFAULT_SEARCH_RESULT_LIMIT = 15
+
+
 # =============================================================================
 # 1. CATÁLOGO DE REGEX DETERMINÍSTICO (BANCAS, ÓRGÃOS, CARGOS, UFS, CIDADES)
 # =============================================================================
@@ -23,7 +26,7 @@ BANCAS_MAP = [
     ("VUNESP", r"\b(?:vunesp|funda[çc][ãa]o\s+vunesp)\b"),
     ("CESGRANRIO", r"\b(?:cesgranrio|funda[çc][ãa]o\s+cesgranrio)\b"),
     ("IBAM", r"\b(?:ibam|instituto\s+brasileiro\s+de\s+administra[çc][ãa]o\s+municipal)\b"),
-    ("IDCAP", r"\b(?:idcap|id\s*cap)\b"),
+    ("IDCAP", r"\b(?:idcap|idecap|id\s*cap)\b"),
     ("IDECAN", r"\b(?:idecan|instituto\s+idecan)\b"),
     ("AOCP", r"\b(?:instituto\s+aocp|aocp|assessoria\s+aocp)\b"),
     ("QUADRIX", r"\b(?:quadrix|instituto\s+quadrix)\b"),
@@ -398,7 +401,7 @@ def filter_and_rank_exam_cards(
     raw_cards: List[Dict[str, Any]],
     user_query: str,
     min_score: int = 20,
-    limit: int = 15
+    limit: int = DEFAULT_SEARCH_RESULT_LIMIT
 ) -> List[Dict[str, Any]]:
     """
     Processa uma lista de cards brutos:
@@ -441,6 +444,7 @@ def filter_and_rank_exam_cards(
 # =============================================================================
 
 __all__ = [
+    'DEFAULT_SEARCH_RESULT_LIMIT',
     'BANCAS_MAP',
     'ORGAOS_MAP',
     'CARGOS_MAP',

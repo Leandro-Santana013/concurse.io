@@ -53,13 +53,16 @@ const renderMarkdownTable = (tableText: string, keyPrefix: string | number) => {
   const bodyRows = lines.slice(startIndex).map(parseRow);
 
   return (
-    <div key={keyPrefix} className="my-4 overflow-x-auto rounded-xl border border-white/10 bg-slate-950/40 p-2 shadow-inner">
-      <table className="w-full text-left text-sm text-slate-200 border-collapse">
+    <div
+      key={keyPrefix}
+      className="my-4 overflow-x-auto rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-2"
+    >
+      <table className="w-full border-collapse text-left text-sm text-[var(--text)]">
         {headerCells.length > 0 && (
           <thead>
-            <tr className="border-b border-white/10 bg-white/5 font-semibold text-indigo-300">
+            <tr className="border-b border-[var(--border-strong)] bg-[var(--surface-subtle)] font-semibold text-[var(--text)]">
               {headerCells.map((h, hIdx) => (
-                <th key={hIdx} className="px-4 py-2.5">
+                <th key={hIdx} scope="col" className="px-4 py-2.5">
                   <MathRenderer content={h} />
                 </th>
               ))}
@@ -70,12 +73,12 @@ const renderMarkdownTable = (tableText: string, keyPrefix: string | number) => {
           {bodyRows.map((row, rIdx) => (
             <tr
               key={rIdx}
-              className={`border-b border-white/5 transition hover:bg-white/[0.02] ${
-                rIdx % 2 === 1 ? 'bg-white/[0.01]' : ''
+              className={`border-b border-[var(--border)] transition-colors hover:bg-[var(--surface-hover)] ${
+                rIdx % 2 === 1 ? 'bg-[var(--surface-subtle)]' : ''
               }`}
             >
               {row.map((cell, cIdx) => (
-                <td key={cIdx} className="px-4 py-2 text-slate-300">
+                <td key={cIdx} className="px-4 py-2 text-[var(--text)]">
                   <MathRenderer content={cell} />
                 </td>
               ))}
@@ -98,7 +101,7 @@ const renderKaTeX = (formula: string, displayMode: boolean, key: string | number
       return (
         <span
           key={key}
-          className="my-3 block overflow-x-auto py-1 text-center font-serif text-indigo-300"
+          className="my-3 block overflow-x-auto py-1 text-center font-reading text-[var(--info)]"
           dangerouslySetInnerHTML={{ __html: html }}
         />
       );
@@ -106,12 +109,19 @@ const renderKaTeX = (formula: string, displayMode: boolean, key: string | number
     return (
       <span
         key={key}
-        className="inline-block px-0.5 font-serif text-indigo-200"
+        className="inline-block px-0.5 font-reading text-[var(--info)]"
         dangerouslySetInnerHTML={{ __html: html }}
       />
     );
   } catch {
-    return <span key={key} className="text-amber-300 font-mono text-sm">{formula}</span>;
+    return (
+      <span
+        key={key}
+        className="rounded-[var(--radius-sm)] bg-[var(--warning-surface)] px-1 font-mono text-sm text-[var(--warning)]"
+      >
+        {formula}
+      </span>
+    );
   }
 };
 
@@ -151,7 +161,7 @@ const renderInlineFormatting = (raw: string, keyPrefix: string): React.ReactNode
         if (/^<u>[\s\S]*<\/u>$/i.test(part)) {
           const inner = part.slice(3, -4);
           return (
-            <u key={subKey} className="underline decoration-indigo-400 decoration-1.5 underline-offset-2">
+            <u key={subKey} className="underline decoration-[var(--info)] decoration-1 underline-offset-2">
               {renderInlineFormatting(inner, `${subKey}_u`)}
             </u>
           );
@@ -161,7 +171,7 @@ const renderInlineFormatting = (raw: string, keyPrefix: string): React.ReactNode
         if (part.startsWith('***') && part.endsWith('***') && part.length >= 6) {
           const inner = part.slice(3, -3);
           return (
-            <strong key={subKey} className="font-bold italic text-white">
+            <strong key={subKey} className="font-bold italic text-[var(--text)]">
               {renderInlineFormatting(inner, `${subKey}_bi`)}
             </strong>
           );
@@ -171,7 +181,7 @@ const renderInlineFormatting = (raw: string, keyPrefix: string): React.ReactNode
         if (/^<b>[\s\S]*<\/b>$/i.test(part)) {
           const inner = part.slice(3, -4);
           return (
-            <strong key={subKey} className="font-bold text-white">
+            <strong key={subKey} className="font-bold text-[var(--text)]">
               {renderInlineFormatting(inner, `${subKey}_b`)}
             </strong>
           );
@@ -179,7 +189,7 @@ const renderInlineFormatting = (raw: string, keyPrefix: string): React.ReactNode
         if (/^<strong>[\s\S]*<\/strong>$/i.test(part)) {
           const inner = part.slice(8, -9);
           return (
-            <strong key={subKey} className="font-bold text-white">
+            <strong key={subKey} className="font-bold text-[var(--text)]">
               {renderInlineFormatting(inner, `${subKey}_str`)}
             </strong>
           );
@@ -187,7 +197,7 @@ const renderInlineFormatting = (raw: string, keyPrefix: string): React.ReactNode
         if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
           const inner = part.slice(2, -2);
           return (
-            <strong key={subKey} className="font-bold text-white">
+            <strong key={subKey} className="font-bold text-[var(--text)]">
               {renderInlineFormatting(inner, `${subKey}_bmd`)}
             </strong>
           );
@@ -197,7 +207,7 @@ const renderInlineFormatting = (raw: string, keyPrefix: string): React.ReactNode
         if (/^<i>[\s\S]*<\/i>$/i.test(part)) {
           const inner = part.slice(3, -4);
           return (
-            <em key={subKey} className="italic text-slate-300">
+            <em key={subKey} className="italic text-[var(--text-muted)]">
               {renderInlineFormatting(inner, `${subKey}_i`)}
             </em>
           );
@@ -205,7 +215,7 @@ const renderInlineFormatting = (raw: string, keyPrefix: string): React.ReactNode
         if (/^<em>[\s\S]*<\/em>$/i.test(part)) {
           const inner = part.slice(4, -5);
           return (
-            <em key={subKey} className="italic text-slate-300">
+            <em key={subKey} className="italic text-[var(--text-muted)]">
               {renderInlineFormatting(inner, `${subKey}_em`)}
             </em>
           );
@@ -213,7 +223,7 @@ const renderInlineFormatting = (raw: string, keyPrefix: string): React.ReactNode
         if (part.startsWith('*') && part.endsWith('*') && part.length >= 2) {
           const inner = part.slice(1, -1);
           return (
-            <em key={subKey} className="italic text-slate-300">
+            <em key={subKey} className="italic text-[var(--text-muted)]">
               {renderInlineFormatting(inner, `${subKey}_imd`)}
             </em>
           );
@@ -238,7 +248,7 @@ const renderInlineMarkdown = (text: string) => {
   // Cabeçalho H3 Markdown
   if (text.startsWith('### ')) {
     return (
-      <h3 className="text-base sm:text-lg font-bold font-heading text-indigo-200 my-2 border-b border-indigo-500/20 pb-1">
+      <h3 className="my-2 border-b border-[var(--border)] pb-1 text-base font-bold text-[var(--text)] sm:text-lg">
         {text.slice(4)}
       </h3>
     );
@@ -283,7 +293,7 @@ const renderFormattedBlock = (rawText: string, keyPrefix: string | number) => {
         <span key={keyPrefix} className="inline-block w-full">
           {sections.map((sec, sIdx) => (
             <React.Fragment key={sIdx}>
-              {sIdx > 0 && <span className="my-6 block border-b border-indigo-500/25" />}
+              {sIdx > 0 && <span className="my-6 block border-b border-[var(--border)]" />}
               {renderFormattedBlock(sec, `${keyPrefix}_sec_${sIdx}`)}
             </React.Fragment>
           ))}
@@ -298,10 +308,10 @@ const renderFormattedBlock = (rawText: string, keyPrefix: string | number) => {
     return (
       <div
         key={keyPrefix}
-        className="my-4 rounded-2xl border border-indigo-500/25 bg-gradient-to-br from-indigo-950/40 via-slate-900/60 to-slate-950/60 p-4 sm:p-5 shadow-lg shadow-indigo-950/20 backdrop-blur-sm space-y-3"
+        className="my-4 min-w-0 space-y-3 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-subtle)] p-4 font-reading text-[var(--text)] [overflow-wrap:anywhere] sm:p-5"
       >
         {paras.map((para, pIdx) => (
-          <div key={pIdx} className="leading-relaxed text-indigo-100/90 text-sm sm:text-base font-reading">
+          <div key={pIdx} className="text-base leading-[1.7] sm:text-[1.0625rem]">
             {renderInlineMarkdown(para)}
           </div>
         ))}
@@ -320,7 +330,7 @@ const renderFormattedBlock = (rawText: string, keyPrefix: string | number) => {
             return (
               <blockquote
                 key={pIdx}
-                className="my-3 border-l-4 border-indigo-400/70 bg-gradient-to-r from-indigo-950/40 via-indigo-900/10 to-transparent py-3 px-4 rounded-r-xl italic text-indigo-100 font-serif text-sm sm:text-base leading-relaxed tracking-wide space-y-1 shadow-sm backdrop-blur-xs"
+                className="my-3 space-y-1 rounded-r-[var(--radius-sm)] border-l-4 border-[var(--border-strong)] bg-[var(--surface-subtle)] px-4 py-3 font-reading text-base italic leading-[1.7] text-[var(--text)]"
               >
                 {lines.map((line, lIdx) => (
                   <span key={lIdx} className="block whitespace-pre-wrap">
@@ -345,7 +355,7 @@ const renderFormattedBlock = (rawText: string, keyPrefix: string | number) => {
     return (
       <blockquote
         key={keyPrefix}
-        className="my-3 border-l-4 border-indigo-400/70 bg-gradient-to-r from-indigo-950/40 via-indigo-900/10 to-transparent py-3 px-4 rounded-r-xl italic text-indigo-100 font-serif text-sm sm:text-base leading-relaxed tracking-wide space-y-1 shadow-sm backdrop-blur-xs"
+        className="my-3 space-y-1 rounded-r-[var(--radius-sm)] border-l-4 border-[var(--border-strong)] bg-[var(--surface-subtle)] px-4 py-3 font-reading text-base italic leading-[1.7] text-[var(--text)]"
       >
         {lines.map((line, lIdx) => (
           <span key={lIdx} className="block whitespace-pre-wrap">
@@ -374,7 +384,7 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content, className =
 
     if (tableParts.length > 1) {
       return (
-        <span className={`inline-block w-full leading-relaxed ${className}`}>
+        <span className={`inline-block min-w-0 w-full leading-relaxed [overflow-wrap:anywhere] ${className}`}>
           {tableParts.map((tPart, tIdx) => {
             if (tPart.trim().startsWith('|') && tPart.includes('---')) {
               return renderMarkdownTable(tPart, tIdx);
@@ -388,7 +398,7 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content, className =
 
   // 2. Renderiza a estrutura de blocos e formatação do documento
   return (
-    <span className={`inline-block w-full leading-relaxed ${className}`}>
+    <span className={`inline-block min-w-0 w-full leading-relaxed [overflow-wrap:anywhere] ${className}`}>
       {renderFormattedBlock(content, 'root')}
     </span>
   );

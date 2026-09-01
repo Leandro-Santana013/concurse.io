@@ -1,8 +1,17 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 
-export type ViewType = 'search' | 'folders' | 'stats' | 'errors' | 'ranking' | 'exam';
-export type ThemeMode = 'dark' | 'paper' | 'oled';
+export type ViewType = 'home' | 'search' | 'folders' | 'stats' | 'errors' | 'ranking' | 'exam';
+export type ThemeMode = 'light' | 'dark' | 'oled';
 export type FontSizeScale = 'sm' | 'base' | 'lg';
 
 export interface ToastMessage {
@@ -19,203 +28,230 @@ export interface DirectIngestInitialData {
 }
 
 interface UIContextType {
-  // Navigation & Layout
   currentView: ViewType;
   navigateTo: (view: ViewType) => void;
   isMobileSidebarOpen: boolean;
   setMobileSidebarOpen: (open: boolean) => void;
   toggleMobileSidebar: () => void;
-
-  // Study Preferences & Theme
   theme: ThemeMode;
   setTheme: (theme: ThemeMode) => void;
   fontSize: FontSizeScale;
   setFontSize: (size: FontSizeScale) => void;
   enableEliminationMode: boolean;
   toggleEliminationMode: () => void;
-
-  // Live Downloads & Tasks
   activeDownloadsCount: number;
   refreshDownloads: () => Promise<void>;
-
-  // Direct Ingest Modal
   isDirectIngestModalOpen: boolean;
   directIngestData: DirectIngestInitialData;
   openDirectIngestModal: (data?: DirectIngestInitialData) => void;
   closeDirectIngestModal: () => void;
-
-  // Toast Notifications
   toasts: ToastMessage[];
   showToast: (type: ToastMessage['type'], title: string, message?: string) => void;
   removeToast: (id: string) => void;
 }
 
+interface StoredPreferences {
+  version: 2;
+  theme: ThemeMode;
+  fontSize: FontSizeScale;
+  enableEliminationMode: boolean;
+}
 
 const UIContext = createContext<UIContextType | undefined>(undefined);
 
+const PREFS_STORAGE_KEY = 'concurse_ui_preferences_v2';
+const LEGACY_PREFS_STORAGE_KEY = 'concurse_ui_preferences_v1';
 
-const PREFS_STORAGE_KEY = 'concurse_ui_preferences_v1';
+const viewPaths: Record<ViewType, string> = {
+  home: '/',
+  folders: '/biblioteca',
+  search: '/buscar',
+  stats: '/progresso',
+  errors: '/progresso/erros',
+  ranking: '/progresso/ranking',
+  exam: '/prova/ativa',
+};
+
+const getViewFromPath = (pathname: string): ViewType => {
+  if (pathname.startsWith('/prova/')) return 'exam';
+  if (pathname === '/buscar') return 'search';
+  if (pathname === '/biblioteca') return 'folders';
+  if (pathname === '/progresso/erros') return 'errors';
+  if (pathname === '/progresso/ranking') return 'ranking';
+  if (pathname.startsWith('/progresso')) return 'stats';
+  return 'home';
+};
+
+const readPreferences = (): StoredPreferences => {
+  const defaults: StoredPreferences = {
+    version: 2,
+    theme: 'light',
+    fontSize: 'base',
+    enableEliminationMode: true,
+  };
+
+  try {
+    const raw = localStorage.getItem(PREFS_STORAGE_KEY) ?? localStorage.getItem(LEGACY_PREFS_STORAGE_KEY);
+    if (!raw) return defaults;
+
+    const saved = JSON.parse(raw) as {
+      theme?: string;
+      fontSize?: string;
+      enableEliminationMode?: boolean;
+    };
+    const theme: ThemeMode = saved.theme === 'paper'
+      ? 'light'
+      : saved.theme === 'dark' || saved.theme === 'oled' || saved.theme === 'light'
+        ? saved.theme
+        : defaults.theme;
+    const fontSize: FontSizeScale = saved.fontSize === 'sm' || saved.fontSize === 'lg'
+      ? saved.fontSize
+      : 'base';
+
+    return {
+      version: 2,
+      theme,
+      fontSize,
+      enableEliminationMode: saved.enableEliminationMode ?? true,
+    };
+  } catch {
+    return defaults;
+  }
+};
 
 export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Navigation
-  const [currentView, setCurrentView] = useState<ViewType>('search');
+  const navigate = useNavigate();
+  const location = useLocation();
+  const initialPreferences = useMemo(readPreferences, []);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-
-  // Study Preferences
-  const [theme, setThemeState] = useState<ThemeMode>(() => {
-    const saved = localStorage.getItem(PREFS_STORAGE_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved).theme || 'dark';
-      } catch (e) {
-        return 'dark';
-      }
-    }
-    return 'dark';
-  });
-
-  const [fontSize, setFontSizeState] = useState<FontSizeScale>(() => {
-    const saved = localStorage.getItem(PREFS_STORAGE_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved).fontSize || 'base';
-      } catch (e) {
-        return 'base';
-      }
-    }
-    return 'base';
-  });
-
-  const [enableEliminationMode, setEnableEliminationMode] = useState<boolean>(() => {
-    const saved = localStorage.getItem(PREFS_STORAGE_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved).enableEliminationMode ?? true;
-      } catch (e) {
-        return true;
-      }
-    }
-    return true;
-  });
-
-  // Downloads tracking
+  const [theme, setTheme] = useState<ThemeMode>(initialPreferences.theme);
+  const [fontSize, setFontSize] = useState<FontSizeScale>(initialPreferences.fontSize);
+  const [enableEliminationMode, setEnableEliminationMode] = useState(
+    initialPreferences.enableEliminationMode,
+  );
   const [activeDownloadsCount, setActiveDownloadsCount] = useState(0);
-
-  // Toasts
+  const [isDirectIngestModalOpen, setIsDirectIngestModalOpen] = useState(false);
+  const [directIngestData, setDirectIngestData] = useState<DirectIngestInitialData>({});
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  // Persist preferences
+  const currentView = getViewFromPath(location.pathname);
+
   useEffect(() => {
-    localStorage.setItem(
-      PREFS_STORAGE_KEY,
-      JSON.stringify({ theme, fontSize, enableEliminationMode })
-    );
+    const preferences: StoredPreferences = {
+      version: 2,
+      theme,
+      fontSize,
+      enableEliminationMode,
+    };
+    localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify(preferences));
   }, [theme, fontSize, enableEliminationMode]);
 
-  // Apply theme class to document root
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.remove('theme-dark', 'theme-paper', 'theme-oled');
+    root.classList.remove('theme-light', 'theme-dark', 'theme-paper', 'theme-oled');
     root.classList.add(`theme-${theme}`);
+    root.dataset.theme = theme;
+    root.style.colorScheme = theme === 'light' ? 'light' : 'dark';
   }, [theme]);
 
-  // Periodic active downloads check
-  const refreshDownloads = async () => {
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.remove('font-scale-ui-sm', 'font-scale-ui-base', 'font-scale-ui-lg');
+    root.classList.add(`font-scale-ui-${fontSize}`);
+  }, [fontSize]);
+
+  useEffect(() => {
+    setIsMobileSidebarOpen(false);
+  }, [location.pathname]);
+
+  const refreshDownloads = useCallback(async () => {
     try {
       const downloads = await api.getActiveDownloads();
       setActiveDownloadsCount(downloads.length);
-    } catch (e) {
-      // silent catch for background polling
+    } catch {
+      setActiveDownloadsCount(0);
     }
-  };
-
-  useEffect(() => {
-    refreshDownloads();
-    const interval = setInterval(refreshDownloads, 4000);
-    return () => clearInterval(interval);
   }, []);
 
-  const navigateTo = (view: ViewType) => {
-    setCurrentView(view);
+  useEffect(() => {
+    void refreshDownloads();
+    const interval = window.setInterval(() => void refreshDownloads(), 4000);
+    return () => window.clearInterval(interval);
+  }, [refreshDownloads]);
+
+  const navigateTo = useCallback((view: ViewType) => {
+    navigate(viewPaths[view]);
     setIsMobileSidebarOpen(false);
-  };
+  }, [navigate]);
 
-  const toggleMobileSidebar = () => {
-    setIsMobileSidebarOpen((prev) => !prev);
-  };
-
-  const setTheme = (newTheme: ThemeMode) => {
-    setThemeState(newTheme);
-  };
-
-  const setFontSize = (newSize: FontSizeScale) => {
-    setFontSizeState(newSize);
-  };
-
-  const toggleEliminationMode = () => {
-    setEnableEliminationMode((prev) => !prev);
-  };
-
-  // Direct Ingest Modal state
-  const [isDirectIngestModalOpen, setIsDirectIngestModalOpen] = useState(false);
-  const [directIngestData, setDirectIngestData] = useState<DirectIngestInitialData>({});
-
-  const openDirectIngestModal = (data?: DirectIngestInitialData) => {
-    setDirectIngestData(data || {});
+  const openDirectIngestModal = useCallback((data?: DirectIngestInitialData) => {
+    setDirectIngestData(data ?? {});
     setIsDirectIngestModalOpen(true);
-  };
+  }, []);
 
-  const closeDirectIngestModal = () => {
+  const closeDirectIngestModal = useCallback(() => {
     setIsDirectIngestModalOpen(false);
     setDirectIngestData({});
-  };
+  }, []);
 
-  const showToast = (type: ToastMessage['type'], title: string, message?: string) => {
-    const id = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    setToasts((prev) => [...prev, { id, type, title, message }]);
-    setTimeout(() => {
-      removeToast(id);
-    }, 4000);
-  };
+  const removeToast = useCallback((id: string) => {
+    setToasts((current) => current.filter((toast) => toast.id !== id));
+  }, []);
 
-  const removeToast = (id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
+  const showToast = useCallback((
+    type: ToastMessage['type'],
+    title: string,
+    message?: string,
+  ) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    setToasts((current) => [...current.slice(-3), { id, type, title, message }]);
+    window.setTimeout(() => removeToast(id), 5000);
+  }, [removeToast]);
 
-  return (
-    <UIContext.Provider
-      value={{
-        currentView,
-        navigateTo,
-        isMobileSidebarOpen,
-        setMobileSidebarOpen: setIsMobileSidebarOpen,
-        toggleMobileSidebar,
-        theme,
-        setTheme,
-        fontSize,
-        setFontSize,
-        enableEliminationMode,
-        toggleEliminationMode,
-        activeDownloadsCount,
-        refreshDownloads,
-        isDirectIngestModalOpen,
-        directIngestData,
-        openDirectIngestModal,
-        closeDirectIngestModal,
-        toasts,
-        showToast,
-        removeToast,
-      }}
-    >
-      {children}
-    </UIContext.Provider>
-  );
+  const value = useMemo<UIContextType>(() => ({
+    currentView,
+    navigateTo,
+    isMobileSidebarOpen,
+    setMobileSidebarOpen: setIsMobileSidebarOpen,
+    toggleMobileSidebar: () => setIsMobileSidebarOpen((open) => !open),
+    theme,
+    setTheme,
+    fontSize,
+    setFontSize,
+    enableEliminationMode,
+    toggleEliminationMode: () => setEnableEliminationMode((enabled) => !enabled),
+    activeDownloadsCount,
+    refreshDownloads,
+    isDirectIngestModalOpen,
+    directIngestData,
+    openDirectIngestModal,
+    closeDirectIngestModal,
+    toasts,
+    showToast,
+    removeToast,
+  }), [
+    activeDownloadsCount,
+    closeDirectIngestModal,
+    currentView,
+    directIngestData,
+    enableEliminationMode,
+    fontSize,
+    isDirectIngestModalOpen,
+    isMobileSidebarOpen,
+    navigateTo,
+    openDirectIngestModal,
+    refreshDownloads,
+    removeToast,
+    showToast,
+    theme,
+    toasts,
+  ]);
+
+  return <UIContext.Provider value={value}>{children}</UIContext.Provider>;
 };
 
 export const useUI = (): UIContextType => {
   const context = useContext(UIContext);
-  if (!context) {
-    throw new Error('useUI must be used within a UIProvider');
-  }
+  if (!context) throw new Error('useUI must be used within a UIProvider');
   return context;
 };

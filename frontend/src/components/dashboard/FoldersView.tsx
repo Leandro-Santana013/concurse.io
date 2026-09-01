@@ -1,226 +1,213 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  ArrowUpRight,
+  BookOpen,
+  CheckCircle2,
+  FileQuestion,
+  Folder as FolderIcon,
+  Loader2,
+  Play,
+  Plus,
+  RefreshCw,
+  Search,
+  Shuffle,
+} from 'lucide-react';
 import { api } from '../../services/api';
 import { Folder } from '../../types/exam';
 import { useExam } from '../../context/ExamContext';
 import { useUI } from '../../context/UIContext';
-import {
-  Folder as FolderIcon,
-  Play,
-  Award,
-  Sparkles,
-  FileQuestion,
-  Loader2,
-  CheckCircle2,
-  BookOpen,
-  Layers,
-  ArrowUpRight,
-} from 'lucide-react';
+import { useExamStore } from '../../store/useExamStore';
 
 interface FoldersViewProps {
   onStartExam?: () => void;
 }
 
+type SortMode = 'title' | 'questions' | 'score' | 'attempts';
+
 export const FoldersView: React.FC<FoldersViewProps> = ({ onStartExam }) => {
+  const navigate = useNavigate();
   const [folders, setFolders] = useState<Folder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [loadingExamId, setLoadingExamId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [sortMode, setSortMode] = useState<SortMode>('title');
+  const [loadingExamId, setLoadingExamId] = useState<number | 'custom' | null>(null);
   const { loadAndStartExam, generateCustomExam } = useExam();
-  const { navigateTo, showToast, openDirectIngestModal } = useUI();
+  const { showToast, openDirectIngestModal } = useUI();
 
-
-  const handleStart = onStartExam || (() => navigateTo('exam'));
+  const goToExam = (examId: number) => {
+    if (onStartExam) onStartExam();
+    else navigate(`/prova/${examId}`);
+  };
 
   const loadFolders = async () => {
     setIsLoading(true);
+    setError(null);
     try {
-      const data = await api.getFolders();
-      setFolders(data);
-    } catch (e: any) {
-      console.error('Erro ao carregar pastas:', e);
-      showToast('error', 'Erro ao carregar pastas', e.message);
+      setFolders(await api.getFolders());
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Não foi possível carregar a biblioteca.';
+      setError(message);
+      showToast('error', 'Erro ao carregar a biblioteca', message);
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    loadFolders();
+    void loadFolders();
   }, []);
+
+  const visibleFolders = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase('pt-BR');
+    return folders
+      .map((folder) => ({
+        ...folder,
+        exams: folder.exams
+          .filter((exam) => !normalized || exam.title.toLocaleLowerCase('pt-BR').includes(normalized))
+          .sort((a, b) => {
+            if (sortMode === 'questions') return b.question_count - a.question_count;
+            if (sortMode === 'score') return (b.best_score ?? -1) - (a.best_score ?? -1);
+            if (sortMode === 'attempts') return b.attempt_count - a.attempt_count;
+            return a.title.localeCompare(b.title, 'pt-BR');
+          }),
+      }))
+      .filter((folder) => folder.exams.length > 0);
+  }, [folders, query, sortMode]);
 
   const handleLaunchExam = async (examId: number) => {
     setLoadingExamId(examId);
     try {
       await loadAndStartExam(examId);
-      handleStart();
-    } catch (e: any) {
-      showToast('error', 'Falha ao abrir simulado', e.message);
+      goToExam(examId);
+    } catch (err) {
+      showToast('error', 'Falha ao abrir o simulado', err instanceof Error ? err.message : undefined);
     } finally {
       setLoadingExamId(null);
     }
   };
 
   const handleGenerateCustom = async () => {
-    setIsLoading(true);
+    setLoadingExamId('custom');
     try {
       await generateCustomExam(20);
-      showToast('success', 'Simulado Gerado', '20 questões selecionadas aleatoriamente.');
-      handleStart();
-    } catch (e: any) {
-      showToast('error', 'Erro ao gerar simulado', e.message);
+      const examId = useExamStore.getState().activeExam?.id;
+      showToast('success', 'Simulado pronto', '20 questões foram selecionadas para você.');
+      if (examId) goToExam(examId);
+    } catch (err) {
+      showToast('error', 'Erro ao gerar o simulado', err instanceof Error ? err.message : undefined);
     } finally {
-      setIsLoading(false);
+      setLoadingExamId(null);
     }
   };
 
-  const totalExamsCount = folders.reduce((acc, f) => acc + f.exams.length, 0);
+  const totalExams = folders.reduce((total, folder) => total + folder.exams.length, 0);
+  const examsWithAnswerKey = folders.reduce(
+    (total, folder) => total + folder.exams.filter((exam) => exam.has_official_answers).length,
+    0,
+  );
 
   if (isLoading && folders.length === 0) {
     return (
-      <div className="flex h-96 flex-col items-center justify-center text-slate-400">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
-        <p className="mt-3 font-heading font-medium text-sm text-slate-300">Carregando sua biblioteca de provas...</p>
+      <div className="page-shell" aria-busy="true">
+        <div className="space-y-3"><div className="skeleton h-7 w-56" /><div className="skeleton h-4 w-full max-w-xl" /></div>
+        <div className="mt-8 space-y-3">{[1, 2, 3].map((item) => <div key={item} className="skeleton h-24 w-full" />)}</div>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-6xl animate-fadeIn p-4 sm:p-6 lg:p-8 space-y-8">
-      {/* Top Bento Header with Glassmorphism */}
-      <div className="grid gap-4 md:grid-cols-3">
-        {/* Main Banner Card (2 Cols) */}
-        <div className="glass-card relative overflow-hidden p-6 sm:p-8 md:col-span-2 flex flex-col justify-between">
-          <div className="absolute -right-12 -top-12 h-48 w-48 rounded-full bg-indigo-500/15 blur-2xl pointer-events-none" />
-          <div className="relative z-10">
-            <span className="inline-flex items-center gap-1.5 rounded-full glass-pill-indigo px-3.5 py-1 text-xs font-bold">
-              <Layers className="h-3.5 w-3.5" /> Biblioteca de Simulados
-            </span>
-            <h1 className="mt-3 font-heading text-2xl sm:text-3xl font-black text-white">
-              Minhas Provas & Pastas
-            </h1>
-            <p className="mt-2 text-sm text-slate-300 font-reading leading-relaxed">
-              Acesse seus cadernos organizados por banca examinadora e órgão, ou gere um simulado rápido de 20 questões mistas com cronômetro oficial.
-            </p>
-          </div>
-
-          <div className="mt-6 pt-4 border-t border-white/10 flex flex-wrap items-center gap-3 relative z-10">
-            <button
-              onClick={handleGenerateCustom}
-              className="flex items-center gap-2 rounded-2xl glass-btn-primary px-6 py-3.5 font-heading font-bold text-sm text-white"
-            >
-              <Sparkles className="h-4 w-4 text-cyan-300" />
-              <span>Gerar Simulado Geral (20q)</span>
-            </button>
-
-            <button
-              onClick={() => openDirectIngestModal()}
-              className="flex items-center gap-2 rounded-2xl glass-btn-secondary px-5 py-3.5 font-heading font-bold text-sm text-slate-200 hover:text-white"
-            >
-              <BookOpen className="h-4 w-4 text-indigo-400" />
-              <span>Importar por Link / PCI</span>
-            </button>
-          </div>
+    <div className="page-shell space-y-8">
+      <header className="flex flex-col gap-5 border-b border-[var(--border)] pb-7 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p className="eyebrow">Biblioteca</p>
+          <h1 className="page-title">Suas provas</h1>
+          <p className="page-description">Escolha um caderno salvo ou monte uma sessão rápida com questões da sua base.</p>
         </div>
-
-
-
-        {/* Quick Metric Bento Card (1 Col) */}
-        <div className="glass-card p-6 flex flex-col justify-between">
-          <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Resumo da Biblioteca</span>
-            <div className="mt-4 flex items-baseline gap-2">
-              <span className="font-heading text-3xl font-black text-white">{totalExamsCount}</span>
-              <span className="text-xs font-semibold text-slate-400">provas salvas</span>
-            </div>
-            <div className="mt-1 flex items-baseline gap-2">
-              <span className="font-heading text-2xl font-bold text-indigo-400">{folders.length}</span>
-              <span className="text-xs font-semibold text-slate-400">pastas de bancas</span>
-            </div>
-          </div>
-
-          <div className="mt-4 rounded-2xl glass-pill px-3.5 py-2.5 flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-300">Modo de Treino</span>
-            <span className="text-xs font-mono font-bold text-emerald-400">Oficial + Gabarito</span>
-          </div>
-        </div>
-      </div>
-
-      {folders.length === 0 && !isLoading && (
-        <div className="flex h-64 flex-col items-center justify-center rounded-3xl glass-card text-center p-6 text-slate-400">
-          <FolderIcon className="h-10 w-10 stroke-[1.5] text-slate-500 mb-2" />
-          <p className="font-heading font-semibold text-slate-200">Nenhuma prova salva ainda</p>
-          <p className="mt-1 text-xs text-slate-400 max-w-sm">
-            Vá até a aba "Buscar Provas" para indexar sua primeira prova ou concurso.
-          </p>
-          <button
-            onClick={() => navigateTo('search')}
-            className="mt-4 flex items-center gap-1.5 rounded-xl glass-btn-primary px-4 py-2 text-xs font-bold text-white"
-          >
-            Buscar Novas Provas <ArrowUpRight className="h-3.5 w-3.5" />
+        <div className="flex flex-wrap gap-2">
+          <button className="button-secondary" onClick={() => openDirectIngestModal()}><Plus aria-hidden="true" /> Importar prova</button>
+          <button className="button-primary" onClick={handleGenerateCustom} disabled={loadingExamId === 'custom'}>
+            {loadingExamId === 'custom' ? <Loader2 aria-hidden="true" /> : <Shuffle aria-hidden="true" />}
+            Simulado de 20 questões
           </button>
         </div>
+      </header>
+
+      <section aria-label="Resumo da biblioteca" className="grid gap-3 sm:grid-cols-3">
+        <div className="metric-card"><span>Provas salvas</span><strong>{totalExams}</strong></div>
+        <div className="metric-card"><span>Grupos</span><strong>{folders.length}</strong></div>
+        <div className="metric-card"><span>Com gabarito</span><strong>{examsWithAnswerKey} de {totalExams}</strong></div>
+      </section>
+
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <label className="relative flex-1">
+          <span className="sr-only">Filtrar provas por título</span>
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+          <input className="input-control pl-10" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filtrar por título" />
+        </label>
+        <label className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
+          Ordenar por
+          <select className="input-control w-auto" value={sortMode} onChange={(event) => setSortMode(event.target.value as SortMode)}>
+            <option value="title">Título</option><option value="questions">Mais questões</option><option value="score">Melhor nota</option><option value="attempts">Mais tentativas</option>
+          </select>
+        </label>
+      </div>
+
+      {error && (
+        <section className="state-card" role="alert">
+          <RefreshCw aria-hidden="true" /><div><h2>Não foi possível abrir a biblioteca</h2><p>{error}</p></div>
+          <button className="button-secondary" onClick={loadFolders}>Tentar novamente</button>
+        </section>
       )}
 
-      {/* Folders List in Bento Layout */}
+      {!error && folders.length === 0 && (
+        <section className="state-card text-center">
+          <FolderIcon className="mx-auto" aria-hidden="true" /><h2>Nenhuma prova salva</h2>
+          <p>Busque uma prova pública ou importe um link para criar sua biblioteca.</p>
+          <button className="button-primary mx-auto" onClick={() => navigate('/buscar')}>Buscar provas <ArrowUpRight aria-hidden="true" /></button>
+        </section>
+      )}
+
+      {!error && folders.length > 0 && visibleFolders.length === 0 && (
+        <section className="state-card text-center">
+          <Search className="mx-auto" aria-hidden="true" /><h2>Nenhuma prova corresponde ao filtro</h2>
+          <button className="button-secondary mx-auto" onClick={() => setQuery('')}>Limpar filtro</button>
+        </section>
+      )}
+
       <div className="space-y-8">
-        {folders.map((folder) => (
-          <div key={folder.id} className="glass-card p-6 sm:p-7">
-            {/* Folder Header */}
-            <div className="flex items-center justify-between border-b border-white/10 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl glass-pill-indigo text-indigo-400">
-                  <FolderIcon className="h-5 w-5" />
-                </div>
-                <div>
-                  <h2 className="font-heading text-lg font-bold text-white">{folder.name}</h2>
-                  <p className="text-xs font-semibold text-slate-400">{folder.exams.length} caderno(s) disponível(is)</p>
-                </div>
-              </div>
+        {visibleFolders.map((folder) => (
+          <section key={folder.id} aria-labelledby={`folder-${folder.id}`}>
+            <div className="mb-3">
+              <h2 id={`folder-${folder.id}`} className="section-title flex items-center gap-2"><FolderIcon aria-hidden="true" /> {folder.name}</h2>
+              <p className="text-sm text-[var(--text-muted)]">{folder.exams.length} {folder.exams.length === 1 ? 'prova' : 'provas'}</p>
             </div>
-
-            {/* Exams Cards Grid */}
-            <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
               {folder.exams.map((exam) => (
-                <div
-                  key={exam.id}
-                  className="glass-card-interactive p-5 flex flex-col justify-between group"
-                >
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-1.5 text-xs font-mono font-bold text-indigo-300">
-                        <FileQuestion className="h-3.5 w-3.5 text-indigo-400" /> {exam.question_count} Qs
-                      </span>
-                      {exam.best_score !== null && (
-                        <span className="rounded-lg glass-pill-emerald px-2 py-0.5 text-xs font-mono font-bold">
-                          Melhor: {exam.best_score}%
-                        </span>
-                      )}
+                <article key={exam.id} className="flex flex-col gap-4 border-b border-[var(--border)] p-4 last:border-b-0 md:flex-row md:items-center md:justify-between">
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-[var(--text)]">{exam.title}</h3>
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-sm text-[var(--text-muted)]">
+                      <span className="inline-flex items-center gap-1"><FileQuestion aria-hidden="true" /> {exam.question_count} questões</span>
+                      <span>{exam.attempt_count ? `${exam.attempt_count} tentativa(s)` : 'Ainda não realizada'}</span>
+                      {exam.best_score !== null && <span>Melhor nota: <strong className="text-[var(--text)]">{exam.best_score}%</strong></span>}
+                      {exam.last_score !== null && <span>Última: <strong className="text-[var(--text)]">{exam.last_score}%</strong></span>}
                     </div>
-                    <h3 className="mt-3 font-heading text-sm font-bold text-white line-clamp-2 group-hover:text-indigo-300 transition" title={exam.title}>
-                      {exam.title}
-                    </h3>
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                      <span className={exam.has_official_answers ? 'status-success' : 'status-warning'}>
+                        <CheckCircle2 aria-hidden="true" /> {exam.has_official_answers ? `Gabarito ${Math.round(exam.gabarito_coverage)}%` : 'Gabarito não confirmado'}
+                      </span>
+                      {exam.source_url && <span className="status-neutral"><BookOpen aria-hidden="true" /> Fonte disponível</span>}
+                    </div>
                   </div>
-
-                  <div className="mt-5 flex items-center justify-between border-t border-white/10 pt-4">
-                    <span className="text-[11px] font-semibold text-slate-400">
-                      {exam.attempt_count > 0 ? `${exam.attempt_count} tentativa(s)` : 'Não iniciado'}
-                    </span>
-                    <button
-                      onClick={() => handleLaunchExam(exam.id)}
-                      disabled={loadingExamId === exam.id}
-                      className="flex items-center gap-1.5 rounded-xl glass-btn-primary px-4 py-2 text-xs font-heading font-bold text-white disabled:opacity-50"
-                    >
-                      {loadingExamId === exam.id ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Play className="h-3.5 w-3.5 fill-current" />
-                      )}
-                      Iniciar Prova
-                    </button>
-                  </div>
-                </div>
+                  <button className="button-primary shrink-0" onClick={() => handleLaunchExam(exam.id)} disabled={loadingExamId === exam.id}>
+                    {loadingExamId === exam.id ? <Loader2 aria-hidden="true" /> : <Play aria-hidden="true" />} Iniciar prova
+                  </button>
+                </article>
               ))}
             </div>
-          </div>
+          </section>
         ))}
       </div>
     </div>

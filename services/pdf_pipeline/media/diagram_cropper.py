@@ -254,13 +254,17 @@ class ExamImageExtractor:
                 b_next = sorted_tb[i + 1]
                 curr_txt = b_curr[4]
                 next_txt = b_next[4]
+
+                # Ignora gaps se o próximo bloco for rodapé institucional ou número de página
+                if b_next[1] >= dead_zone_bottom - 20 or b_next[3] >= page_h - 45:
+                    continue
                 
                 has_trigger = bool(IMAGE_TRIGGER_REGEX.search(curr_txt) or IMAGE_TRIGGER_REGEX.search(next_txt))
                 gap_y0 = b_curr[3] + 4
                 gap_y1 = b_next[1] - 4
                 gap_h = gap_y1 - gap_y0
                 
-                if (has_trigger and gap_h >= 25) or (gap_h >= 80):
+                if has_trigger and gap_h >= 25:
                     gap_x0 = max(25.0, min(b_curr[0], b_next[0]) - 10)
                     gap_x1 = min(page_w - 25.0, max(b_curr[2], b_next[2], page_w * 0.75) + 10)
                     gap_rect = fitz.Rect(gap_x0, gap_y0, gap_x1, gap_y1)
@@ -351,6 +355,28 @@ class ExamImageExtractor:
 
         try:
             pix = page_obj.get_pixmap(clip=crop_rect, dpi=self.dpi)
+            if pix.width < 10 or pix.height < 10:
+                return None
+
+            # Validação rigorosa de pixels não-brancos (evita imagens vazias, brancas ou falsos positivos)
+            try:
+                import numpy as np
+                n_channels = pix.n
+                img_arr = np.frombuffer(pix.samples, dtype=np.uint8).reshape((pix.height, pix.width, n_channels))
+                if n_channels >= 3:
+                    gray = 0.299 * img_arr[:, :, 0] + 0.587 * img_arr[:, :, 1] + 0.114 * img_arr[:, :, 2]
+                else:
+                    gray = img_arr[:, :, 0]
+
+                non_white_count = int(np.sum(gray < 240))
+                tot_pixels = pix.width * pix.height
+                non_white_pct = (non_white_count / tot_pixels) if tot_pixels > 0 else 0
+
+                if non_white_pct < 0.012 or non_white_count < 200:
+                    return None
+            except Exception:
+                pass
+
             pix_bytes = pix.tobytes("png")
             img_hash = hashlib.md5(pix_bytes).hexdigest()
 

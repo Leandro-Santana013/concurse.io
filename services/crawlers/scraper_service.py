@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 import time
 import re
 import concurrent.futures
+from urllib.parse import quote_plus, urljoin
 
 def get_ddgs_class():
     """Retorna a classe DuckDuckGo Search disponível no ambiente."""
@@ -17,6 +18,7 @@ def get_ddgs_class():
             return None
 
 from services.search.exam_search_filter import (
+    DEFAULT_SEARCH_RESULT_LIMIT,
     interpret_search_query_deterministic,
     standardize_card_title,
     calculate_card_match_score,
@@ -297,7 +299,23 @@ def _scrape_pci_pdfs(query, nlp_data=None):
             pass
 
     results.sort(key=lambda x: x.get('match_score', 0), reverse=True)
-    return results[:15]
+    return results[:DEFAULT_SEARCH_RESULT_LIMIT]
+
+def _is_cloudflare_challenge(response):
+    """Identifica a pagina de desafio sem tentar contornar a protecao do site."""
+    if str(response.headers.get('cf-mitigated', '')).lower() == 'challenge':
+        return True
+    if response.status_code not in {403, 429, 503}:
+        return False
+    body = (response.text or '').lower()
+    return any(marker in body for marker in (
+        'cf-chl-',
+        'challenge-platform',
+        'security verification',
+        'verificacao de seguranca',
+        'just a moment',
+    ))
+
 
 def _scrape_idcap_pdfs(query, nlp_data=None):
     """
@@ -308,10 +326,14 @@ def _scrape_idcap_pdfs(query, nlp_data=None):
     query_lower = query.lower()
     
     # Se uma banca explicitamente diferente foi identificada (ex: FGV, Cebraspe, FCC), pula o crawler do IDCAP
-    if nlp_data and nlp_data.get('banca') and nlp_data.get('banca') not in ['IDCAP', ''] and 'idcap' not in query_lower:
+    if nlp_data and nlp_data.get('banca') and nlp_data.get('banca') not in ['IDCAP', ''] and not re.search(r'\b(?:idcap|idecap)\b', query_lower):
         return results
 
-    ignore_words = {'prova', 'provas', 'concurso', 'concursos', 'filetype:pdf', 'pdf', 'processo', 'seletivo', 'privado', 'de', 'do', 'da', 'para', 'em', 'no', 'na'}
+    ignore_words = {
+        'prova', 'provas', 'concurso', 'concursos', 'filetype:pdf', 'pdf',
+        'processo', 'seletivo', 'privado', 'de', 'do', 'da', 'para', 'em',
+        'no', 'na', 'idcap', 'idecap',
+    }
     query_words = [w for w in re.findall(r'\b[\w\-/]+\b', query_lower) if len(w) > 1 and w not in ignore_words]
 
     session = requests.Session()
@@ -320,20 +342,26 @@ def _scrape_idcap_pdfs(query, nlp_data=None):
         'Accept-Language': 'pt-BR,pt;q=0.9',
     })
 
+    official_blocked = False
+
     try:
         concurso_links = []
-        if query.startswith('http') and 'idcap' in query:
+        if query.startswith('http') and 'idcap' in query_lower:
             concurso_links.append((999, query, "Link Direto"))
         else:
             def fetch_status_page(status_page):
-                url = f"https://idcap.selecao.net.br{status_page}"
+                nonlocal official_blocked
+                url = urljoin("https://idcap.selecao.net.br", status_page)
                 page_concursos = []
                 try:
-                    resp = session.get(url, timeout=5.0)
+                    resp = session.get(url, timeout=4.0)
+                    if _is_cloudflare_challenge(resp):
+                        official_blocked = True
+                        return page_concursos
                     if resp.status_code == 200:
                         soup = BeautifulSoup(resp.text, 'html.parser')
                         for a in soup.find_all('a', href=lambda h: h and '/informacoes/' in h):
-                            href = a['href']
+                            href = urljoin(url, a['href'])
                             parent_div = a.find_parent('div')
                             card_text = parent_div.get_text(separator=' ', strip=True) if parent_div else a.get_text(strip=True)
                             card_lower = card_text.lower()
@@ -354,22 +382,30 @@ def _scrape_idcap_pdfs(query, nlp_data=None):
                     pass
                 return page_concursos
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-                futures = [executor.submit(fetch_status_page, sp) for sp in ['/index/1/', '/index/2/', '/index/3/', '/index/4/', '/index/5/']]
+            status_pages = ['/index/1/', '/index/2/', '/index/3/', '/index/4/', '/index/5/']
+            if query_words:
+                status_pages.insert(0, f"/index/todos/?busca={quote_plus(' '.join(query_words))}")
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+                futures = [executor.submit(fetch_status_page, status_page) for status_page in status_pages]
                 for fut in concurrent.futures.as_completed(futures):
                     concurso_links.extend(fut.result())
 
-        concurso_links.sort(key=lambda x: x[0], reverse=True)
-        # Varre os concursos correspondentes encontrados (top 10)
-        concurso_links = concurso_links[:10]
+        unique_concursos = {}
+        for score, href, title in concurso_links:
+            previous = unique_concursos.get(href)
+            if previous is None or score > previous[0]:
+                unique_concursos[href] = (score, href, title)
+        concurso_links = sorted(unique_concursos.values(), key=lambda item: item[0], reverse=True)
+        concurso_links = concurso_links[:DEFAULT_SEARCH_RESULT_LIMIT]
 
         def fetch_concurso_pdfs(item):
             concurso_score, href, concurso_title = item
             c_results = []
             try:
-                url = f"https://idcap.selecao.net.br{href}" if href.startswith('/') else href
+                url = urljoin("https://idcap.selecao.net.br", href)
                 resp = session.get(url, timeout=5.0)
-                if resp.status_code == 200:
+                if resp.status_code == 200 and not _is_cloudflare_challenge(resp):
                     soup = BeautifulSoup(resp.text, 'html.parser')
                     
                     prova_links = []
@@ -384,7 +420,7 @@ def _scrape_idcap_pdfs(query, nlp_data=None):
                             if is_administrative_document(text_lower):
                                 continue
 
-                            full_url = pdf_href if pdf_href.startswith('http') else f"https://idcap.selecao.net.br{pdf_href}"
+                            full_url = urljoin(url, pdf_href)
                             
                             if 'gabarito' in text_lower:
                                 gabarito_links.append((text, full_url))
@@ -430,16 +466,44 @@ def _scrape_idcap_pdfs(query, nlp_data=None):
             futures = [executor.submit(fetch_concurso_pdfs, item) for item in concurso_links]
             for fut in concurrent.futures.as_completed(futures):
                 results.extend(fut.result())
-                if len(results) >= 15:
+                if len(results) >= DEFAULT_SEARCH_RESULT_LIMIT:
                     break
 
         if results:
             results.sort(key=lambda x: x.get('match_score', 0), reverse=True)
-            return results[:10]
+            unique_results = {result['url']: result for result in results}
+            return list(unique_results.values())[:DEFAULT_SEARCH_RESULT_LIMIT]
     except Exception as e:
-        print(f"   │  [IDCAP Crawler] Aviso: {e}", flush=True)
+        print(f"      [IDCAP Crawler] Aviso: {e}", flush=True)
 
-    return results
+    fallback_query = query.strip()
+    if not re.search(r'\b(?:idcap|idecap|id\s*cap)\b', fallback_query, re.IGNORECASE):
+        fallback_query = f"{fallback_query} IDCAP".strip()
+    fallback_nlp = dict(nlp_data or {})
+    fallback_nlp['banca'] = 'IDCAP'
+
+    try:
+        pci_results = _scrape_pci_pdfs(fallback_query, fallback_nlp)
+        idcap_results = []
+        for result in pci_results:
+            if re.search(
+                r'\b(?:idcap|idecap)\b',
+                f"{result.get('title', '')} {result.get('url', '')}",
+                re.IGNORECASE,
+            ):
+                item = dict(result)
+                item['source'] = 'idcap'
+                idcap_results.append(item)
+        if official_blocked:
+            print(
+                "      [IDCAP Crawler] Portal oficial protegido por Cloudflare; "
+                f"usando {len(idcap_results)} resultado(s) do catalogo PCI.",
+                flush=True,
+            )
+        return idcap_results[:DEFAULT_SEARCH_RESULT_LIMIT]
+    except Exception as fallback_error:
+        print(f"      [IDCAP Crawler] Fallback indisponivel: {fallback_error}", flush=True)
+        return []
 
 def _search_pdfs_web(query, nlp_data=None):
     """

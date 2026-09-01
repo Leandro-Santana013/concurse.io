@@ -476,19 +476,23 @@ def detect_layout_and_ordered_blocks(
                 lx0, ly0, lx1, ly1 = line['bbox']
 
                 # Filtros de margem e ruídos institucionais
-                if ly0 < 18 or ly1 > height - 28:
+                if ly0 < 18 or ly0 >= height - 48 or ly1 > height - 38:
                     continue
                 lt_lower = line_text.lower()
                 if 'pcimarkpci' in lt_lower or 'pciconcursos.com.br' in lt_lower or 'qconcursos.com' in lt_lower or 'confidencial at' in lt_lower or 'tjsp2301' in lt_lower:
                     continue
+                if 'enem2024' in lt_lower or 'enem20e4' in lt_lower or re.search(r'(?:enem\d{4}){2,}', lt_lower) or re.match(r'^\s*\*\d{6,}[A-Z0-9]*\*\s*$', line_text.strip()):
+                    continue
+                if (lx1 - lx0 < 6 or ly1 - ly0 > height * 0.5) and ('enem' in lt_lower or len(line_text) > 30):
+                    continue
                 if 'PROVA' in line_text.upper() and len(line_text) < 25 and any(f'PROVA {k}' in line_text.upper() for k in range(10)):
                     continue
-                if ly1 > height - 55:
-                    if any(kw in lt_lower for kw in ['tipo ', 'página', 'pagina', 'tarde', 'manhã', 'manha', 'noite', 'ati -', 'fgv', 'dataprev', 'analista', 'cargo', 'ibam']):
+                if ly1 > height - 60 or ly0 > height - 52:
+                    if any(kw in lt_lower for kw in ['tipo ', 'página', 'pagina', 'tarde', 'manhã', 'manha', 'noite', 'ati -', 'fgv', 'dataprev', 'analista', 'cargo', 'ibam', 'enem', 'linguagens, códigos', 'ciências humanas', 'ciências da natureza', 'matemática e suas tecnologias', 'caderno 1', 'caderno 2', 'caderno 3', 'caderno 4', 'caderno azul', 'caderno amarelo', 'caderno branco', 'caderno rosa']):
                         continue
                     if re.match(r'^\s*(?:p[aá]g(?:ina)?\.?\s*)?\d+(?:\s*(?:de|\/|\-)\s*\d+)?\s*$', line_text.strip(), re.IGNORECASE):
                         continue
-                    if re.match(r'^[A-Za-z\u00C0-\u00DC\s\-]+\s*[-–—]\s*\d+\s*$', line_text.strip()):
+                    if re.match(r'^[A-Za-z\u00C0-\u00DC\s\-\/\(\)]+\s*[-–—]\s*\d+\s*$', line_text.strip()):
                         continue
                 if ly0 < 52:
                     if any(kw in lt_lower for kw in ['dataprev', 'empresa de tecnologia', 'fgv conhecimento', 'caderno de prova']):
@@ -556,10 +560,10 @@ def detect_layout_and_ordered_blocks(
             stitched.append(cur)
         return stitched
 
-    # Extrai linhas de texto (excluindo tabelas Markdown)
+    # Extrai linhas de texto (excluindo tabelas Markdown e linhas de largura total)
     text_only_lines = [l for l in lines_extracted if not l['text'].startswith('\n|')]
-    left_lines = [l for l in text_only_lines if l['mid_x'] < mid_x_page]
-    right_lines = [l for l in text_only_lines if l['mid_x'] >= mid_x_page]
+    left_lines = [l for l in text_only_lines if l['x1'] <= mid_x_page + 25 and l['width'] < width * 0.55]
+    right_lines = [l for l in text_only_lines if l['x0'] >= mid_x_page - 25 and l['width'] < width * 0.55]
 
     # Detecta se há realmente 2 colunas paralelas concorrentes na mesma faixa Y
     overlapping_y_pairs = 0
@@ -595,15 +599,14 @@ def detect_layout_and_ordered_blocks(
     top_headers = []
     col_left = []
     col_right = []
-    footers = []
 
     for l in lines_extracted:
-        # Linha na faixa superior antes do início das 2 colunas paralelas
-        if l['y1'] <= y_col_start:
+        # Linha na faixa superior antes do início das 2 colunas paralelas (apenas se cruzar o centro ou tiver largura de página inteira)
+        if l['y1'] <= y_col_start and (l['width'] > width * 0.45 or (l['x0'] < mid_x_page - 20 and l['x1'] > mid_x_page + 20)):
             top_headers.append(l)
-        # Rodapé de página inteira
-        elif l['y0'] >= height - 35 and l['x0'] < width * 0.35 and l['x1'] > width * 0.65:
-            footers.append(l)
+        # Rodapé de página
+        elif l['y0'] >= height - 48 or l['y1'] >= height - 38:
+            continue
         elif l['mid_x'] < mid_x_page:
             col_left.append(l)
         else:
@@ -614,12 +617,10 @@ def detect_layout_and_ordered_blocks(
         top_headers = stitch_lines_within_group(top_headers)
         col_left = stitch_lines_within_group(col_left)
         col_right = stitch_lines_within_group(col_right)
-        footers = stitch_lines_within_group(footers)
 
     top_headers.sort(key=lambda l: (round(l['y0'], -1), l['x0']))
     col_left.sort(key=lambda l: (round(l['y0'], -1), l['x0']))
     col_right.sort(key=lambda l: (round(l['y0'], -1), l['x0']))
-    footers.sort(key=lambda l: (round(l['y0'], -1), l['x0']))
 
     ordered_groups = []
     if top_headers:
@@ -631,9 +632,6 @@ def detect_layout_and_ordered_blocks(
     if col_right:
         t_raw = '\n'.join(l['text'] for l in col_right)
         ordered_groups.append({'page': page.number, 'x0': mid_x_page, 'y0': y_col_start, 'x1': width, 'y1': height, 'text': normalize_paragraph_flow(t_raw)})
-    if footers:
-        t_raw = '\n'.join(l['text'] for l in footers)
-        ordered_groups.append({'page': page.number, 'x0': 0, 'y0': height - 40, 'x1': width, 'y1': height, 'text': normalize_paragraph_flow(t_raw)})
 
     return ordered_groups
 

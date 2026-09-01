@@ -58,6 +58,17 @@ class SearchResultItem(BaseModel):
     match_score: Optional[int] = 0
     source: Optional[str] = "web"
     status: Optional[str] = "Pendente"
+    reuse_available: bool = False
+
+
+class ExamIngestResponse(BaseModel):
+    exam_id: int
+    title: str
+    status: str
+    progress: int = 0
+    message: str
+    reused: bool = False
+    already_in_library: bool = False
 
 
 class ProgressEventSchema(BaseModel):

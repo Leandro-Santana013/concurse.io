@@ -1,85 +1,95 @@
 import React from 'react';
-import { Menu, CloudDownload, Sparkles, BookOpen, Flame, ChevronRight } from 'lucide-react';
-import { useUI } from '../../context/UIContext';
+import {
+  BarChart3,
+  BookOpen,
+  CloudDownload,
+  Home,
+  Import,
+  Search,
+} from 'lucide-react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useExam } from '../../context/ExamContext';
+import { useUI } from '../../context/UIContext';
 
-interface NavbarProps {
-  onToggleMobileSidebar?: () => void;
-}
+const navigation = [
+  { to: '/', label: 'Início', icon: Home, end: true },
+  { to: '/biblioteca', label: 'Biblioteca', icon: BookOpen },
+  { to: '/buscar', label: 'Buscar', icon: Search },
+  { to: '/progresso', label: 'Progresso', icon: BarChart3 },
+];
 
-export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
-  const { toggleMobileSidebar: uiToggle, activeDownloadsCount, navigateTo, openDirectIngestModal } = useUI();
-  const { activeExam } = useExam();
-  const handleToggle = onToggleMobileSidebar || uiToggle;
+const getPageTitle = (pathname: string) => {
+  if (pathname === '/biblioteca') return 'Biblioteca';
+  if (pathname === '/buscar') return 'Buscar provas';
+  if (pathname === '/progresso/erros') return 'Caderno de erros';
+  if (pathname === '/progresso/ranking') return 'Ranking';
+  if (pathname.startsWith('/progresso')) return 'Progresso';
+  return 'Início';
+};
 
+export const Navbar: React.FC = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { activeDownloadsCount, openDirectIngestModal } = useUI();
+  const { activeExam, isFinished } = useExam();
+
+  const activeExamPath = activeExam
+    ? `/prova/${activeExam.id}${isFinished ? '/resultado' : ''}`
+    : '/biblioteca';
 
   return (
-    <header className="sticky top-0 z-30 flex h-20 items-center justify-between glass-navbar px-4 sm:px-8">
-      <div className="flex items-center gap-3">
-        <button
-          onClick={handleToggle}
-          aria-label="Abrir Menu de Navegação"
-          className="flex h-10 w-10 items-center justify-center rounded-2xl glass-btn-secondary text-slate-300 hover:text-white transition lg:hidden"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
-
-        {/* Active Exam Floating Pill with Glass Glow if exam is running in background */}
-        {activeExam && (
-          <button
-            onClick={() => navigateTo('exam')}
-            className="hidden md:flex items-center gap-2 rounded-2xl glass-pill-indigo px-4 py-2 text-xs font-semibold hover:bg-indigo-600/20 transition group"
-          >
-            <BookOpen className="h-4 w-4 text-indigo-400 group-hover:scale-110 transition-transform" />
-            <span className="max-w-[220px] truncate font-heading">{activeExam.title}</span>
-            <span className="rounded-full bg-indigo-500/30 px-2 py-0.5 text-[10px] font-bold text-indigo-200 border border-indigo-400/30">
-              Em andamento
-            </span>
-            <ChevronRight className="h-3.5 w-3.5 text-indigo-400 group-hover:translate-x-0.5 transition-transform" />
-          </button>
-        )}
-      </div>
-
-      <div className="flex items-center gap-3 sm:gap-4">
-        {/* Direct Link Ingestion Button */}
-        <button
-          onClick={() => openDirectIngestModal()}
-          className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600/80 via-violet-600/80 to-cyan-600/80 hover:from-indigo-500 hover:to-cyan-500 px-3.5 sm:px-4 py-2 text-xs font-bold text-white shadow-lg shadow-indigo-500/20 border border-white/20 transition hover:scale-[1.02] active:scale-95"
-          title="Colar link direto do PCI Concursos ou PDF da Prova e Gabarito"
-        >
-
-          <Sparkles className="h-3.5 w-3.5 text-cyan-300" />
-          <span className="hidden sm:inline">Importar por Link / PCI</span>
-          <span className="sm:hidden">Colar Link</span>
-        </button>
-
-        {/* Active Downloads SSE Indicator */}
-        {activeDownloadsCount > 0 && (
-          <div className="flex items-center gap-2 rounded-2xl glass-pill-cyan px-3.5 py-1.5 text-xs font-bold animate-pulse">
-            <CloudDownload className="h-4 w-4 text-cyan-300" />
-            <span>{activeDownloadsCount} processando PDF</span>
-          </div>
-        )}
-
-
-        {/* User Profile Bento Pill */}
-        <div className="flex items-center gap-3 border-l border-white/10 pl-4">
-          <div className="relative">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-500 font-black text-sm text-white shadow-lg shadow-indigo-500/30 ring-1 ring-white/30">
-              C
-            </div>
-            <div className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-amber-400 text-[9px] text-slate-950 font-black ring-2 ring-[#080C14] shadow-sm">
-              ★
-            </div>
-          </div>
-          <div className="hidden sm:block text-left">
-            <p className="text-xs font-bold text-white font-heading tracking-wide">Concurseiro</p>
-            <p className="text-[10px] font-semibold text-emerald-400 flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" /> Plano Pro Ativo
-            </p>
-          </div>
+    <>
+      <header className="app-navbar">
+        <div className="navbar-title-group">
+          <span className="mobile-brand" aria-hidden="true">C</span>
+          <p>{getPageTitle(location.pathname)}</p>
         </div>
-      </div>
-    </header>
+
+        <div className="navbar-actions">
+          {activeDownloadsCount > 0 && (
+            <div className="download-status" role="status" aria-live="polite">
+              <CloudDownload aria-hidden="true" />
+              <span>{activeDownloadsCount} {activeDownloadsCount === 1 ? 'arquivo' : 'arquivos'}</span>
+              <span className="desktop-only"> em processamento</span>
+            </div>
+          )}
+
+          {activeExam && (
+            <button
+              type="button"
+              className="ui-button ui-button-secondary active-exam-button"
+              onClick={() => navigate(activeExamPath)}
+            >
+              <BookOpen aria-hidden="true" />
+              <span className="desktop-only">{isFinished ? 'Ver resultado' : 'Continuar prova'}</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            className="ui-button ui-button-primary navbar-import-button"
+            onClick={() => openDirectIngestModal()}
+            aria-label="Importar prova por link"
+          >
+            <Import aria-hidden="true" />
+            <span className="desktop-only">Importar</span>
+          </button>
+        </div>
+      </header>
+
+      <nav className="mobile-bottom-nav" aria-label="Navegação principal">
+        {navigation.map(({ to, label, icon: Icon, end }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={end}
+            className={({ isActive }) => `bottom-nav-link${isActive ? ' is-active' : ''}`}
+          >
+            <Icon aria-hidden="true" />
+            <span>{label}</span>
+          </NavLink>
+        ))}
+      </nav>
+    </>
   );
 };

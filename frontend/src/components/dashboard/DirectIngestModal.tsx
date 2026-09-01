@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { CheckCircle2, Clipboard, ExternalLink, FileText, Loader2, RefreshCw, X } from 'lucide-react';
 import { api } from '../../services/api';
+import { ImportStage } from '../../types/exam';
 import { useUI } from '../../context/UIContext';
-import { X, ExternalLink, Loader2 } from 'lucide-react';
 
 interface DirectIngestModalProps {
   isOpen: boolean;
@@ -12,6 +13,8 @@ interface DirectIngestModalProps {
   initialTitle?: string;
 }
 
+const TERMINAL_ERRORS = new Set(['Erro', 'Falha']);
+
 export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
   isOpen,
   onClose,
@@ -21,288 +24,234 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
   initialTitle = '',
 }) => {
   const { showToast } = useUI();
-  const [examUrl, setExamUrl] = useState(initialExamUrl);
-  const [gabaritoUrl, setGabaritoUrl] = useState(initialGabaritoUrl);
-  const [customTitle, setCustomTitle] = useState(initialTitle);
-  
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const retryTimerRef = useRef<number | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const [examUrl, setExamUrl] = useState('');
+  const [gabaritoUrl, setGabaritoUrl] = useState('');
+  const [customTitle, setCustomTitle] = useState('');
+  const [stage, setStage] = useState<ImportStage>('form');
   const [progress, setProgress] = useState(0);
-  const [statusMsg, setStatusMsg] = useState('');
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [readyExamId, setReadyExamId] = useState<number | null>(null);
-  const [eventSource, setEventSource] = useState<EventSource | null>(null);
+
+  const stopWatching = () => {
+    eventSourceRef.current?.close();
+    eventSourceRef.current = null;
+    if (retryTimerRef.current !== null) window.clearTimeout(retryTimerRef.current);
+    retryTimerRef.current = null;
+  };
 
   useEffect(() => {
-    if (isOpen) {
-      setExamUrl(initialExamUrl || '');
-      setGabaritoUrl(initialGabaritoUrl || '');
-      setCustomTitle(initialTitle || '');
-      setProgress(0);
-      setStatusMsg('');
-      setErrorMsg(null);
-      setReadyExamId(null);
-      setIsSubmitting(false);
-    } else {
-      if (eventSource) {
-        eventSource.close();
-        setEventSource(null);
-      }
-    }
-  }, [isOpen, initialExamUrl, initialGabaritoUrl, initialTitle]);
-
-  if (!isOpen) return null;
-
-  const handlePasteExam = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text) {
-        setExamUrl(text.trim());
-      }
-    } catch {
-      showToast('warning', 'Cole manualmente usando Ctrl+V.');
-    }
-  };
-
-  const handlePasteGabarito = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text) {
-        setGabaritoUrl(text.trim());
-      }
-    } catch {
-      showToast('warning', 'Cole manualmente usando Ctrl+V.');
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanUrl = examUrl.trim();
-    if (!cleanUrl) {
-      setErrorMsg('Informe o link da prova.');
+    if (!isOpen) {
+      stopWatching();
       return;
     }
 
-    setIsSubmitting(true);
-    setErrorMsg(null);
-    setProgress(5);
-    setStatusMsg('Iniciando processamento...');
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+    setExamUrl(initialExamUrl);
+    setGabaritoUrl(initialGabaritoUrl);
+    setCustomTitle(initialTitle);
+    setStage('form');
+    setProgress(0);
+    setStatusMessage('');
+    setErrorMessage(null);
+    setReadyExamId(null);
+    document.body.style.overflow = 'hidden';
+    window.setTimeout(() => closeButtonRef.current?.focus(), 0);
 
-    try {
-      const titleToSend = customTitle.trim() || 'Nova Prova de Concurso';
-      const gabaritoToSend = gabaritoUrl.trim() || undefined;
-
-      const res = await api.ingestExam(cleanUrl, titleToSend, gabaritoToSend);
-      const examId = res.exam_id;
-
-      if (res.status === 'Aprovada') {
-        setProgress(100);
-        setStatusMsg('Prova pronta para o simulado!');
-        setReadyExamId(examId);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
         return;
       }
+      if (event.key !== 'Tab' || !dialogRef.current) return;
+      const controls = Array.from(dialogRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+      if (controls.length === 0) return;
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
 
-      const sse = new EventSource(`/api/v1/exams/${examId}/progress/stream`);
-      setEventSource(sse);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = '';
+      stopWatching();
+      previousFocusRef.current?.focus();
+    };
+  }, [isOpen, initialExamUrl, initialGabaritoUrl, initialTitle, onClose]);
 
-      sse.onmessage = (evt) => {
-        try {
-          const data = JSON.parse(evt.data);
-          const prog = data.progress ?? 0;
-          const msg = data.status || 'Processando...';
+  if (!isOpen) return null;
 
-          setProgress(prog);
-          setStatusMsg(msg);
-
-          if (prog >= 100) {
-            sse.close();
-            setReadyExamId(examId);
-          } else if (prog === -1) {
-            sse.close();
-            setIsSubmitting(false);
-            setErrorMsg(msg || 'Erro ao processar arquivo.');
-          }
-        } catch (err) {
-          console.error('SSE Error:', err);
-        }
-      };
-
-      sse.onerror = () => {
-        sse.close();
-      };
-    } catch (err: any) {
-      setIsSubmitting(false);
-      setErrorMsg(err.message || 'Erro de conexão.');
+  const updateProgress = (examId: number, data: { progress?: number; status?: string; error_type?: string | null }) => {
+    const nextProgress = data.progress ?? 0;
+    const nextStatus = data.status || 'Processando prova...';
+    setProgress(Math.max(0, nextProgress));
+    setStatusMessage(nextStatus);
+    if (nextProgress >= 100 || nextStatus === 'Aprovada') {
+      stopWatching();
+      setReadyExamId(examId);
+      setStage('ready');
+    } else if (nextProgress < 0 || data.error_type || TERMINAL_ERRORS.has(nextStatus)) {
+      stopWatching();
+      setStage('error');
+      setErrorMessage(nextStatus || 'O processamento da prova falhou.');
     }
   };
 
-  const handleStartSimulado = () => {
-    if (readyExamId && onExamReady) {
-      onClose();
-      onExamReady(readyExamId);
+  const watchProgress = (examId: number, attempt = 0) => {
+    stopWatching();
+    const source = new EventSource(`/api/v1/exams/${examId}/progress/stream`);
+    eventSourceRef.current = source;
+    source.onmessage = (event) => {
+      try {
+        updateProgress(examId, JSON.parse(event.data));
+      } catch {
+        setStatusMessage('Recebendo atualizações do processamento...');
+      }
+    };
+    source.onerror = async () => {
+      source.close();
+      eventSourceRef.current = null;
+      try {
+        const snapshot = await api.getExamProgress(examId);
+        updateProgress(examId, snapshot);
+        if (snapshot.progress >= 100 || snapshot.progress < 0 || snapshot.error_type) return;
+      } catch {
+        // A reconexão limitada abaixo fornece uma segunda chance à conexão.
+      }
+      if (attempt < 2) {
+        setStatusMessage('Reconectando ao processamento...');
+        retryTimerRef.current = window.setTimeout(() => watchProgress(examId, attempt + 1), 1200 * (attempt + 1));
+      } else {
+        setStage('error');
+        setErrorMessage('Perdemos a conexão com o processamento. Tente acompanhar novamente.');
+      }
+    };
+  };
+
+  const pasteInto = async (setter: (value: string) => void) => {
+    try {
+      const value = (await navigator.clipboard.readText()).trim();
+      if (value) setter(value);
+    } catch {
+      showToast('warning', 'Cole manualmente usando Ctrl+V');
     }
   };
 
-  // URL para redirect externo do PCI Concursos
-  const pciRedirectUrl = examUrl.trim().startsWith('http')
-    ? examUrl.trim()
-    : 'https://www.pciconcursos.com.br/provas/';
+  const startImport = async () => {
+    const cleanUrl = examUrl.trim();
+    if (!cleanUrl) {
+      setErrorMessage('Informe o link da prova.');
+      setStage('error');
+      return;
+    }
+    setStage('submitting');
+    setProgress(5);
+    setErrorMessage(null);
+    setStatusMessage('Criando a prova...');
+    try {
+      const response = await api.ingestExam(cleanUrl, customTitle.trim() || 'Nova Prova de Concurso', gabaritoUrl.trim() || undefined);
+      if (response.status === 'Aprovada') {
+        setProgress(100);
+        setStatusMessage(response.reused ? response.message : 'Prova pronta para começar.');
+        setReadyExamId(response.exam_id);
+        setStage('ready');
+        return;
+      }
+      setStage('processing');
+      setStatusMessage(response.reused ? response.message : 'Baixando e organizando as questões...');
+      watchProgress(response.exam_id);
+    } catch (error) {
+      setStage('error');
+      setErrorMessage(error instanceof Error ? error.message : 'Não foi possível iniciar a importação.');
+    }
+  };
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    void startImport();
+  };
+
+  const isBusy = stage === 'submitting' || stage === 'processing';
+  const pciUrl = examUrl.trim().startsWith('http') ? examUrl.trim() : 'https://www.pciconcursos.com.br/provas/';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
-      <div className="relative w-full max-w-xl rounded-2xl border border-slate-800 bg-[#0c121e] p-6 shadow-2xl text-slate-100">
-        
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
-          <h2 className="text-lg font-bold text-white">
-            Importar Prova & Gabarito
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
-            aria-label="Fechar"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--scrim)] p-3 sm:p-6" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="import-title" aria-describedby="import-description" className="max-h-[calc(100vh-1.5rem)] w-full max-w-2xl overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl">
+        <header className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-[var(--border)] bg-[var(--surface)] p-5">
+          <div>
+            <h2 id="import-title" className="text-lg font-semibold text-[var(--text)]">Importar prova</h2>
+            <p id="import-description" className="mt-1 text-sm text-[var(--text-muted)]">Cole o link da prova e, se tiver, o link do gabarito oficial.</p>
+          </div>
+          <button ref={closeButtonRef} type="button" className="icon-button" onClick={onClose} aria-label="Fechar importação"><X aria-hidden="true" /></button>
+        </header>
 
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="mt-5 space-y-4">
-          {/* Field 1: Exam URL */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-300">
-              Link da Prova (PCI Concursos ou PDF)
-            </label>
-            <div className="relative flex items-center">
-              <input
-                type="url"
-                required
-                disabled={isSubmitting}
-                value={examUrl}
-                onChange={(e) => setExamUrl(e.target.value)}
-                placeholder="https://www.pciconcursos.com.br/provas/... ou link do PDF"
-                className="w-full rounded-xl border border-slate-700 bg-slate-900/90 py-2.5 pl-3.5 pr-20 text-xs font-mono text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none disabled:opacity-60"
-              />
-              <button
-                type="button"
-                disabled={isSubmitting}
-                onClick={handlePasteExam}
-                className="absolute right-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 px-2.5 py-1 text-[11px] font-medium text-slate-300 transition"
-              >
-                Colar
-              </button>
+        <form onSubmit={handleSubmit} className="space-y-5 p-5 sm:p-6">
+          <div className="block">
+            <label className="field-label" htmlFor="exam-url">Link da prova</label>
+            <div className="mt-2 flex gap-2">
+              <input id="exam-url" type="url" required className="input-control font-mono text-sm" disabled={isBusy} value={examUrl} onChange={(event) => setExamUrl(event.target.value)} placeholder="https://.../prova.pdf" />
+              <button type="button" className="button-secondary shrink-0" disabled={isBusy} onClick={() => void pasteInto(setExamUrl)}><Clipboard aria-hidden="true" /> Colar</button>
             </div>
           </div>
 
-          {/* Field 2: Gabarito URL */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-300">
-              Link do Gabarito Oficial <span className="text-slate-500 font-normal">(Opcional)</span>
-            </label>
-            <div className="relative flex items-center">
-              <input
-                type="url"
-                disabled={isSubmitting}
-                value={gabaritoUrl}
-                onChange={(e) => setGabaritoUrl(e.target.value)}
-                placeholder="https://.../gabarito.pdf"
-                className="w-full rounded-xl border border-slate-700 bg-slate-900/90 py-2.5 pl-3.5 pr-20 text-xs font-mono text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none disabled:opacity-60"
-              />
-              <button
-                type="button"
-                disabled={isSubmitting}
-                onClick={handlePasteGabarito}
-                className="absolute right-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 px-2.5 py-1 text-[11px] font-medium text-slate-300 transition"
-              >
-                Colar
-              </button>
+          <div className="block">
+            <label className="field-label" htmlFor="answer-url">Link do gabarito <span className="font-normal text-[var(--text-muted)]">(opcional)</span></label>
+            <div className="mt-2 flex gap-2">
+              <input id="answer-url" type="url" className="input-control font-mono text-sm" disabled={isBusy} value={gabaritoUrl} onChange={(event) => setGabaritoUrl(event.target.value)} placeholder="https://.../gabarito.pdf" />
+              <button type="button" className="button-secondary shrink-0" disabled={isBusy} onClick={() => void pasteInto(setGabaritoUrl)}><Clipboard aria-hidden="true" /> Colar</button>
             </div>
           </div>
 
-          {/* Field 3: Title */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-300">
-              Título / Cargo <span className="text-slate-500 font-normal">(Opcional)</span>
-            </label>
-            <input
-              type="text"
-              disabled={isSubmitting}
-              value={customTitle}
-              onChange={(e) => setCustomTitle(e.target.value)}
-              placeholder="Ex: IBAM 2024 - Enfermeiro"
-              className="w-full rounded-xl border border-slate-700 bg-slate-900/90 py-2.5 px-3.5 text-xs text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none disabled:opacity-60"
-            />
-          </div>
+          <label className="block" htmlFor="exam-title">
+            <span className="field-label">Título <span className="font-normal text-[var(--text-muted)]">(opcional)</span></span>
+            <input id="exam-title" className="input-control mt-2" disabled={isBusy} value={customTitle} onChange={(event) => setCustomTitle(event.target.value)} placeholder="Ex.: FGV 2025 — Auditor" />
+          </label>
 
-          {/* Error Alert */}
-          {errorMsg && (
-            <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300 font-medium">
-              {errorMsg}
-            </div>
+          {(stage === 'submitting' || stage === 'processing') && (
+            <section className="rounded-lg border border-[var(--border)] bg-[var(--surface-subtle)] p-4" aria-live="polite" aria-busy="true">
+              <div className="flex items-center justify-between gap-4 text-sm"><span className="flex items-center gap-2 font-medium text-[var(--text)]"><Loader2 aria-hidden="true" />{statusMessage}</span><span className="font-mono">{progress}%</span></div>
+              <progress className="mt-3 h-2 w-full" max="100" value={Math.max(5, progress)}>{progress}%</progress>
+              <p className="mt-2 text-xs text-[var(--text-muted)]">Você pode fechar esta janela; o processamento continuará em segundo plano.</p>
+            </section>
           )}
 
-          {/* Progress Bar */}
-          {isSubmitting && (
-            <div className="space-y-1.5 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-              <div className="flex items-center justify-between text-xs font-medium text-slate-300">
-                <span className="flex items-center gap-2">
-                  {progress < 100 && <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-400" />}
-                  {statusMsg || 'Processando...'}
-                </span>
-                <span className="font-mono text-slate-100">{progress}%</span>
-              </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800">
-                <div
-                  className="h-full bg-indigo-600 transition-all duration-300"
-                  style={{ width: `${Math.max(5, progress)}%` }}
-                />
-              </div>
-            </div>
+          {stage === 'ready' && (
+            <section className="rounded-lg border border-[var(--success)] bg-[var(--success-subtle)] p-4 text-[var(--text)]" aria-live="polite">
+              <div className="flex gap-3"><CheckCircle2 className="text-[var(--success)]" aria-hidden="true" /><div><h3 className="font-semibold">Prova pronta</h3><p className="mt-1 text-sm">{statusMessage || 'As questões foram organizadas e já podem ser resolvidas.'}</p></div></div>
+            </section>
           )}
 
-          {/* Footer Actions */}
-          <div className="mt-6 flex items-center justify-between border-t border-slate-800/80 pt-4">
-            {/* Redirect link to PCI Concursos */}
-            <a
-              href={pciRedirectUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 transition"
-              title="Abrir página no PCI Concursos em nova aba"
-            >
-              <span>Abrir no PCI Concursos</span>
-              <ExternalLink className="h-3 w-3" />
-            </a>
+          {stage === 'error' && errorMessage && (
+            <section className="rounded-lg border border-[var(--danger)] bg-[var(--danger-subtle)] p-4" role="alert">
+              <h3 className="font-semibold text-[var(--text)]">Não foi possível concluir</h3><p className="mt-1 text-sm text-[var(--text-muted)]">{errorMessage}</p>
+              <button type="button" className="button-secondary mt-3" onClick={() => void startImport()}><RefreshCw aria-hidden="true" /> Tentar novamente</button>
+            </section>
+          )}
 
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={isSubmitting && progress < 100}
-                className="rounded-xl border border-slate-700 bg-slate-800/60 hover:bg-slate-800 px-4 py-2 text-xs font-medium text-slate-300 hover:text-white transition disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-
-              {readyExamId ? (
-                <button
-                  type="button"
-                  onClick={handleStartSimulado}
-                  className="rounded-xl bg-emerald-600 hover:bg-emerald-500 px-5 py-2 text-xs font-semibold text-white shadow transition"
-                >
-                  Iniciar Simulado
-                </button>
+          <footer className="flex flex-col-reverse gap-3 border-t border-[var(--border)] pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <a className="text-link inline-flex min-h-11 items-center gap-2" href={pciUrl} target="_blank" rel="noreferrer"><ExternalLink aria-hidden="true" /> Abrir no PCI Concursos</a>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button type="button" className="button-ghost" onClick={onClose}>{isBusy ? 'Fechar e acompanhar' : 'Cancelar'}</button>
+              {stage === 'ready' && readyExamId ? (
+                <button type="button" className="button-primary" onClick={() => { onClose(); onExamReady?.(readyExamId); }}><FileText aria-hidden="true" /> Iniciar simulado</button>
               ) : (
-                <button
-                  type="submit"
-                  disabled={isSubmitting || !examUrl.trim()}
-                  className="rounded-xl bg-indigo-600 hover:bg-indigo-500 px-5 py-2 text-xs font-semibold text-white shadow transition disabled:opacity-50"
-                >
-                  {isSubmitting ? 'Processando...' : 'Processar Prova'}
-                </button>
+                <button type="submit" className="button-primary" disabled={isBusy || !examUrl.trim()}>{isBusy ? <Loader2 aria-hidden="true" /> : <FileText aria-hidden="true" />} Processar prova</button>
               )}
             </div>
-          </div>
+          </footer>
         </form>
       </div>
     </div>

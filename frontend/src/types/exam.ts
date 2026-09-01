@@ -59,6 +59,26 @@ export interface SearchResultItem {
   match_score: number;
   source: string;
   status?: string;
+  reuse_available?: boolean;
+}
+
+export interface ExamIngestResult {
+  exam_id: number;
+  title: string;
+  status: string;
+  progress: number;
+  message: string;
+  reused: boolean;
+  already_in_library: boolean;
+}
+
+export interface ActiveDownload {
+  id: number;
+  title: string;
+  url: string;
+  status: string;
+  progress: number;
+  error_type?: string | null;
 }
 
 export interface AttemptSubmission {
@@ -102,3 +122,19 @@ export interface NotebookSubjectStat {
   subject: string;
   count: number;
 }
+
+export interface RankingEntry {
+  name?: string | null;
+  picture?: string | null;
+  total_questions: number;
+  accuracy: number;
+}
+
+export interface ExamProgress {
+  status: string;
+  progress: number;
+  error_type?: string | null;
+}
+
+export type AsyncStatus = 'idle' | 'loading' | 'success' | 'empty' | 'error';
+export type ImportStage = 'form' | 'submitting' | 'processing' | 'ready' | 'error';

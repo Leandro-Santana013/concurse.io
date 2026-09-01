@@ -1,15 +1,21 @@
-import os
 import re
 import json
 import asyncio
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.expression import func
 from datetime import datetime
 
-from models.database import get_db, Exam, Folder, Question, ExamAttempt, User
+from models.database import (
+    get_db,
+    Exam,
+    Question,
+    ExamAttempt,
+    create_generated_exam_session,
+    resolve_exam_questions,
+)
 from schemas.exam_schemas import (
     ExamSummarySchema,
     FolderSchema,
@@ -17,78 +23,98 @@ from schemas.exam_schemas import (
     QuestionSchema,
     AttemptSubmission,
     AttemptResult,
+    ExamIngestResponse,
 )
+from routes.api_v1.user_context import get_current_user
+from services.exam_library import claim_exam_for_user, get_user_exam_ids, link_ready_exam_to_user
 
 router = APIRouter()
 
-def _get_current_user_id(request: Request, db: Session) -> Optional[int]:
-    """Recupera o ID do usuário da sessão ou retorna o primeiro usuário padrão."""
-    user = db.query(User).first()
-    if not user:
-        user = User(google_id="default_dev_user", email="dev@concurse.io", name="Concurseiro Dev")
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    return user.id
-
 @router.get("/folders", response_model=List[FolderSchema])
-def list_folders(db: Session = Depends(get_db)):
-    """Lista todas as pastas e provas aprovadas com estatísticas de desempenho."""
-    user_id = 1
-    folders = db.query(Folder).all()
-    result = []
+def list_folders(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Lista somente as provas aprovadas vinculadas ao usuário atual com queries otimizadas em lote."""
+    from sqlalchemy.orm import joinedload
+    exam_ids = list(get_user_exam_ids(db, current_user.id))
+    if not exam_ids:
+        return []
 
-    for f in folders:
-        exams_data = []
-        for e in f.exams:
-            if e.status != 'Aprovada':
-                continue
-            attempts = db.query(ExamAttempt).filter_by(exam_id=e.id).order_by(ExamAttempt.id.desc()).all()
-            best_pct = max((a.percentage for a in attempts), default=None)
-            last_pct = attempts[0].percentage if attempts else None
-            
-            exams_data.append(ExamSummarySchema(
-                id=e.id,
-                title=e.title,
-                status=e.status,
-                question_count=len(e.questions),
-                best_score=round(best_pct, 1) if best_pct is not None else None,
-                last_score=round(last_pct, 1) if last_pct is not None else None,
-                attempt_count=len(attempts),
-                has_official_answers=bool(e.has_official_answers),
-                answer_key_source=e.answer_key_source or "none",
-                gabarito_coverage=e.gabarito_coverage or 0.0,
-                gabarito_summary=e.gabarito_text,
-                source_url=e.source_url
-            ))
-        if exams_data:
-            result.append(FolderSchema(id=f.id, name=f.name, exams=exams_data))
+    exams = (
+        db.query(Exam)
+        .options(joinedload(Exam.folder))
+        .filter(Exam.id.in_(exam_ids), Exam.status == "Aprovada")
+        .order_by(Exam.title.asc())
+        .all()
+    )
+    if not exams:
+        return []
 
-    orphan_exams = db.query(Exam).filter(Exam.folder_id == None, Exam.status == 'Aprovada').all()
-    if orphan_exams:
-        orphan_data = []
-        for e in orphan_exams:
-            attempts = db.query(ExamAttempt).filter_by(exam_id=e.id).order_by(ExamAttempt.id.desc()).all()
-            best_pct = max((a.percentage for a in attempts), default=None)
-            last_pct = attempts[0].percentage if attempts else None
-            orphan_data.append(ExamSummarySchema(
-                id=e.id,
-                title=e.title,
-                status=e.status,
-                question_count=len(e.questions),
-                best_score=round(best_pct, 1) if best_pct is not None else None,
-                last_score=round(last_pct, 1) if last_pct is not None else None,
-                attempt_count=len(attempts),
-                has_official_answers=bool(e.has_official_answers),
-                answer_key_source=e.answer_key_source or "none",
-                gabarito_coverage=e.gabarito_coverage or 0.0,
-                gabarito_summary=e.gabarito_text,
-                source_url=e.source_url
-            ))
-        if orphan_data:
-            result.append(FolderSchema(id="avulsas", name="Provas Avulsas", exams=orphan_data))
+    active_exam_ids = [e.id for e in exams]
 
-    return result
+    # Contagem de questões em uma única query agrupada
+    question_counts = dict(
+        db.query(Question.exam_id, func.count(Question.id))
+        .filter(Question.exam_id.in_(active_exam_ids))
+        .group_by(Question.exam_id)
+        .all()
+    )
+
+    # Tentativas do usuário em uma única query
+    attempts_by_exam: Dict[int, List[ExamAttempt]] = {}
+    all_attempts = (
+        db.query(ExamAttempt)
+        .filter(
+            ExamAttempt.exam_id.in_(active_exam_ids),
+            ExamAttempt.user_id == current_user.id,
+        )
+        .order_by(ExamAttempt.id.desc())
+        .all()
+    )
+    for att in all_attempts:
+        attempts_by_exam.setdefault(att.exam_id, []).append(att)
+
+    grouped: Dict[Any, Dict[str, Any]] = {}
+
+    for exam in exams:
+        attempts = attempts_by_exam.get(exam.id, [])
+        best_pct = max((attempt.percentage for attempt in attempts), default=None)
+        last_pct = attempts[0].percentage if attempts else None
+        q_count = question_counts.get(exam.id, 0)
+
+        summary = ExamSummarySchema(
+            id=exam.id,
+            title=exam.title,
+            status=exam.status,
+            question_count=q_count,
+            best_score=round(best_pct, 1) if best_pct is not None else None,
+            last_score=round(last_pct, 1) if last_pct is not None else None,
+            attempt_count=len(attempts),
+            has_official_answers=bool(exam.has_official_answers),
+            answer_key_source=exam.answer_key_source or "none",
+            gabarito_coverage=exam.gabarito_coverage or 0.0,
+            gabarito_summary=exam.gabarito_text,
+            source_url=exam.source_url,
+        )
+
+        owns_folder = exam.folder is not None and exam.folder.user_id == current_user.id
+        if owns_folder:
+            folder_key = exam.folder_id
+            folder_name = exam.folder.name
+        elif exam.folder is not None:
+            folder_key = "acervo"
+            folder_name = "Provas do acervo"
+        else:
+            folder_key = "avulsas"
+            folder_name = "Provas Avulsas"
+        group = grouped.setdefault(folder_key, {"name": folder_name, "exams": []})
+        group["exams"].append(summary)
+
+    return [
+        FolderSchema(id=folder_id, name=data["name"], exams=data["exams"])
+        for folder_id, data in grouped.items()
+    ]
 
 def _sort_questions_key(q):
     raw = str(getattr(q, 'numero_questao', None) or (q.get('numero_questao') if isinstance(q, dict) else '') or '').strip()
@@ -108,8 +134,13 @@ def get_exam_detail(exam_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Prova não encontrada.")
 
     questions_list = []
-    sorted_questions = sorted(exam.questions, key=_sort_questions_key)
-    for q in sorted_questions:
+    resolved_questions, is_generated_session = resolve_exam_questions(db, exam)
+    sorted_questions = (
+        resolved_questions
+        if is_generated_session
+        else sorted(resolved_questions, key=_sort_questions_key)
+    )
+    for idx, q in enumerate(sorted_questions, start=1):
         try:
             raw_opts = json.loads(q.options) if q.options else {}
             if isinstance(raw_opts, dict):
@@ -142,7 +173,7 @@ def get_exam_detail(exam_id: int, db: Session = Depends(get_db)):
 
         questions_list.append(QuestionSchema(
             id=q.id,
-            numero_questao=str(q.numero_questao or ""),
+            numero_questao=str(idx) if is_generated_session else str(q.numero_questao or ""),
             statement=q.statement,
             options=options_dict,
             correct_answer=q.correct_answer,
@@ -213,20 +244,30 @@ async def stream_exam_progress(exam_id: int):
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 @router.post("/exams/attempt", response_model=AttemptResult)
-def submit_attempt(submission: AttemptSubmission, db: Session = Depends(get_db)):
+def submit_attempt(
+    submission: AttemptSubmission,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
     """Submete as respostas de um simulado, calcula pontuação e gera detalhamento por matéria."""
     exam = db.query(Exam).filter_by(id=submission.exam_id).first()
     if not exam:
         raise HTTPException(status_code=404, detail="Prova não encontrada.")
 
-    user_id = 1
+    user_id = current_user.id
     score = 0
-    total = len(exam.questions)
+    resolved_questions, is_generated_session = resolve_exam_questions(db, exam)
+    exam_questions = (
+        resolved_questions
+        if is_generated_session
+        else sorted(resolved_questions, key=_sort_questions_key)
+    )
+    total = len(exam_questions)
     detailed_answers = {}
     feedback_per_subject = {}
 
-    for q in exam.questions:
-        q_num = str(q.numero_questao or q.id)
+    for idx, q in enumerate(exam_questions, start=1):
+        q_num = str(idx) if is_generated_session else str(q.numero_questao or q.id)
         user_ans = submission.answers.get(q_num, "").strip().upper()
         correct_ans = q.correct_answer.strip().upper() if q.correct_answer else "A"
         
@@ -282,7 +323,11 @@ def submit_attempt(submission: AttemptSubmission, db: Session = Depends(get_db))
     )
 
 @router.post("/exams/generate_custom", response_model=ExamDetailSchema)
-def generate_custom_exam(count: int = Query(20, ge=5, le=100), db: Session = Depends(get_db)):
+def generate_custom_exam(
+    count: int = Query(20, ge=5, le=100),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
     """Gera um simulado personalizado aleatório a partir de todas as questões do banco."""
     questions = db.query(Question).order_by(func.random()).limit(count).all()
     if not questions:
@@ -314,21 +359,31 @@ def generate_custom_exam(count: int = Query(20, ge=5, le=100), db: Session = Dep
             latex_support=is_latex
         ))
 
+    title = f"Simulado Personalizado ({len(questions_list)} Questões)"
+    exam = create_generated_exam_session(
+        db,
+        title=title,
+        kind="custom",
+        question_ids=[question.id for question in questions],
+        user_id=current_user.id,
+    )
+
     return ExamDetailSchema(
-        id=999999,
-        title=f"Simulado Personalizado ({len(questions_list)} Questões)",
-        status="Aprovada",
+        id=exam.id,
+        title=exam.title,
+        status=exam.status,
         has_official_answers=True,
         gabarito_coverage=100.0,
         questions=questions_list
     )
 
-@router.post("/exams/ingest")
+@router.post("/exams/ingest", response_model=ExamIngestResponse)
 def ingest_exam_from_url(
     payload: Dict[str, Any],
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
-    """Cria uma nova prova a partir de URL e inicia o processamento assíncrono em background."""
+    """Associa uma prova canônica ao usuário e só processa conteúdo ainda inexistente."""
     from app_core.async_worker import dispatch_async_exam_task
     url = payload.get("url")
     title = payload.get("title", "Nova Prova de Concurso")
@@ -339,42 +394,63 @@ def ingest_exam_from_url(
 
     force_reprocess = bool(payload.get("force") or payload.get("reprocess"))
 
-    # Verifica se já existe
-    existing = db.query(Exam).filter_by(source_url=url).first()
-    if existing and existing.status == 'Aprovada' and not gabarito_url and not force_reprocess and len(existing.questions) >= 5:
-        return {"exam_id": existing.id, "status": "Aprovada", "message": "Prova já cadastrada e processada."}
+    claim = claim_exam_for_user(
+        db,
+        user_id=current_user.id,
+        raw_url=str(url),
+        title=str(title),
+        gabarito_url=str(gabarito_url) if gabarito_url else None,
+        force_reprocess=force_reprocess,
+    )
+    exam = claim.exam
 
-    if not existing:
-        exam = Exam(
-            title=title,
-            source_url=url,
-            gabarito_url=gabarito_url,
-            status="Processando",
-            progress=5,
-            progress_message="Iniciando download e processamento...",
-            user_id=1
-        )
-        db.add(exam)
-        db.commit()
-        db.refresh(exam)
+    if claim.should_process:
+        dispatch_async_exam_task(exam.id)
+
+    if exam.status == "Aprovada" and claim.reused:
+        message = "Prova pronta recuperada do banco, sem nova extração."
+    elif not claim.should_process:
+        message = "Esta prova já está sendo processada; o processamento existente foi reutilizado."
     else:
-        exam = existing
-        exam.status = "Processando"
-        exam.progress = 5
-        exam.progress_message = "Reiniciando processamento..."
-        if title and title != "Nova Prova de Concurso":
-            exam.title = title
-        if gabarito_url:
-            exam.gabarito_url = gabarito_url
-        db.commit()
+        message = "Processamento assíncrono iniciado com sucesso."
 
-    dispatch_async_exam_task(exam.id)
     return {
         "exam_id": exam.id,
         "title": exam.title,
-        "status": "Processando",
-        "progress": 5,
-        "message": "Processamento assíncrono iniciado com sucesso."
+        "status": exam.status,
+        "progress": exam.progress or 0,
+        "message": message,
+        "reused": claim.reused,
+        "already_in_library": claim.already_in_library,
+    }
+
+
+@router.post("/exams/{exam_id}/claim", response_model=ExamIngestResponse)
+def claim_processed_exam(
+    exam_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Vincula uma prova pronta ao usuário sem acionar ingestão ou worker."""
+    try:
+        exam, already_in_library = link_ready_exam_to_user(
+            db,
+            user_id=current_user.id,
+            exam_id=exam_id,
+        )
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+    return {
+        "exam_id": exam.id,
+        "title": exam.title,
+        "status": exam.status,
+        "progress": exam.progress or 0,
+        "message": "Prova já processada adicionada à biblioteca sem nova extração.",
+        "reused": True,
+        "already_in_library": already_in_library,
     }
 
 

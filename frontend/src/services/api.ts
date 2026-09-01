@@ -6,6 +6,10 @@ import {
   AttemptResult,
   GlobalStats,
   NotebookSubjectStat,
+  RankingEntry,
+  ExamProgress,
+  ExamIngestResult,
+  ActiveDownload,
 } from '../types/exam';
 
 const API_BASE = '/api/v1';
@@ -50,13 +54,21 @@ export const api = {
     return res.json();
   },
 
-  async ingestExam(url: string, title: string, gabaritoUrl?: string): Promise<{ exam_id: number; status: string }> {
+  async ingestExam(url: string, title: string, gabaritoUrl?: string): Promise<ExamIngestResult> {
     const res = await fetch(`${API_BASE}/exams/ingest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url, title, gabarito_url: gabaritoUrl }),
     });
     if (!res.ok) throw new Error('Falha ao iniciar processamento da prova');
+    return res.json();
+  },
+
+  async claimProcessedExam(examId: number): Promise<ExamIngestResult> {
+    const res = await fetch(`${API_BASE}/exams/${examId}/claim`, {
+      method: 'POST',
+    });
+    if (!res.ok) throw new Error('Falha ao adicionar a prova processada à biblioteca');
     return res.json();
   },
 
@@ -79,15 +91,21 @@ export const api = {
     return res.json();
   },
 
-  async getRanking(): Promise<any[]> {
+  async getRanking(): Promise<RankingEntry[]> {
     const res = await fetch(`${API_BASE}/ranking`);
     if (!res.ok) throw new Error('Falha ao carregar ranking global');
     return res.json();
   },
 
-  async getActiveDownloads(): Promise<any[]> {
+  async getActiveDownloads(): Promise<ActiveDownload[]> {
     const res = await fetch(`${API_BASE}/downloads/active`);
     if (!res.ok) return [];
     return res.json();
-  }
+  },
+
+  async getExamProgress(examId: number): Promise<ExamProgress> {
+    const res = await fetch(`${API_BASE}/exams/${examId}/progress`);
+    if (!res.ok) throw new Error('Falha ao consultar o processamento da prova');
+    return res.json();
+  },
 };

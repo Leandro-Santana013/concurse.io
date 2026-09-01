@@ -1,375 +1,234 @@
 import React, { useState } from 'react';
-import { api } from '../../services/api';
-import { SearchResultItem } from '../../types/exam';
-import { useUI } from '../../context/UIContext';
 import {
-  Search,
-  DownloadCloud,
-  FileText,
-  CheckCircle2,
-  Sparkles,
-  Loader2,
-  AlertCircle,
-  Building2,
-  ExternalLink,
-  ArrowRight,
-  GraduationCap,
-  Copy,
   Check,
+  Clipboard,
+  ExternalLink,
+  FileCheck2,
+  FileSearch,
+  Loader2,
+  RefreshCw,
+  Search,
 } from 'lucide-react';
+import { api } from '../../services/api';
+import { AsyncStatus, SearchResultItem } from '../../types/exam';
+import { useUI } from '../../context/UIContext';
 
 interface SearchHubProps {
-  onExamReady?: (examId: number) => void;
+  onExamReady?: (examId: number) => void | Promise<void>;
 }
 
-export const SearchHub: React.FC<SearchHubProps> = ({ onExamReady }) => {
-  const { showToast, navigateTo, openDirectIngestModal } = useUI();
-  const [query, setQuery] = useState('');
+const SOURCE_OPTIONS = [
+  { id: 'all', label: 'Todas' },
+  { id: 'idcap', label: 'IDCAP' },
+  { id: 'pci', label: 'PCI Concursos' },
+  { id: 'web', label: 'Web' },
+];
 
+const POPULAR_QUERIES = ['FGV', 'Cebraspe', 'Polícia Federal', 'Tribunais'];
+
+export const SearchHub: React.FC<SearchHubProps> = ({ onExamReady }) => {
+  const { openDirectIngestModal, showToast } = useUI();
+  const [query, setQuery] = useState('');
   const [selectedSource, setSelectedSource] = useState('all');
   const [results, setResults] = useState<SearchResultItem[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [status, setStatus] = useState<AsyncStatus>('idle');
+  const [error, setError] = useState<string | null>(null);
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
-  const [ingestingUrls, setIngestingUrls] = useState<
-    Record<string, { examId?: number; progress: number; statusMsg: string }>
-  >({});
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [addingUrl, setAddingUrl] = useState<string | null>(null);
 
-  const popularBancas = ['Cebraspe', 'FGV', 'FCC', 'IBAM', 'Vunesp', 'IDCAP', 'Cesgranrio'];
+  const executeSearch = async (searchQuery = query) => {
+    const cleaned = searchQuery.trim();
+    if (!cleaned) {
+      setError('Digite o cargo, órgão ou banca que deseja encontrar.');
+      setStatus('error');
+      return;
+    }
 
-  const handleSearch = async (e?: React.FormEvent, directQuery?: string) => {
-    if (e) e.preventDefault();
-    const searchQuery = directQuery !== undefined ? directQuery : query;
-    if (!searchQuery.trim()) return;
-
-    if (directQuery) setQuery(directQuery);
-
-    setIsLoading(true);
-    setErrorMsg(null);
+    setQuery(cleaned);
+    setStatus('loading');
+    setError(null);
     try {
-      const sourceParam = selectedSource === 'all' ? undefined : selectedSource;
-      const data = await api.searchExams(searchQuery, sourceParam);
+      const source = selectedSource === 'all' ? undefined : selectedSource;
+      const data = await api.searchExams(cleaned, source);
       setResults(data);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Erro ao realizar busca de provas.');
-      showToast('error', 'Falha na busca', err.message);
-    } finally {
-      setIsLoading(false);
+      setStatus(data.length > 0 ? 'success' : 'empty');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Não foi possível concluir a busca.';
+      setError(message);
+      setStatus('error');
     }
   };
 
-  const handleSourceChange = (newSource: string) => {
-    setSelectedSource(newSource);
-    if (query.trim()) {
-      const sourceParam = newSource === 'all' ? undefined : newSource;
-      setIsLoading(true);
-      setErrorMsg(null);
-      api.searchExams(query, sourceParam)
-        .then((data) => setResults(data))
-        .catch((err: any) => {
-          setErrorMsg(err.message || 'Erro ao filtrar fonte.');
-        })
-        .finally(() => setIsLoading(false));
-    }
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    void executeSearch();
   };
 
-  const handleIngest = async (item: SearchResultItem) => {
-    const key = item.url;
-    setIngestingUrls((prev) => ({
-      ...prev,
-      [key]: { progress: 10, statusMsg: 'Iniciando download do PDF...' },
-    }));
-
+  const handleCopy = async (url: string) => {
     try {
-      const res = await api.ingestExam(item.url, item.title, item.gabarito_url || undefined);
-      const examId = res.exam_id;
+      await navigator.clipboard.writeText(url);
+      setCopiedUrl(url);
+      window.setTimeout(() => setCopiedUrl((current) => current === url ? null : current), 1800);
+    } catch {
+      showToast('warning', 'Não foi possível copiar o link', 'Selecione o endereço e copie manualmente.');
+    }
+  };
 
-      // Start Server-Sent Events (SSE) Listener
-      const eventSource = new EventSource(`/api/v1/exams/${examId}/progress/stream`);
+  const handleUseReadyExam = async (item: SearchResultItem) => {
+    setAddingUrl(item.url);
+    try {
+      if (!item.id) throw new Error('A prova processada não possui um identificador válido.');
+      const response = await api.claimProcessedExam(item.id);
 
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          const progress = data.progress || 0;
-          const statusMsg = data.status || 'Processando com IA...';
-
-          setIngestingUrls((prev) => ({
-            ...prev,
-            [key]: { examId, progress, statusMsg },
-          }));
-
-          if (progress >= 100) {
-            eventSource.close();
-            showToast('success', 'Prova Pronta!', `"${item.title.substring(0, 40)}..." foi indexada com sucesso.`);
-            if (onExamReady) onExamReady(examId);
-          } else if (progress === -1) {
-            eventSource.close();
-            showToast('error', 'Falha no processamento', statusMsg);
-          }
-        } catch (e) {
-          console.error('SSE Parse Error:', e);
-        }
-      };
-
-      eventSource.onerror = () => {
-        eventSource.close();
-      };
-    } catch (e: any) {
-      setIngestingUrls((prev) => ({
-        ...prev,
-        [key]: { progress: -1, statusMsg: `Erro: ${e.message}` },
-      }));
-      showToast('error', 'Erro ao iniciar download', e.message);
+      setResults((current) => current.filter((result) => result.url !== item.url));
+      if (results.length <= 1) setStatus('empty');
+      showToast('success', 'Prova adicionada à biblioteca', 'Nenhum download ou nova extração foi iniciado.');
+      await onExamReady?.(response.exam_id);
+    } catch (err) {
+      showToast(
+        'error',
+        'Não foi possível adicionar a prova',
+        err instanceof Error ? err.message : 'Tente novamente em instantes.',
+      );
+    } finally {
+      setAddingUrl(null);
     }
   };
 
   return (
-    <div className="mx-auto max-w-6xl animate-fadeIn p-4 sm:p-6 lg:p-8 space-y-8">
-      {/* Bento Hero Banner with Frosted Glass & Light Glow */}
-      <div className="relative overflow-hidden rounded-3xl border border-white/15 bg-gradient-to-br from-indigo-950/40 via-[#0E1626]/85 to-[#080C14]/90 p-6 sm:p-10 shadow-2xl backdrop-blur-2xl">
-        <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-indigo-500/20 blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-cyan-500/15 blur-3xl pointer-events-none" />
+    <div className="page-shell space-y-8">
+      <header className="max-w-3xl">
+        <p className="eyebrow">Descobrir</p>
+        <h1 className="page-title">Encontre sua próxima prova</h1>
+        <p className="page-description">Busque por cargo, órgão ou banca. Antes de importar, confira a fonte e a disponibilidade do gabarito.</p>
+      </header>
 
-        <div className="relative z-10 max-w-3xl">
-          <div className="inline-flex items-center gap-2 rounded-full glass-pill-indigo px-3.5 py-1.5 text-xs font-bold">
-            <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
-            <span>Motor de Busca & Indexação IA</span>
-          </div>
-
-          <h1 className="mt-4 font-heading text-2xl sm:text-4xl font-black tracking-tight text-white">
-            Encontre Qualquer Prova Oficial
-          </h1>
-          <p className="mt-2 text-sm sm:text-base text-slate-300 font-reading leading-relaxed">
-            Pesquise por cargo, banca examinadora ou órgão público. O motor extrai enunciados, fórmulas matemáticas e gabaritos oficiais para você resolver no simulador.
-          </p>
-
-          {/* Search Form with Glass Input & Primary Glass Button */}
-          <form onSubmit={handleSearch} className="mt-7 flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+      <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-6" aria-labelledby="search-title">
+        <h2 id="search-title" className="sr-only">Buscar provas</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="block">
+            <label className="field-label" htmlFor="exam-search">Cargo, órgão ou banca</label>
+            <div className="search-control mt-2">
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
               <input
-                type="text"
+                id="exam-search"
+                className="input-control search-input text-base"
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Ex: IBAM Enfermeiro, Polícia Federal Agente, FGV Auditor, TJ..."
-                className="w-full glass-input rounded-2xl py-4 pl-12 pr-4 text-sm font-medium placeholder-slate-400"
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Ex.: FGV Auditor, TJ Técnico, Polícia Federal"
+                aria-describedby="search-help"
               />
-            </div>
-            <button
-              type="submit"
-              disabled={isLoading || !query.trim()}
-              className="flex items-center justify-center gap-2 rounded-2xl glass-btn-primary px-7 py-4 font-heading font-bold text-sm text-white disabled:opacity-50"
-            >
-              {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
-              <span>Buscar Provas</span>
-            </button>
-          </form>
-
-          {/* Quick Banca Chips */}
-          <div className="mt-5 flex flex-wrap items-center gap-2">
-            <span className="text-xs font-bold text-slate-400 mr-1">Bancas Populares:</span>
-            {popularBancas.map((banca) => (
-              <button
-                key={banca}
-                onClick={() => handleSearch(undefined, banca)}
-                className="rounded-xl glass-btn-secondary px-3 py-1 text-xs font-semibold text-slate-300 hover:text-white transition"
-              >
-                {banca}
+              <button type="submit" className="button-primary search-submit" disabled={status === 'loading'} aria-label="Buscar provas">
+                {status === 'loading' ? <Loader2 aria-hidden="true" /> : <Search aria-hidden="true" />}
+                <span className="hidden sm:inline">Buscar</span>
               </button>
-            ))}
-          </div>
-
-          {/* Source Filter Tabs & Direct Link Action */}
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-white/10">
-            <div className="flex flex-wrap gap-2">
-              {[
-                { id: 'all', label: 'Todas as Fontes' },
-                { id: 'idcap', label: 'IDCAP' },
-                { id: 'pci', label: 'PCI Concursos' },
-                { id: 'web', label: 'Web Geral' },
-              ].map((chip) => (
-                <button
-                  key={chip.id}
-                  onClick={() => handleSourceChange(chip.id)}
-                  className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition ${
-                    selectedSource === chip.id
-                      ? 'glass-btn-primary text-white shadow-md'
-                      : 'glass-btn-secondary text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  {chip.label}
-                </button>
-              ))}
             </div>
-
-            <button
-              type="button"
-              onClick={() => openDirectIngestModal()}
-              className="flex items-center gap-1.5 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-400/30 px-3 py-1.5 text-xs font-bold text-indigo-300 hover:text-white transition shadow-sm"
-            >
-              <Sparkles className="h-3.5 w-3.5 text-cyan-300" />
-              <span>Colar Links Diretos (PCI / PDF)</span>
-            </button>
-
+            <span id="search-help" className="mt-2 block text-sm text-[var(--text-muted)]">Tente combinar banca, cargo e ano para resultados mais precisos.</span>
           </div>
+
+          <div className="flex flex-col gap-3 border-t border-[var(--border)] pt-4 md:flex-row md:items-center md:justify-between">
+            <fieldset>
+              <legend className="field-label mb-2">Fontes</legend>
+              <div className="flex flex-wrap gap-2">
+                {SOURCE_OPTIONS.map((source) => (
+                  <button
+                    key={source.id}
+                    type="button"
+                    aria-pressed={selectedSource === source.id}
+                    className={selectedSource === source.id ? 'filter-chip filter-chip-active' : 'filter-chip'}
+                    onClick={() => setSelectedSource(source.id)}
+                  >
+                    {source.label}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            <button type="button" className="button-secondary" onClick={() => openDirectIngestModal()}>
+              <Clipboard aria-hidden="true" /> Importar um link direto
+            </button>
+          </div>
+        </form>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-[var(--text-muted)]">Buscas comuns:</span>
+          {POPULAR_QUERIES.map((suggestion) => (
+            <button key={suggestion} type="button" className="text-link" onClick={() => void executeSearch(suggestion)}>{suggestion}</button>
+          ))}
         </div>
-      </div>
+      </section>
 
-
-      {/* Error Message Alert */}
-      {errorMsg && (
-        <div className="flex items-center gap-3 rounded-2xl glass-pill-rose p-4 text-sm font-medium shadow-lg">
-          <AlertCircle className="h-5 w-5 shrink-0 text-rose-400" />
-          <span>{errorMsg}</span>
-        </div>
-      )}
-
-      {/* Search Results Area */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-heading text-lg font-bold text-white">
-            Resultados Encontrados {results.length > 0 && <span className="text-indigo-400 font-mono">({results.length})</span>}
+      <section aria-labelledby="results-title" aria-live="polite">
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <h2 id="results-title" className="section-title">
+            {status === 'idle' ? 'Resultados' : status === 'success' ? `${results.length} prova${results.length === 1 ? '' : 's'} encontrada${results.length === 1 ? '' : 's'}` : 'Resultados'}
           </h2>
         </div>
 
-        {results.length === 0 && !isLoading && (
-          <div className="flex h-64 flex-col items-center justify-center rounded-3xl glass-card text-center p-6 text-slate-400">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl glass-btn-secondary text-slate-300 mb-3">
-              <FileText className="h-6 w-6 stroke-[1.5]" />
-            </div>
-            <p className="font-heading font-semibold text-slate-200">Nenhuma busca realizada</p>
-            <p className="mt-1 text-xs text-slate-400 max-w-sm">
-              Digite um cargo ou banca examinadora acima para pesquisar cadernos de questões reais.
-            </p>
+        {status === 'idle' && (
+          <div className="state-card text-center"><FileSearch className="mx-auto" aria-hidden="true" /><h3>Comece com uma busca</h3><p>Os resultados aparecerão aqui, organizados para comparação rápida.</p></div>
+        )}
+
+        {status === 'loading' && (
+          <div className="space-y-3" aria-busy="true">{[1, 2, 3].map((item) => <div key={item} className="skeleton h-32 w-full" />)}</div>
+        )}
+
+        {status === 'empty' && (
+          <div className="state-card text-center"><FileSearch className="mx-auto" aria-hidden="true" /><h3>Nenhuma prova encontrada</h3><p>Tente remover o ano, trocar a banca ou consultar todas as fontes.</p></div>
+        )}
+
+        {status === 'error' && (
+          <div className="state-card" role="alert">
+            <RefreshCw aria-hidden="true" /><div><h3>Não foi possível buscar</h3><p>{error}</p></div>
+            {query && <button className="button-secondary" onClick={() => void executeSearch()}>Tentar novamente</button>}
           </div>
         )}
 
-        {isLoading && (
-          <div className="flex h-64 flex-col items-center justify-center rounded-3xl glass-card text-slate-400">
-            <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
-            <p className="mt-3 font-heading text-sm font-semibold text-slate-200">Pesquisando cadernos e gabaritos...</p>
-            <p className="text-xs text-slate-400 mt-1">Varrendo repositórios oficiais e organizando questões</p>
-          </div>
-        )}
-
-        {results.length > 0 && (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {results.map((item, idx) => {
-              const ingestStatus = ingestingUrls[item.url];
-              const isDone = ingestStatus && ingestStatus.progress >= 100;
-              const isError = ingestStatus && ingestStatus.progress === -1;
-              const isProcessing = ingestStatus && ingestStatus.progress > 0 && ingestStatus.progress < 100;
-
-              return (
-                <div
-                  key={idx}
-                  onClick={() => openDirectIngestModal({ examUrl: item.url, gabaritoUrl: item.gabarito_url || '', title: item.title })}
-                  className="glass-card-interactive flex flex-col justify-between p-5 group cursor-pointer hover:border-indigo-400/50 hover:shadow-indigo-500/10 transition"
-                >
-                  <div>
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="rounded-lg glass-pill-indigo px-2.5 py-0.5 text-[11px] font-mono font-bold">
-                          {item.source.toUpperCase()}
-                        </span>
-                        {item.match_score !== undefined && item.match_score > 0 && (
-                          <span
-                            className={`rounded-lg px-2 py-0.5 text-[10px] font-mono font-bold transition ${
-                              item.match_score >= 80
-                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-500/10'
-                                : item.match_score >= 50
-                                ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
-                                : 'bg-slate-700/40 text-slate-400 border border-white/10'
-                            }`}
-                          >
-                            {item.match_score}% Match
-                          </span>
-                        )}
-                      </div>
-                      {item.has_gabarito_link && (
-                        <span className="rounded-lg glass-pill-emerald px-2 py-0.5 text-[10px] font-bold">
-                          Gabarito Detectado
-                        </span>
-                      )}
+        {status === 'success' && (
+          <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+            {results.map((item, index) => (
+              <article key={`${item.url}-${index}`} className="border-b border-[var(--border)] p-4 last:border-b-0 sm:p-5">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      <span className="status-neutral">{item.source || 'Web'}</span>
+                      <span className={item.has_gabarito_link ? 'status-success' : 'status-warning'}>
+                        <FileCheck2 aria-hidden="true" /> {item.has_gabarito_link ? 'Gabarito localizado' : 'Gabarito não localizado'}
+                      </span>
+                      {item.reuse_available && <span className="status-success"><Check aria-hidden="true" /> Já processada</span>}
+                      {item.match_score > 0 && <span className="status-neutral">Compatibilidade {item.match_score}%</span>}
                     </div>
-
-                    <h3 className="mt-3.5 font-heading text-sm font-bold text-white leading-snug line-clamp-2 group-hover:text-indigo-300 transition" title={item.title}>
-                      {item.title}
-                    </h3>
-
-                    {/* Direct PDF Source Link Display - Entire Link Visible */}
-                    <div className="mt-3 rounded-xl bg-slate-950/80 p-2.5 border border-white/10 text-[11px] space-y-2" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-1.5 text-slate-400">
-                        <div className="flex items-center gap-1.5 font-semibold text-slate-300">
-                          <FileText className="h-3.5 w-3.5 text-indigo-400" />
-                          <span>Link Identificado:</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigator.clipboard.writeText(item.url);
-                              setCopiedUrl(item.url);
-                              showToast('success', 'Link copiado para a área de transferência!');
-                              setTimeout(() => setCopiedUrl(null), 2000);
-                            }}
-                            className="flex items-center gap-1 rounded-lg glass-pill px-2 py-0.5 text-[10px] font-bold text-slate-300 hover:text-white hover:bg-white/10 transition"
-                            title="Copiar URL completa"
-                          >
-                            {copiedUrl === item.url ? (
-                              <>
-                                <Check className="h-3 w-3 text-emerald-400" />
-                                <span className="text-emerald-400">Copiado</span>
-                              </>
-                            ) : (
-                              <>
-                                <Copy className="h-3 w-3 text-slate-400" />
-                                <span>Copiar</span>
-                              </>
-                            )}
-                          </button>
-                          <a
-                            href={item.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="flex items-center gap-1 rounded-lg glass-pill px-2 py-0.5 text-[10px] font-bold text-slate-300 hover:text-white hover:bg-white/10 transition"
-                            title="Abrir página original em nova aba"
-                          >
-                            <ExternalLink className="h-3 w-3 text-cyan-400" />
-                            <span>Abrir</span>
-                          </a>
-                        </div>
-                      </div>
-                      
-                      <div className="break-all font-mono text-[11px] text-indigo-200/90 select-all leading-relaxed bg-black/40 p-2 rounded-lg border border-white/5">
-                        {item.url}
-                      </div>
-                    </div>
+                    <h3 className="mt-3 text-base font-semibold leading-snug text-[var(--text)]">{item.title}</h3>
+                    <details className="mt-3 text-sm text-[var(--text-muted)]">
+                      <summary className="cursor-pointer font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]">Detalhes da fonte</summary>
+                      <p className="mt-2 break-all font-mono text-xs">{item.url}</p>
+                    </details>
                   </div>
-
-                  {/* Actions Area: Direct Modal Open */}
-                  <div className="mt-5 border-t border-white/10 pt-4">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openDirectIngestModal({ examUrl: item.url, gabaritoUrl: item.gabarito_url || '', title: item.title });
-                      }}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 via-violet-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 py-2.5 text-xs font-bold text-white shadow-lg shadow-indigo-500/20 border border-white/20 transition hover:scale-[1.01] active:scale-95"
-                    >
-                      <Sparkles className="h-4 w-4 text-cyan-300" />
-                      <span>Abrir Modal (PDF Prova & Gabarito)</span>
+                  <div className="flex flex-wrap gap-2 lg:justify-end">
+                    {item.reuse_available ? (
+                      <button
+                        className="button-primary"
+                        disabled={addingUrl !== null}
+                        aria-busy={addingUrl === item.url}
+                        onClick={() => void handleUseReadyExam(item)}
+                      >
+                        {addingUrl === item.url ? <Loader2 aria-hidden="true" /> : <FileCheck2 aria-hidden="true" />}
+                        {addingUrl === item.url ? 'Adicionando…' : 'Adicionar à biblioteca'}
+                      </button>
+                    ) : (
+                      <button className="button-primary" onClick={() => openDirectIngestModal({ examUrl: item.url, gabaritoUrl: item.gabarito_url || '', title: item.title })}>Importar</button>
+                    )}
+                    <a className="button-secondary" href={item.url} target="_blank" rel="noreferrer"><ExternalLink aria-hidden="true" /> Ver origem</a>
+                    <button className="button-ghost" onClick={() => void handleCopy(item.url)}>
+                      {copiedUrl === item.url ? <Check aria-hidden="true" /> : <Clipboard aria-hidden="true" />}
+                      {copiedUrl === item.url ? 'Copiado' : 'Copiar link'}
                     </button>
                   </div>
                 </div>
-              );
-            })}
+              </article>
+            ))}
           </div>
-
         )}
-      </div>
+      </section>
     </div>
   );
 };

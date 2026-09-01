@@ -13,6 +13,7 @@ from services.pdf_pipeline import parse_exam_document
 from services.diagnostics import inspect_pdf_document
 from services.gabarito import parse_gabarito_from_pdf, parse_gabarito_from_text, merge_exam_with_gabarito, format_gabarito_summary
 from services.search import standardize_card_title, interpret_search_query_deterministic
+from services.exam_library import register_exam_source_alias
 
 def set_exam_progress(exam_id: int, status_msg: str, pct: int, error_type: Optional[str] = None):
     """Atualiza o progresso do exame no banco de dados de forma thread-safe com retentativas e garantias de integridade."""
@@ -135,6 +136,16 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
                         clean_title = ex_update.title
                         session.commit()
 
+        if source_url:
+            with Session() as source_session:
+                exam_source = source_session.query(Exam).filter_by(id=exam_id).first()
+                if exam_source:
+                    exam_source.source_url = source_url[:500]
+                    if gabarito_url and not exam_source.gabarito_url:
+                        exam_source.gabarito_url = gabarito_url[:500]
+                    source_session.commit()
+                    register_exam_source_alias(source_session, exam_id, source_url)
+
         if not os.path.exists(pdf_path) and source_url and source_url.startswith('http'):
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -236,7 +247,7 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
 
                     # Criação ou associação de pasta
                     folder_name = (clean_title if clean_title else f"Pasta Prova {exam.id}")[:95].strip()
-                    folder = session.query(Folder).filter_by(name=folder_name).first()
+                    folder = session.query(Folder).filter_by(name=folder_name, user_id=user_id).first()
                     if not folder:
                         folder = Folder(name=folder_name, user_id=user_id)
                         session.add(folder)

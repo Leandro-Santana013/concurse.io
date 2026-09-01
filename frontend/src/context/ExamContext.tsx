@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
 import { useExamStore } from '../store/useExamStore';
 import { ExamDetail, AttemptResult, Question } from '../types/exam';
 import { api } from '../services/api';
@@ -50,7 +50,6 @@ const ExamContext = createContext<ExamContextType | undefined>(undefined);
 export const ExamProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const store = useExamStore();
   const [isLoadingExam, setIsLoadingExam] = useState(false);
-  const [eliminatedOptions, setEliminatedOptions] = useState<Record<string, Record<string, boolean>>>({});
 
   // Computed values
   const currentQuestion = store.activeExam?.questions[store.currentIdx] || null;
@@ -60,6 +59,23 @@ export const ExamProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const totalQuestions = store.activeExam?.questions.length || 0;
   const answeredCount = Object.keys(store.answers).filter((k) => store.answers[k]).length;
   const progressPercentage = totalQuestions > 0 ? (answeredCount / totalQuestions) * 100 : 0;
+
+  // Mantém o cronômetro consistente em qualquer rota. O cálculo usa o timestamp
+  // persistido no store, então abas em segundo plano e reloads não perdem tempo.
+  useEffect(() => {
+    if (!store.activeExam || !store.isTimerRunning || store.isFinished) return;
+
+    store.tickTimer();
+    const interval = window.setInterval(store.tickTimer, 1000);
+    const syncWhenVisible = () => {
+      if (document.visibilityState === 'visible') store.tickTimer();
+    };
+    document.addEventListener('visibilitychange', syncWhenVisible);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', syncWhenVisible);
+    };
+  }, [store.activeExam?.id, store.isFinished, store.isTimerRunning, store.tickTimer]);
 
   // Format Seconds to HH:MM:SS or MM:SS
   const formatTime = useCallback((secs: number) => {
@@ -74,21 +90,11 @@ export const ExamProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Option Elimination (Riscar alternativa)
   const toggleEliminateOption = (qNum: string, optKey: string) => {
-    setEliminatedOptions((prev) => {
-      const qEliminated = prev[qNum] || {};
-      const nextState = !qEliminated[optKey];
-      return {
-        ...prev,
-        [qNum]: {
-          ...qEliminated,
-          [optKey]: nextState,
-        },
-      };
-    });
+    store.toggleEliminateOption(qNum, optKey);
   };
 
   const clearEliminatedOptions = () => {
-    setEliminatedOptions({});
+    store.clearEliminatedOptions();
   };
 
   // Start exam from ID
@@ -136,13 +142,22 @@ export const ExamProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       throw new Error('Nenhum simulado ativo para envio.');
     }
 
+    // Capture the timestamp delta immediately before submission so background tabs,
+    // navigation and reloads do not make the persisted timer lose time.
+    const examId = store.activeExam.id;
+    const elapsedSeconds = store.syncTimer();
+
     const result = await api.submitAttempt({
-      exam_id: store.activeExam.id,
-      elapsed_seconds: store.elapsedSeconds,
-      answers: store.answers,
+      exam_id: examId,
+      elapsed_seconds: elapsedSeconds,
+      answers: { ...store.answers },
     });
 
-    store.finishExam(result);
+    const latestState = useExamStore.getState();
+    if (latestState.activeExam?.id !== examId) {
+      throw new Error('A prova ativa mudou durante o envio. O resultado não foi aplicado.');
+    }
+    latestState.finishExam(result);
     return result;
   };
 
@@ -164,10 +179,13 @@ export const ExamProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isFinished: store.isFinished,
         attemptResult: store.attemptResult,
         isLoadingExam,
-        eliminatedOptions,
+        eliminatedOptions: store.eliminatedOptions,
         toggleEliminateOption,
         clearEliminatedOptions,
-        startExam: store.startExam,
+        startExam: (exam) => {
+          clearEliminatedOptions();
+          store.startExam(exam);
+        },
         loadAndStartExam,
         generateCustomExam,
         loadErrorNotebookExam,
