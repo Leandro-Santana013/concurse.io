@@ -48,6 +48,12 @@ const THEME_OPTIONS: { id: ThemeMode; label: string; description: string; previe
     description: 'Verde moderno e profissional',
     preview: { bg: '#081715', surface: '#0e221f', text: '#e6f7f4', primary: '#10b981' },
   },
+  {
+    id: 'dracula',
+    label: 'Dracula',
+    description: 'Roxo e azul escuro inspirado no VS Code',
+    preview: { bg: '#282a36', surface: '#44475a', text: '#f8f8f2', primary: '#bd93f9' },
+  },
 ];
 
 const FONT_OPTIONS: { id: FontSizeScale; label: string; detail: string }[] = [
