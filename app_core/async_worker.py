@@ -8,10 +8,26 @@ import requests
 from datetime import datetime
 from typing import Optional, Dict, Any, Tuple
 
-from models.database import Session, Exam, Folder, Question, ExamCatalog
+from models.database import (
+    AnswerKeyMatchAudit,
+    Session,
+    Exam,
+    Folder,
+    Question,
+    ExamCatalog,
+)
 from services.pdf_pipeline import parse_exam_document
 from services.diagnostics import inspect_pdf_document
-from services.gabarito import parse_gabarito_from_pdf, parse_gabarito_from_text, merge_exam_with_gabarito, format_gabarito_summary
+from services.gabarito import (
+    AnswerKeyMatchResult,
+    build_exam_answer_key_profile,
+    extract_exam_code_ranges_from_pdf,
+    explicit_answer_key_result,
+    format_gabarito_summary,
+    match_gabarito_from_pdf,
+    merge_exam_with_gabarito,
+    parse_gabarito_from_text,
+)
 from services.search import standardize_card_title, interpret_search_query_deterministic
 from services.exam_library import register_exam_source_alias
 
@@ -170,6 +186,8 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
 
         extracted_questions = []
         gabarito_dict = {}
+        exam_code_ranges = []
+        answer_key_attempts = []
         answer_source = "none"
 
         if is_html_source and html_data:
@@ -203,36 +221,116 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
             set_exam_progress(exam_id, "Nenhuma questão estruturada encontrada no documento.", -1, "NO_QUESTIONS_FOUND")
             return
 
+        if not is_html_source and os.path.exists(pdf_path):
+            exam_code_ranges = extract_exam_code_ranges_from_pdf(pdf_path)
+
+        exam_profile = build_exam_answer_key_profile(
+            pdf_path if not is_html_source and os.path.exists(pdf_path) else None,
+            extracted_questions,
+            title=clean_title,
+            code_ranges=exam_code_ranges,
+        )
+
         set_exam_progress(exam_id, f"{len(extracted_questions)} questões lidas! Processando gabarito...", 70)
 
         # 4. Processamento do Gabarito
         if gabarito_override:
             gabarito_dict = parse_gabarito_from_text(gabarito_override)
             answer_source = "manual_text"
+            answer_key_attempts.append(
+                explicit_answer_key_result(
+                    gabarito_dict,
+                    exam_profile,
+                    method="manual_text",
+                    source_relation="manual",
+                )
+            )
         elif gabarito_url:
             gab_pdf_path = os.path.join('pdfs', f"{exam_id}_gab_{ts}.pdf")
             if gabarito_url.startswith('http'):
                 if download_pdf_file(gabarito_url, gab_pdf_path):
-                    gabarito_dict = parse_gabarito_from_pdf(gab_pdf_path, cargo_or_title=clean_title)
-                    answer_source = "attached_pdf"
+                    candidate_match = match_gabarito_from_pdf(
+                        gab_pdf_path,
+                        exam_profile,
+                        source_relation="paired",
+                        document_hint=gabarito_url,
+                    )
+                    answer_key_attempts.append(candidate_match)
+                    if candidate_match.accepted:
+                        gabarito_dict = candidate_match.answers
+                        answer_source = "attached_pdf"
                 else:
                     # Tenta reaproveitar PDF de gabarito local existente
                     existing_gab = [f for f in os.listdir('pdfs') if f.startswith(f"{exam_id}_gab_") and f.endswith('.pdf')]
                     if existing_gab:
-                        gabarito_dict = parse_gabarito_from_pdf(os.path.join('pdfs', existing_gab[0]), cargo_or_title=clean_title)
-                        if gabarito_dict:
+                        candidate_match = match_gabarito_from_pdf(
+                            os.path.join('pdfs', existing_gab[0]),
+                            exam_profile,
+                            source_relation="paired",
+                            document_hint=gabarito_url,
+                        )
+                        answer_key_attempts.append(candidate_match)
+                        if candidate_match.accepted:
+                            gabarito_dict = candidate_match.answers
                             answer_source = "attached_pdf"
             elif os.path.exists(gabarito_url):
-                gabarito_dict = parse_gabarito_from_pdf(gabarito_url, cargo_or_title=clean_title)
-                answer_source = "attached_pdf"
+                candidate_match = match_gabarito_from_pdf(
+                    gabarito_url,
+                    exam_profile,
+                    source_relation="paired",
+                    document_hint=gabarito_url,
+                )
+                answer_key_attempts.append(candidate_match)
+                if candidate_match.accepted:
+                    gabarito_dict = candidate_match.answers
+                    answer_source = "attached_pdf"
 
         if not gabarito_dict and not is_html_source and os.path.exists(pdf_path):
-            gabarito_dict = parse_gabarito_from_pdf(pdf_path, cargo_or_title=clean_title)
-            if gabarito_dict:
+            candidate_match = match_gabarito_from_pdf(
+                pdf_path,
+                exam_profile,
+                source_relation="embedded",
+                document_hint=source_url,
+            )
+            answer_key_attempts.append(candidate_match)
+            if candidate_match.accepted:
+                gabarito_dict = candidate_match.answers
                 answer_source = "embedded_pdf"
 
+        accepted_match = next(
+            (attempt for attempt in answer_key_attempts if attempt.accepted),
+            None,
+        )
+        match_result = accepted_match or next(
+            (attempt for attempt in answer_key_attempts if attempt.candidate),
+            None,
+        ) or AnswerKeyMatchResult(
+            profile=exam_profile,
+            status="not_found",
+            conflicts=["no_answer_key_candidate"],
+        )
+
         # 5. Pareamento e Persistência no Banco de Dados
-        updated_questions, stats = merge_exam_with_gabarito(extracted_questions, gabarito_dict)
+        strict_match = bool(
+            match_result.accepted
+            and answer_source in {"attached_pdf", "embedded_pdf"}
+        )
+        updated_questions, stats = merge_exam_with_gabarito(
+            extracted_questions,
+            gabarito_dict,
+            strict=strict_match,
+        )
+        if stats.get("integrity_conflicts"):
+            match_result.accepted = False
+            match_result.status = "rejected"
+            match_result.confidence = 0.0
+            match_result.conflicts = list(dict.fromkeys([
+                *match_result.conflicts,
+                *stats["integrity_conflicts"],
+            ]))
+            gabarito_dict = {}
+            answer_source = "none"
+            updated_questions, stats = merge_exam_with_gabarito(extracted_questions, {})
 
         set_exam_progress(exam_id, "Salvando prova e questões no banco de dados...", 88)
 
@@ -258,6 +356,17 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
                     exam.answer_key_source = answer_source
                     exam.gabarito_coverage = stats['coverage_pct']
                     exam.gabarito_text = format_gabarito_summary(gabarito_dict)
+                    session.add(AnswerKeyMatchAudit(
+                        exam_id=exam.id,
+                        accepted=1 if match_result.accepted else 0,
+                        status=match_result.status,
+                        confidence=match_result.confidence,
+                        answer_source=answer_source,
+                        method=match_result.method,
+                        candidate_page=match_result.candidate_page,
+                        decision_json=match_result.to_audit_json(),
+                        created_at=datetime.now().isoformat(),
+                    ))
 
                     # Remove questões antigas se houver
                     session.query(Question).filter_by(exam_id=exam.id).delete()

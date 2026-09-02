@@ -1,5 +1,6 @@
 import os
 import sys
+from types import SimpleNamespace
 sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -12,6 +13,7 @@ from services.search import (
 )
 from fastapi.testclient import TestClient
 from fastapi_app import app
+from routes.api_v1.user_context import get_current_user
 
 client = TestClient(app)
 
@@ -106,8 +108,15 @@ def test_filter_and_rank_cards():
 
 def test_search_api_integration():
     print("\n--- Teste 5: Integração com Endpoint FastAPI /api/v1/search ---")
-    
-    response = client.get("/api/v1/search?q=Petrobras+Engenheiro+2024&refresh=true")
+    previous_override = app.dependency_overrides.get(get_current_user)
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=1)
+    try:
+        response = client.get("/api/v1/search?q=Petrobras+Engenheiro+2024&refresh=true")
+    finally:
+        if previous_override is None:
+            app.dependency_overrides.pop(get_current_user, None)
+        else:
+            app.dependency_overrides[get_current_user] = previous_override
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)

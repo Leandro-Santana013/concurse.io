@@ -1,5 +1,5 @@
 import React from 'react';
-import { BarChart3, BookOpen, Home, Search } from 'lucide-react';
+import { BarChart3, BookOpen, Home, Search, User } from 'lucide-react';
 import { Link, NavLink } from 'react-router-dom';
 
 const navigation = [
@@ -7,6 +7,7 @@ const navigation = [
   { to: '/biblioteca', label: 'Biblioteca', icon: BookOpen },
   { to: '/buscar', label: 'Buscar', icon: Search },
   { to: '/progresso', label: 'Progresso', icon: BarChart3 },
+  { to: '/perfil', label: 'Perfil & Ajustes', icon: User },
 ];
 
 export const Sidebar: React.FC = () => (

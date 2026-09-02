@@ -10,9 +10,9 @@ import React, {
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 
-export type ViewType = 'home' | 'search' | 'folders' | 'stats' | 'errors' | 'ranking' | 'exam';
-export type ThemeMode = 'light' | 'dark' | 'oled';
-export type FontSizeScale = 'sm' | 'base' | 'lg';
+export type ViewType = 'home' | 'search' | 'folders' | 'stats' | 'errors' | 'ranking' | 'exam' | 'profile';
+export type ThemeMode = 'light' | 'dark' | 'oled' | 'sepia' | 'emerald';
+export type FontSizeScale = 'sm' | 'base' | 'lg' | 'xl';
 
 export interface ToastMessage {
   id: string;
@@ -70,9 +70,11 @@ const viewPaths: Record<ViewType, string> = {
   errors: '/progresso/erros',
   ranking: '/progresso/ranking',
   exam: '/prova/ativa',
+  profile: '/perfil',
 };
 
 const getViewFromPath = (pathname: string): ViewType => {
+  if (pathname === '/perfil') return 'profile';
   if (pathname.startsWith('/prova/')) return 'exam';
   if (pathname === '/buscar') return 'search';
   if (pathname === '/biblioteca') return 'folders';
@@ -99,13 +101,16 @@ const readPreferences = (): StoredPreferences => {
       fontSize?: string;
       enableEliminationMode?: boolean;
     };
-    const theme: ThemeMode = saved.theme === 'paper'
-      ? 'light'
-      : saved.theme === 'dark' || saved.theme === 'oled' || saved.theme === 'light'
-        ? saved.theme
+    const validThemes: ThemeMode[] = ['light', 'dark', 'oled', 'sepia', 'emerald'];
+    const validFontSizes: FontSizeScale[] = ['sm', 'base', 'lg', 'xl'];
+
+    const theme: ThemeMode = validThemes.includes(saved.theme as ThemeMode)
+      ? (saved.theme as ThemeMode)
+      : saved.theme === 'paper'
+        ? 'sepia'
         : defaults.theme;
-    const fontSize: FontSizeScale = saved.fontSize === 'sm' || saved.fontSize === 'lg'
-      ? saved.fontSize
+    const fontSize: FontSizeScale = validFontSizes.includes(saved.fontSize as FontSizeScale)
+      ? (saved.fontSize as FontSizeScale)
       : 'base';
 
     return {
@@ -148,17 +153,18 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
 
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.remove('theme-light', 'theme-dark', 'theme-paper', 'theme-oled');
+    root.classList.remove('theme-light', 'theme-dark', 'theme-paper', 'theme-oled', 'theme-sepia', 'theme-emerald');
     root.classList.add(`theme-${theme}`);
     root.dataset.theme = theme;
-    root.style.colorScheme = theme === 'light' ? 'light' : 'dark';
+    root.style.colorScheme = (theme === 'light' || theme === 'sepia') ? 'light' : 'dark';
   }, [theme]);
 
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.remove('font-scale-ui-sm', 'font-scale-ui-base', 'font-scale-ui-lg');
+    root.classList.remove('font-scale-ui-sm', 'font-scale-ui-base', 'font-scale-ui-lg', 'font-scale-ui-xl');
     root.classList.add(`font-scale-ui-${fontSize}`);
   }, [fontSize]);
+
 
   useEffect(() => {
     setIsMobileSidebarOpen(false);

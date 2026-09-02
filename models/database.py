@@ -1,9 +1,20 @@
 import json
 import os
 from datetime import datetime
-from sqlalchemy import create_engine, Column, Integer, String, Text, Float, ForeignKey, event
+from sqlalchemy import create_engine, Column, Integer, String, Text, Float, ForeignKey, event, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from dotenv import load_dotenv
+
+from app_security import (
+    decrypt_user_data,
+    encrypt_user_data,
+    is_encrypted_with_active_key,
+    is_encrypted_user_data,
+    is_pseudonymous_email,
+    is_protected_identifier,
+    protect_identifier,
+    pseudonymous_email,
+)
 
 load_dotenv()
 
@@ -63,19 +74,69 @@ def get_db():
 class User(Base):
     __tablename__ = 'users'
     id = Column(Integer, primary_key=True)
-    google_id = Column(String(200), unique=True, nullable=False, index=True)
-    email = Column(String(200), nullable=False)
-    name = Column(String(200), nullable=True)
-    picture = Column(String(500), nullable=True)
+    google_subject_hash = Column("google_id", String(200), unique=True, nullable=False, index=True)
+    _email_legacy = Column("email", String(200), nullable=False)
+    _name_legacy = Column("name", String(200), nullable=True)
+    _picture_legacy = Column("picture", String(500), nullable=True)
+    _email_encrypted = Column("email_encrypted", Text, nullable=True)
+    _name_encrypted = Column("name_encrypted", Text, nullable=True)
+    _picture_encrypted = Column("picture_encrypted", Text, nullable=True)
     
-    folders = relationship("Folder", back_populates="user")
-    exams = relationship("Exam", back_populates="user")
-    attempts = relationship("ExamAttempt", back_populates="user")
+    folders = relationship("Folder", back_populates="user", cascade="all, delete-orphan")
+    exams = relationship("Exam", back_populates="user", cascade="all, delete-orphan")
+    attempts = relationship("ExamAttempt", back_populates="user", cascade="all, delete-orphan")
     exam_library = relationship(
         "UserExam",
         back_populates="user",
         cascade="all, delete-orphan",
     )
+
+    @property
+    def google_id(self):
+        """Identificador pseudonimizado; o `sub` bruto do Google não é persistido."""
+        return self.google_subject_hash
+
+    @google_id.setter
+    def google_id(self, value):
+        self.google_subject_hash = protect_identifier(value)
+
+    @property
+    def email(self):
+        if self._email_encrypted:
+            return decrypt_user_data(self._email_encrypted, "email")
+        return self._email_legacy
+
+    @email.setter
+    def email(self, value):
+        normalized = str(value or "").strip()
+        if not normalized:
+            raise ValueError("E-mail do usuário não pode ser vazio.")
+        self._email_encrypted = encrypt_user_data(normalized, "email")
+        self._email_legacy = pseudonymous_email(normalized)
+
+    @property
+    def name(self):
+        if self._name_encrypted:
+            return decrypt_user_data(self._name_encrypted, "name")
+        return self._name_legacy
+
+    @name.setter
+    def name(self, value):
+        normalized = str(value or "").strip()
+        self._name_encrypted = encrypt_user_data(normalized, "name") if normalized else None
+        self._name_legacy = None
+
+    @property
+    def picture(self):
+        if self._picture_encrypted:
+            return decrypt_user_data(self._picture_encrypted, "picture")
+        return self._picture_legacy
+
+    @picture.setter
+    def picture(self, value):
+        normalized = str(value or "").strip()
+        self._picture_encrypted = encrypt_user_data(normalized, "picture") if normalized else None
+        self._picture_legacy = None
 
 class Folder(Base):
     __tablename__ = 'folders'
@@ -155,6 +216,23 @@ class ExamAttempt(Base):
     
     exam = relationship("Exam", back_populates="attempts")
     user = relationship("User", back_populates="attempts")
+
+
+class AnswerKeyMatchAudit(Base):
+    """Historico da decisao automatica que vinculou ou rejeitou um gabarito."""
+
+    __tablename__ = 'answer_key_match_audits'
+
+    id = Column(Integer, primary_key=True)
+    exam_id = Column(Integer, ForeignKey('exams.id'), nullable=False, index=True)
+    accepted = Column(Integer, default=0, nullable=False)
+    status = Column(String(30), nullable=False, default='not_found', index=True)
+    confidence = Column(Float, default=0.0, nullable=False)
+    answer_source = Column(String(50), nullable=False, default='none')
+    method = Column(String(50), nullable=False, default='none')
+    candidate_page = Column(Integer, nullable=True)
+    decision_json = Column(Text, nullable=False, default='{}')
+    created_at = Column(String(30), nullable=False)
 
 
 class UserExam(Base):
@@ -268,10 +346,102 @@ class ExamCatalog(Base):
     source = Column(String(50), default='web')
     created_at = Column(String(30), nullable=True)
 
+def _ensure_user_security_columns():
+    """Migração aditiva mínima para bancos criados antes da criptografia de PII."""
+    inspector = inspect(engine)
+    if "users" not in inspector.get_table_names():
+        return
+
+    existing = {column["name"] for column in inspector.get_columns("users")}
+    missing = [
+        column
+        for column in ("email_encrypted", "name_encrypted", "picture_encrypted")
+        if column not in existing
+    ]
+    if not missing:
+        return
+
+    with engine.begin() as connection:
+        for column in missing:
+            connection.execute(text(f"ALTER TABLE users ADD COLUMN {column} TEXT"))
+
+
+def _migrate_user_security_rows() -> int:
+    """Criptografa PII legada e remove os valores pessoais das colunas antigas."""
+    migrated = 0
+    with engine.begin() as connection:
+        rows = connection.execute(text(
+            "SELECT id, google_id, email, name, picture, "
+            "email_encrypted, name_encrypted, picture_encrypted FROM users"
+        )).mappings().all()
+
+        for row in rows:
+            raw_identifier = str(row["google_id"] or "").strip()
+            protected_identifier = (
+                raw_identifier if is_protected_identifier(raw_identifier)
+                else protect_identifier(raw_identifier)
+            )
+
+            email_plain = (
+                decrypt_user_data(row["email_encrypted"], "email")
+                if is_encrypted_user_data(row["email_encrypted"])
+                else str(row["email"] or "").strip()
+            )
+            if not email_plain:
+                raise RuntimeError(f"Usuário {row['id']} não possui e-mail migrável.")
+
+            name_plain = (
+                decrypt_user_data(row["name_encrypted"], "name")
+                if is_encrypted_user_data(row["name_encrypted"])
+                else str(row["name"] or "").strip() or None
+            )
+            picture_plain = (
+                decrypt_user_data(row["picture_encrypted"], "picture")
+                if is_encrypted_user_data(row["picture_encrypted"])
+                else str(row["picture"] or "").strip() or None
+            )
+
+            already_protected = (
+                is_protected_identifier(raw_identifier)
+                and is_pseudonymous_email(row["email"])
+                and row["name"] is None
+                and row["picture"] is None
+                and is_encrypted_with_active_key(row["email_encrypted"])
+                and (
+                    name_plain is None
+                    or is_encrypted_with_active_key(row["name_encrypted"])
+                )
+                and (
+                    picture_plain is None
+                    or is_encrypted_with_active_key(row["picture_encrypted"])
+                )
+            )
+            if already_protected:
+                continue
+
+            values = {
+                "id": row["id"],
+                "google_id": protected_identifier,
+                "email": pseudonymous_email(email_plain),
+                "email_encrypted": encrypt_user_data(email_plain, "email"),
+                "name_encrypted": encrypt_user_data(name_plain, "name") if name_plain else None,
+                "picture_encrypted": encrypt_user_data(picture_plain, "picture") if picture_plain else None,
+            }
+            connection.execute(text(
+                "UPDATE users SET google_id = :google_id, email = :email, "
+                "name = NULL, picture = NULL, email_encrypted = :email_encrypted, "
+                "name_encrypted = :name_encrypted, picture_encrypted = :picture_encrypted "
+                "WHERE id = :id"
+            ), values)
+            migrated += 1
+    return migrated
+
+
 def init_db():
-    try:
-        Base.metadata.create_all(bind=engine)
-    except Exception as e:
-        print(f"[DB Init Warning] {e}")
+    Base.metadata.create_all(bind=engine)
+    _ensure_user_security_columns()
+    migrated = _migrate_user_security_rows()
+    if migrated:
+        print(f"[User Security] {migrated} usuário(s) com dados protegidos em repouso.")
 
 init_db()

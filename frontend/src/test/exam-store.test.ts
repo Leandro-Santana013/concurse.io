@@ -27,11 +27,11 @@ describe('estado persistido da prova', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-31T12:00:00Z'));
     localStorage.clear();
-    useExamStore.getState().resetExam();
+    useExamStore.getState().clearUserData();
   });
 
   afterEach(() => {
-    useExamStore.getState().resetExam();
+    useExamStore.getState().clearUserData();
     vi.useRealTimers();
   });
 
@@ -53,8 +53,23 @@ describe('estado persistido da prova', () => {
     expect(state.lastTimerSyncAt).not.toBeNull();
 
     const persisted = JSON.parse(localStorage.getItem('concurse-active-exam-storage') ?? '{}');
-    expect(persisted.version).toBe(3);
+    expect(persisted.version).toBe(4);
     expect(persisted.state.activeExam.id).toBe(42);
     expect(persisted.state.eliminatedOptions).toEqual({ '1': { B: true } });
+  });
+
+  it('descarta prova e respostas quando a conta autenticada muda', () => {
+    const store = useExamStore.getState();
+    store.bindToUser(1);
+    store.startExam(exam);
+    store.selectAnswer('1', 'B');
+
+    useExamStore.getState().bindToUser(2);
+
+    const state = useExamStore.getState();
+    expect(state.ownerUserId).toBe(2);
+    expect(state.activeExam).toBeNull();
+    expect(state.answers).toEqual({});
+    expect(state.attemptResult).toBeNull();
   });
 });

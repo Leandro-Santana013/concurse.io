@@ -2,9 +2,10 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { AttemptResult, ExamDetail } from '../types/exam';
 
-const EXAM_STORE_VERSION = 3;
+const EXAM_STORE_VERSION = 4;
 
 interface ExamState {
+  ownerUserId: number | null;
   activeExam: ExamDetail | null;
   currentIdx: number;
   answers: Record<string, string>;
@@ -20,6 +21,7 @@ interface ExamState {
   attemptResult: AttemptResult | null;
 
   startExam: (exam: ExamDetail) => void;
+  refreshExam: (exam: ExamDetail) => void;
   selectAnswer: (questionNum: string, answer: string) => void;
   toggleFlagQuestion: (questionNum: string) => void;
   toggleEliminateOption: (questionNum: string, optionKey: string) => void;
@@ -34,7 +36,25 @@ interface ExamState {
   toggleZenMode: () => void;
   finishExam: (result: AttemptResult) => void;
   resetExam: () => void;
+  bindToUser: (userId: number) => void;
+  clearUserData: () => void;
 }
+
+const normalizeExam = (exam: ExamDetail): ExamDetail => ({
+  ...exam,
+  questions: [...(exam.questions || [])].sort((a, b) => {
+    const numA = Number.parseInt(a.numero_questao || '0', 10);
+    const numB = Number.parseInt(b.numero_questao || '0', 10);
+    if (!Number.isNaN(numA) && !Number.isNaN(numB) && numA !== numB) {
+      return numA - numB;
+    }
+    return (a.numero_questao || '').localeCompare(
+      b.numero_questao || '',
+      undefined,
+      { numeric: true },
+    );
+  }),
+});
 
 type TimerSnapshot = Pick<
   ExamState,
@@ -62,6 +82,7 @@ const calculateTimerSnapshot = (state: TimerSnapshot, timestamp: number): TimerS
 export const useExamStore = create<ExamState>()(
   persist(
     (set, get) => ({
+      ownerUserId: null,
       activeExam: null,
       currentIdx: 0,
       answers: {},
@@ -76,21 +97,8 @@ export const useExamStore = create<ExamState>()(
       attemptResult: null,
 
       startExam: (exam) => {
-        const sortedQuestions = [...(exam.questions || [])].sort((a, b) => {
-          const numA = Number.parseInt(a.numero_questao || '0', 10);
-          const numB = Number.parseInt(b.numero_questao || '0', 10);
-          if (!Number.isNaN(numA) && !Number.isNaN(numB) && numA !== numB) {
-            return numA - numB;
-          }
-          return (a.numero_questao || '').localeCompare(
-            b.numero_questao || '',
-            undefined,
-            { numeric: true },
-          );
-        });
-
         set({
-          activeExam: { ...exam, questions: sortedQuestions },
+          activeExam: normalizeExam(exam),
           currentIdx: 0,
           answers: {},
           flaggedQuestions: {},
@@ -102,6 +110,18 @@ export const useExamStore = create<ExamState>()(
           attemptResult: null,
         });
       },
+
+      refreshExam: (exam) => set((state) => {
+        if (state.activeExam?.id !== exam.id) return state;
+        const normalizedExam = normalizeExam(exam);
+        return {
+          activeExam: normalizedExam,
+          currentIdx: Math.min(
+            state.currentIdx,
+            Math.max(normalizedExam.questions.length - 1, 0),
+          ),
+        };
+      }),
 
       selectAnswer: (qNum, answer) =>
         set((state) => ({
@@ -220,12 +240,61 @@ export const useExamStore = create<ExamState>()(
           isFinished: false,
           attemptResult: null,
         }),
+
+      bindToUser: (userId) =>
+        set((state) => {
+          if (state.ownerUserId === userId) return state;
+          return {
+            ownerUserId: userId,
+            activeExam: null,
+            currentIdx: 0,
+            answers: {},
+            flaggedQuestions: {},
+            eliminatedOptions: {},
+            elapsedSeconds: 0,
+            lastTimerSyncAt: null,
+            isTimerRunning: false,
+            isFinished: false,
+            attemptResult: null,
+          };
+        }),
+
+      clearUserData: () =>
+        set({
+          ownerUserId: null,
+          activeExam: null,
+          currentIdx: 0,
+          answers: {},
+          flaggedQuestions: {},
+          eliminatedOptions: {},
+          elapsedSeconds: 0,
+          lastTimerSyncAt: null,
+          isTimerRunning: false,
+          isFinished: false,
+          attemptResult: null,
+        }),
     }),
     {
       name: 'concurse-active-exam-storage',
       version: EXAM_STORE_VERSION,
-      migrate: (persistedState) => {
+      migrate: (persistedState, persistedVersion) => {
         const state = persistedState as Partial<ExamState>;
+        if (persistedVersion < 4) {
+          return {
+            ...state,
+            ownerUserId: null,
+            activeExam: null,
+            currentIdx: 0,
+            answers: {},
+            flaggedQuestions: {},
+            eliminatedOptions: {},
+            elapsedSeconds: 0,
+            lastTimerSyncAt: null,
+            isTimerRunning: false,
+            isFinished: false,
+            attemptResult: null,
+          } as ExamState;
+        }
         const shouldResume = Boolean(state.activeExam && state.isTimerRunning && !state.isFinished);
 
         return {

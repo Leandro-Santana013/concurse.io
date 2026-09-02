@@ -16,6 +16,7 @@ from models.database import (
     resolve_exam_questions,
 )
 from schemas.exam_schemas import ExamDetailSchema, QuestionSchema
+from routes.api_v1.exam_media import secure_exam_image_urls
 from routes.api_v1.user_context import get_current_user
 
 router = APIRouter()
@@ -202,6 +203,15 @@ def get_error_notebook(
         query = query.filter(Question.subject == subject)
     questions = query.order_by(Question.id.asc()).limit(100).all()
 
+    title_suffix = f" - {subject}" if subject else " (Todas as Matérias)"
+    exam = create_generated_exam_session(
+        db,
+        title=f"Caderno de Erros Inteligente{title_suffix}",
+        kind="notebook",
+        question_ids=[question.id for question in questions],
+        user_id=current_user.id,
+    )
+
     questions_list = []
     for idx, q in enumerate(questions, start=1):
         try:
@@ -211,6 +221,8 @@ def get_error_notebook(
 
         try:
             images_list = json.loads(q.images) if q.images else []
+            if isinstance(images_list, str):
+                images_list = [images_list]
         except Exception:
             images_list = []
 
@@ -223,19 +235,11 @@ def get_error_notebook(
             options=options_dict,
             correct_answer=q.correct_answer,
             subject=q.subject or "Geral",
-            images=images_list if images_list else None,
+            images=secure_exam_image_urls(exam.id, images_list),
             has_official_answer=True,
             latex_support=is_latex
         ))
 
-    title_suffix = f" - {subject}" if subject else " (Todas as Matérias)"
-    exam = create_generated_exam_session(
-        db,
-        title=f"Caderno de Erros Inteligente{title_suffix}",
-        kind="notebook",
-        question_ids=[question.id for question in questions],
-        user_id=current_user.id,
-    )
     return ExamDetailSchema(
         id=exam.id,
         title=exam.title,
@@ -246,7 +250,10 @@ def get_error_notebook(
     )
 
 @router.get("/ranking")
-def get_global_ranking(db: Session = Depends(get_db)):
+def get_global_ranking(
+    db: Session = Depends(get_db),
+    _current_user=Depends(get_current_user),
+):
     """Retorna o ranking global dos concurseiros."""
     results = db.query(
         User,

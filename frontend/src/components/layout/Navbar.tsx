@@ -5,20 +5,25 @@ import {
   CloudDownload,
   Home,
   Import,
+  LogOut,
   Search,
+  User,
 } from 'lucide-react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useExam } from '../../context/ExamContext';
 import { useUI } from '../../context/UIContext';
+import { useAuth } from '../../context/AuthContext';
 
 const navigation = [
   { to: '/', label: 'Início', icon: Home, end: true },
   { to: '/biblioteca', label: 'Biblioteca', icon: BookOpen },
   { to: '/buscar', label: 'Buscar', icon: Search },
   { to: '/progresso', label: 'Progresso', icon: BarChart3 },
+  { to: '/perfil', label: 'Perfil', icon: User },
 ];
 
 const getPageTitle = (pathname: string) => {
+  if (pathname === '/perfil') return 'Perfil & Configurações';
   if (pathname === '/biblioteca') return 'Biblioteca';
   if (pathname === '/buscar') return 'Buscar provas';
   if (pathname === '/progresso/erros') return 'Caderno de erros';
@@ -32,10 +37,12 @@ export const Navbar: React.FC = () => {
   const navigate = useNavigate();
   const { activeDownloadsCount, openDirectIngestModal } = useUI();
   const { activeExam, isFinished } = useExam();
+  const { user } = useAuth();
 
   const activeExamPath = activeExam
     ? `/prova/${activeExam.id}${isFinished ? '/resultado' : ''}`
     : '/biblioteca';
+  const userInitial = (user?.name || user?.email || 'C').trim().charAt(0).toUpperCase();
 
   return (
     <>
@@ -74,6 +81,22 @@ export const Navbar: React.FC = () => {
             <Import aria-hidden="true" />
             <span className="desktop-only">Importar</span>
           </button>
+
+          <div className="account-control">
+            <button
+              type="button"
+              className="account-identity hover:opacity-90 transition cursor-pointer"
+              onClick={() => navigate('/perfil')}
+              title="Acessar Perfil & Configurações"
+            >
+              {user?.picture ? (
+                <img src={user.picture} alt="" width="32" height="32" referrerPolicy="no-referrer" />
+              ) : (
+                <span className="account-avatar" aria-hidden="true">{userInitial}</span>
+              )}
+              <span className="account-name desktop-only">{user?.name || 'Concurseiro'}</span>
+            </button>
+          </div>
         </div>
       </header>
 

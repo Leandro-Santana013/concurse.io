@@ -9,12 +9,15 @@ import {
   useParams,
 } from 'react-router-dom';
 import { DirectIngestModal } from './components/dashboard/DirectIngestModal';
+import { LoginPage } from './components/auth/LoginPage';
 import { Navbar } from './components/layout/Navbar';
 import { ProgressLayout } from './components/layout/ProgressLayout';
 import { Sidebar } from './components/layout/Sidebar';
 import { ToastViewport } from './components/ui/ToastViewport';
 import { useExam } from './context/ExamContext';
+import { useAuth } from './context/AuthContext';
 import { useUI } from './context/UIContext';
+import { api } from './services/api';
 import { useExamStore } from './store/useExamStore';
 
 const HomeView = React.lazy(() => import('./components/dashboard/HomeView').then((module) => ({ default: module.HomeView })));
@@ -24,6 +27,8 @@ const ExamSimulator = React.lazy(() => import('./components/exam/ExamSimulator')
 const AnalyticsView = React.lazy(() => import('./components/stats/AnalyticsView').then((module) => ({ default: module.AnalyticsView })));
 const ErrorNotebookView = React.lazy(() => import('./components/stats/ErrorNotebookView').then((module) => ({ default: module.ErrorNotebookView })));
 const RankingView = React.lazy(() => import('./components/stats/RankingView').then((module) => ({ default: module.RankingView })));
+const ProfileView = React.lazy(() => import('./components/profile/ProfileView').then((module) => ({ default: module.ProfileView })));
+
 
 const PageFallback: React.FC = () => (
   <div className="exam-load-state" role="status" aria-live="polite">
@@ -59,36 +64,70 @@ const AppShell: React.FC = () => (
   </div>
 );
 
+const ProtectedRoute: React.FC = () => {
+  const location = useLocation();
+  const { status } = useAuth();
+
+  if (status === 'loading') {
+    return (
+      <main className="auth-load-state" aria-busy="true">
+        <span className="brand-symbol" aria-hidden="true">C</span>
+        <span className="ui-loader" aria-hidden="true" />
+        <p>Preparando seu espaço de estudo…</p>
+      </main>
+    );
+  }
+
+  if (status === 'unauthenticated') {
+    const returnPath = `${location.pathname}${location.search}${location.hash}`;
+    return <Navigate to={`/login?next=${encodeURIComponent(returnPath)}`} replace />;
+  }
+
+  return <Outlet />;
+};
+
 const ExamRoute: React.FC<{ result?: boolean }> = ({ result = false }) => {
   const { examId = '' } = useParams();
   const navigate = useNavigate();
   const {
     activeExam,
     isFinished,
-    isLoadingExam,
-    loadAndStartExam,
   } = useExam();
   const [loadError, setLoadError] = useState<string | null>(null);
-  const requestedExamRef = useRef<number | null>(null);
+  const [validatedExamId, setValidatedExamId] = useState<number | null>(null);
+  const validationRunRef = useRef(0);
 
   const numericExamId = Number(examId);
   const isActiveAlias = examId === 'ativa';
   const isValidExamId = Number.isInteger(numericExamId) && numericExamId > 0;
 
   useEffect(() => {
-    if (isActiveAlias || !isValidExamId || activeExam?.id === numericExamId) return;
-    if (requestedExamRef.current === numericExamId) return;
-
-    requestedExamRef.current = numericExamId;
+    if (isActiveAlias || !isValidExamId) return;
+    const validationRun = ++validationRunRef.current;
     setLoadError(null);
-    void loadAndStartExam(numericExamId)
-      .catch((error) => {
-        setLoadError(error instanceof Error ? error.message : 'Não foi possível carregar esta prova.');
+    setValidatedExamId(null);
+
+    void api.getExam(numericExamId)
+      .then((exam) => {
+        if (validationRunRef.current !== validationRun) return;
+        const state = useExamStore.getState();
+        if (state.activeExam?.id === numericExamId) {
+          state.refreshExam(exam);
+        } else {
+          state.startExam(exam);
+        }
+        setValidatedExamId(numericExamId);
       })
-      .finally(() => {
-        requestedExamRef.current = null;
+      .catch((error) => {
+        if (validationRunRef.current !== validationRun) return;
+        useExamStore.getState().resetExam();
+        setLoadError(error instanceof Error ? error.message : 'Não foi possível carregar esta prova.');
       });
-  }, [activeExam?.id, isActiveAlias, isValidExamId, numericExamId]);
+
+    return () => {
+      if (validationRunRef.current === validationRun) validationRunRef.current += 1;
+    };
+  }, [isActiveAlias, isValidExamId, numericExamId]);
 
   useEffect(() => {
     if (!result && activeExam && activeExam.id === numericExamId && isFinished) {
@@ -120,7 +159,7 @@ const ExamRoute: React.FC<{ result?: boolean }> = ({ result = false }) => {
     );
   }
 
-  if (isLoadingExam || activeExam?.id !== numericExamId) {
+  if (validatedExamId !== numericExamId || activeExam?.id !== numericExamId) {
     return (
       <main className="exam-load-state" id="main-content" aria-busy="true">
         <span className="ui-loader" aria-hidden="true" />
@@ -179,18 +218,23 @@ export const App: React.FC = () => {
     <>
       <PageScrollReset />
       <Routes>
-        <Route element={<AppShell />}>
-          <Route index element={<LazyPage><HomeView /></LazyPage>} />
-          <Route path="biblioteca" element={<LazyPage><FoldersView onStartExam={openCurrentExam} /></LazyPage>} />
-          <Route path="buscar" element={<LazyPage><SearchHub onExamReady={handleExamReady} /></LazyPage>} />
-          <Route path="progresso" element={<ProgressLayout />}>
-            <Route index element={<LazyPage><AnalyticsView /></LazyPage>} />
-            <Route path="erros" element={<LazyPage><ErrorNotebookView onStartExam={openCurrentExam} /></LazyPage>} />
-            <Route path="ranking" element={<LazyPage><RankingView /></LazyPage>} />
+        <Route path="login" element={<LoginPage />} />
+        <Route element={<ProtectedRoute />}>
+          <Route element={<AppShell />}>
+            <Route index element={<LazyPage><HomeView /></LazyPage>} />
+            <Route path="biblioteca" element={<LazyPage><FoldersView onStartExam={openCurrentExam} /></LazyPage>} />
+            <Route path="buscar" element={<LazyPage><SearchHub onExamReady={handleExamReady} /></LazyPage>} />
+            <Route path="perfil" element={<LazyPage><ProfileView /></LazyPage>} />
+            <Route path="progresso" element={<ProgressLayout />}>
+
+              <Route index element={<LazyPage><AnalyticsView /></LazyPage>} />
+              <Route path="erros" element={<LazyPage><ErrorNotebookView onStartExam={openCurrentExam} /></LazyPage>} />
+              <Route path="ranking" element={<LazyPage><RankingView /></LazyPage>} />
+            </Route>
           </Route>
+          <Route path="prova/:examId" element={<ExamRoute />} />
+          <Route path="prova/:examId/resultado" element={<ExamRoute result />} />
         </Route>
-        <Route path="prova/:examId" element={<ExamRoute />} />
-        <Route path="prova/:examId/resultado" element={<ExamRoute result />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 

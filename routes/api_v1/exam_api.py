@@ -25,7 +25,12 @@ from schemas.exam_schemas import (
     AttemptResult,
     ExamIngestResponse,
 )
-from routes.api_v1.user_context import get_current_user
+from routes.api_v1.user_context import (
+    get_accessible_exam_or_404,
+    get_current_user,
+    require_admin_user,
+)
+from routes.api_v1.exam_media import secure_exam_image_urls
 from services.exam_library import claim_exam_for_user, get_user_exam_ids, link_ready_exam_to_user
 
 router = APIRouter()
@@ -127,11 +132,13 @@ def _sort_questions_key(q):
     return (1, item_id, raw)
 
 @router.get("/exams/{exam_id}", response_model=ExamDetailSchema)
-def get_exam_detail(exam_id: int, db: Session = Depends(get_db)):
+def get_exam_detail(
+    exam_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
     """Retorna detalhes completos da prova com todas as questões formatadas para o simulado."""
-    exam = db.query(Exam).filter_by(id=exam_id).first()
-    if not exam:
-        raise HTTPException(status_code=404, detail="Prova não encontrada.")
+    exam = get_accessible_exam_or_404(db, user_id=current_user.id, exam_id=exam_id)
 
     questions_list = []
     resolved_questions, is_generated_session = resolve_exam_questions(db, exam)
@@ -178,7 +185,7 @@ def get_exam_detail(exam_id: int, db: Session = Depends(get_db)):
             options=options_dict,
             correct_answer=q.correct_answer,
             subject=q.subject or "Geral",
-            images=images_list if images_list else None,
+            images=secure_exam_image_urls(exam.id, images_list),
             has_official_answer=bool(exam.has_official_answers),
             latex_support=is_latex
         ))
@@ -197,11 +204,13 @@ def get_exam_detail(exam_id: int, db: Session = Depends(get_db)):
     )
 
 @router.get("/exams/{exam_id}/progress")
-def get_progress(exam_id: int, db: Session = Depends(get_db)):
+def get_progress(
+    exam_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
     """Consulta pontual do progresso de processamento da prova."""
-    exam = db.query(Exam).filter_by(id=exam_id).first()
-    if not exam:
-        return {"status": "Pendente", "progress": 0, "error_type": None}
+    exam = get_accessible_exam_or_404(db, user_id=current_user.id, exam_id=exam_id)
     return {
         "status": exam.progress_message or exam.status or "Pendente",
         "progress": exam.progress or 0,
@@ -209,11 +218,17 @@ def get_progress(exam_id: int, db: Session = Depends(get_db)):
     }
 
 @router.get("/exams/{exam_id}/progress/stream")
-async def stream_exam_progress(exam_id: int):
+async def stream_exam_progress(
+    exam_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
     """
     Endpoint Server-Sent Events (SSE) que envia o progresso em tempo real
     para o cliente até que o exame seja aprovado ou ocorra erro.
     """
+    get_accessible_exam_or_404(db, user_id=current_user.id, exam_id=exam_id)
+
     async def event_generator():
         last_progress = -999
         last_msg = ""
@@ -250,9 +265,11 @@ def submit_attempt(
     current_user=Depends(get_current_user),
 ):
     """Submete as respostas de um simulado, calcula pontuação e gera detalhamento por matéria."""
-    exam = db.query(Exam).filter_by(id=submission.exam_id).first()
-    if not exam:
-        raise HTTPException(status_code=404, detail="Prova não encontrada.")
+    exam = get_accessible_exam_or_404(
+        db,
+        user_id=current_user.id,
+        exam_id=submission.exam_id,
+    )
 
     user_id = current_user.id
     score = 0
@@ -328,10 +345,26 @@ def generate_custom_exam(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Gera um simulado personalizado aleatório a partir de todas as questões do banco."""
-    questions = db.query(Question).order_by(func.random()).limit(count).all()
+    """Gera um simulado aleatório apenas com questões do acervo do usuário."""
+    accessible_exam_ids = get_user_exam_ids(db, current_user.id)
+    questions = (
+        db.query(Question)
+        .filter(Question.exam_id.in_(accessible_exam_ids))
+        .order_by(func.random())
+        .limit(count)
+        .all()
+    ) if accessible_exam_ids else []
     if not questions:
-        raise HTTPException(status_code=400, detail="Nenhuma questão cadastrada no banco de dados.")
+        raise HTTPException(status_code=400, detail="Nenhuma questão disponível na sua biblioteca.")
+
+    title = f"Simulado Personalizado ({len(questions)} Questões)"
+    exam = create_generated_exam_session(
+        db,
+        title=title,
+        kind="custom",
+        question_ids=[question.id for question in questions],
+        user_id=current_user.id,
+    )
 
     questions_list = []
     for idx, q in enumerate(questions, start=1):
@@ -342,6 +375,8 @@ def generate_custom_exam(
 
         try:
             images_list = json.loads(q.images) if q.images else []
+            if isinstance(images_list, str):
+                images_list = [images_list]
         except Exception:
             images_list = []
 
@@ -354,19 +389,10 @@ def generate_custom_exam(
             options=options_dict,
             correct_answer=q.correct_answer,
             subject=q.subject or "Geral",
-            images=images_list if images_list else None,
+            images=secure_exam_image_urls(exam.id, images_list),
             has_official_answer=True,
             latex_support=is_latex
         ))
-
-    title = f"Simulado Personalizado ({len(questions_list)} Questões)"
-    exam = create_generated_exam_session(
-        db,
-        title=title,
-        kind="custom",
-        question_ids=[question.id for question in questions],
-        user_id=current_user.id,
-    )
 
     return ExamDetailSchema(
         id=exam.id,
@@ -455,8 +481,14 @@ def claim_processed_exam(
 
 
 @router.post("/exams/{exam_id}/status")
-def update_exam_status(exam_id: int, payload: Dict[str, Any], db: Session = Depends(get_db)):
+def update_exam_status(
+    exam_id: int,
+    payload: Dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
     """Atualiza o status de um exame (Aprovar, Negar ou Reprocessar)."""
+    require_admin_user(current_user)
     from app_core.async_worker import dispatch_async_exam_task
     new_status = payload.get("status")
     if not new_status:

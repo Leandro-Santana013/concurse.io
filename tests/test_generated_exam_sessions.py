@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+from types import SimpleNamespace
 
 sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 
@@ -20,6 +21,7 @@ from models.database import (
     User,
     get_db,
 )
+from routes.api_v1.user_context import get_current_user
 
 
 @pytest.fixture()
@@ -43,6 +45,12 @@ def api_and_session_factory():
             email="generated-session@example.com",
             name="Test User",
         ))
+        db.add(User(
+            id=2,
+            google_id="foreign-generated-session-user",
+            email="foreign-generated-session@example.com",
+            name="Foreign User",
+        ))
         source_exam = Exam(
             title="Prova fonte",
             status="Aprovada",
@@ -61,6 +69,24 @@ def api_and_session_factory():
                 subject="Português" if index <= 3 else "Direito",
                 numero_questao=str(100 + index),
             ))
+        foreign_exam = Exam(
+            title="Prova de outro usuário",
+            status="Aprovada",
+            user_id=2,
+            has_official_answers=1,
+            gabarito_coverage=100.0,
+        )
+        db.add(foreign_exam)
+        db.flush()
+        for index in range(1, 6):
+            db.add(Question(
+                exam_id=foreign_exam.id,
+                statement=f"Conteúdo privado estrangeiro {index}",
+                options=json.dumps({"A": "Correta", "B": "Incorreta"}),
+                correct_answer="A",
+                subject="Privado",
+                numero_questao=str(index),
+            ))
         db.commit()
 
     def override_get_db():
@@ -71,12 +97,14 @@ def api_and_session_factory():
             db.close()
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=1)
     client = TestClient(app)
     try:
         yield client, test_session_factory
     finally:
         client.close()
         app.dependency_overrides.pop(get_db, None)
+        app.dependency_overrides.pop(get_current_user, None)
         Base.metadata.drop_all(bind=test_engine)
         test_engine.dispose()
 
@@ -137,6 +165,23 @@ def test_custom_exam_has_real_id_can_reload_and_submit(api_and_session_factory):
         stored_attempt = db.query(ExamAttempt).filter_by(exam_id=generated["id"]).one()
         assert stored_attempt.total == 5
         assert stored_attempt.score == 5
+
+
+def test_custom_exam_uses_only_questions_from_the_current_users_library(api_and_session_factory):
+    client, session_factory = api_and_session_factory
+
+    response = client.post("/api/v1/exams/generate_custom?count=10")
+
+    assert response.status_code == 200
+    returned_ids = {question["id"] for question in response.json()["questions"]}
+    with session_factory() as db:
+        owned_exam_id = db.query(Exam.id).filter(Exam.user_id == 1, Exam.doc_type != "generated_session").scalar()
+        foreign_exam_id = db.query(Exam.id).filter(Exam.user_id == 2).scalar()
+        owned_ids = {row[0] for row in db.query(Question.id).filter(Question.exam_id == owned_exam_id)}
+        foreign_ids = {row[0] for row in db.query(Question.id).filter(Question.exam_id == foreign_exam_id)}
+
+    assert returned_ids == owned_ids
+    assert returned_ids.isdisjoint(foreign_ids)
 
 
 def test_notebook_resolves_generated_attempts_and_deduplicates_original_questions(api_and_session_factory):

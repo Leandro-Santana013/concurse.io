@@ -112,7 +112,10 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
 
   const watchProgress = (examId: number, attempt = 0) => {
     stopWatching();
-    const source = new EventSource(`/api/v1/exams/${examId}/progress/stream`);
+    const source = new EventSource(
+      `/api/v1/exams/${examId}/progress/stream`,
+      { withCredentials: true },
+    );
     eventSourceRef.current = source;
     source.onmessage = (event) => {
       try {

@@ -8,7 +8,15 @@ from .gabarito_service import (
     merge_exam_with_gabarito,
     format_gabarito_summary,
     extract_gabarito_from_doc,
+    extract_exam_code_ranges_from_pdf,
     _extract_gabarito_from_doc,
+)
+from .matching_service import (
+    AnswerKeyMatchResult,
+    ExamAnswerKeyProfile,
+    build_exam_answer_key_profile,
+    explicit_answer_key_result,
+    match_gabarito_from_pdf,
 )
 
 __all__ = [
@@ -17,5 +25,11 @@ __all__ = [
     "merge_exam_with_gabarito",
     "format_gabarito_summary",
     "extract_gabarito_from_doc",
+    "extract_exam_code_ranges_from_pdf",
     "_extract_gabarito_from_doc",
+    "AnswerKeyMatchResult",
+    "ExamAnswerKeyProfile",
+    "build_exam_answer_key_profile",
+    "explicit_answer_key_result",
+    "match_gabarito_from_pdf",
 ]

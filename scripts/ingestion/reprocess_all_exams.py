@@ -17,9 +17,17 @@ if hasattr(sys.stdout, 'reconfigure'):
 from dotenv import load_dotenv
 load_dotenv()
 
-from models.database import Session, Exam, Question, Folder
+from models.database import AnswerKeyMatchAudit, Session, Exam, Question, Folder
 from services.pdf_pipeline import parse_exam_document
-from services.gabarito import parse_gabarito_from_pdf, parse_gabarito_from_text, merge_exam_with_gabarito, format_gabarito_summary
+from services.gabarito import (
+    AnswerKeyMatchResult,
+    build_exam_answer_key_profile,
+    extract_exam_code_ranges_from_pdf,
+    format_gabarito_summary,
+    match_gabarito_from_pdf,
+    merge_exam_with_gabarito,
+    parse_gabarito_from_text,
+)
 
 def reprocess_all_exams():
     print("=================================================================")
@@ -88,21 +96,80 @@ def reprocess_all_exams():
                 continue
 
             gabarito_dict = {}
+            exam_code_ranges = extract_exam_code_ranges_from_pdf(pdf_path)
+            exam_profile = build_exam_answer_key_profile(
+                pdf_path,
+                questions,
+                title=title,
+                code_ranges=exam_code_ranges,
+            )
+            answer_key_attempts = []
             answer_source = answer_key_source or "none"
 
             gab_matching = glob.glob(f"pdfs/{exam_id}_gab_*.pdf")
             if gab_matching and os.path.exists(gab_matching[0]):
-                gabarito_dict = parse_gabarito_from_pdf(gab_matching[0], cargo_or_title=title)
-                answer_source = "attached_pdf"
-            elif gabarito_url and os.path.exists(gabarito_url):
-                gabarito_dict = parse_gabarito_from_pdf(gabarito_url, cargo_or_title=title)
-                answer_source = "attached_pdf"
-            elif not gabarito_dict and os.path.exists(pdf_path):
-                gabarito_dict = parse_gabarito_from_pdf(pdf_path, cargo_or_title=title)
-                if gabarito_dict:
+                candidate_match = match_gabarito_from_pdf(
+                    gab_matching[0],
+                    exam_profile,
+                    source_relation="paired",
+                    document_hint=gabarito_url or gab_matching[0],
+                )
+                answer_key_attempts.append(candidate_match)
+                if candidate_match.accepted:
+                    gabarito_dict = candidate_match.answers
+                    answer_source = "attached_pdf"
+            if not gabarito_dict and gabarito_url and os.path.exists(gabarito_url):
+                candidate_match = match_gabarito_from_pdf(
+                    gabarito_url,
+                    exam_profile,
+                    source_relation="paired",
+                    document_hint=gabarito_url,
+                )
+                answer_key_attempts.append(candidate_match)
+                if candidate_match.accepted:
+                    gabarito_dict = candidate_match.answers
+                    answer_source = "attached_pdf"
+            if not gabarito_dict and os.path.exists(pdf_path):
+                candidate_match = match_gabarito_from_pdf(
+                    pdf_path,
+                    exam_profile,
+                    source_relation="embedded",
+                    document_hint=source_url or pdf_path,
+                )
+                answer_key_attempts.append(candidate_match)
+                if candidate_match.accepted:
+                    gabarito_dict = candidate_match.answers
                     answer_source = "embedded_pdf"
 
-            updated_questions, stats = merge_exam_with_gabarito(questions, gabarito_dict)
+            accepted_match = next(
+                (attempt for attempt in answer_key_attempts if attempt.accepted),
+                None,
+            )
+            match_result = accepted_match or next(
+                (attempt for attempt in answer_key_attempts if attempt.candidate),
+                None,
+            ) or AnswerKeyMatchResult(
+                profile=exam_profile,
+                status="not_found",
+                conflicts=["no_answer_key_candidate"],
+            )
+
+            updated_questions, stats = merge_exam_with_gabarito(
+                questions,
+                gabarito_dict,
+                strict=bool(match_result.accepted),
+            )
+            if stats.get("integrity_conflicts"):
+                match_result.accepted = False
+                match_result.status = "rejected"
+                match_result.confidence = 0.0
+                match_result.conflicts = list(dict.fromkeys([
+                    *match_result.conflicts,
+                    *stats["integrity_conflicts"],
+                ]))
+                gabarito_dict = {}
+                answer_source = "none"
+                updated_questions, stats = merge_exam_with_gabarito(questions, {})
 
             with Session() as session:
                 exam = session.query(Exam).filter_by(id=exam_id).first()
@@ -142,6 +209,17 @@ def reprocess_all_exams():
                 exam.gabarito_coverage = stats['coverage_pct']
                 exam.answer_key_source = answer_source
                 exam.gabarito_text = format_gabarito_summary(gabarito_dict)
+                session.add(AnswerKeyMatchAudit(
+                    exam_id=exam.id,
+                    accepted=1 if match_result.accepted else 0,
+                    status=match_result.status,
+                    confidence=match_result.confidence,
+                    answer_source=answer_source,
+                    method=match_result.method,
+                    candidate_page=match_result.candidate_page,
+                    decision_json=match_result.to_audit_json(),
+                    created_at=datetime.now().isoformat(),
+                ))
 
                 session.commit()
 

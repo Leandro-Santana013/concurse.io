@@ -1,17 +1,59 @@
 import os
 import sys
+from types import SimpleNamespace
+
 sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 from fastapi.testclient import TestClient
-from fastapi_app import app
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
+from fastapi_app import app
+from models.database import Base, get_db
+from routes.api_v1.user_context import get_current_user
+
+engine = create_engine(
+    "sqlite://",
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
+session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+Base.metadata.create_all(bind=engine)
+
+
+def _override_get_db():
+    db = session_factory()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+app.dependency_overrides[get_db] = _override_get_db
 client = TestClient(app)
+authenticated_user = SimpleNamespace(
+    id=1,
+    email="estudante@example.com",
+    name="Pessoa Estudante",
+    picture="",
+)
+
+
+def _override_authenticated_user():
+    return authenticated_user
+
+
+app.dependency_overrides[get_current_user] = _override_authenticated_user
 
 def test_healthcheck():
     response = client.get("/health")
     assert response.status_code == 200
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["referrer-policy"] == "no-referrer"
     data = response.json()
     assert data["status"] == "healthy"
     assert data["version"] == "2.0.0"
@@ -25,6 +67,20 @@ def test_root():
         assert "concurse.io API V2" in data.get("name", "")
     else:
         assert "<!DOCTYPE html>" in response.text or "<html" in response.text
+
+
+def test_protected_routes_require_login():
+    app.dependency_overrides.pop(get_current_user, None)
+    try:
+        assert client.get("/api/v1/auth/me").status_code == 401
+        assert client.get("/api/v1/ranking").status_code == 401
+    finally:
+        app.dependency_overrides[get_current_user] = _override_authenticated_user
+
+
+def test_legacy_question_media_is_not_public():
+    response = client.get("/static/images/questions/qimg_exam41_q1_1.png")
+    assert response.status_code == 404
 
 
 def test_folders_api():

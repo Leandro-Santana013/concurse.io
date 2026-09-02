@@ -1,8 +1,88 @@
+import unicodedata
 import re
-import fitz
 from typing import Dict, List, Optional, Any, Tuple
 
+import fitz
+
 GABARITO_HEADER_REGEX = re.compile(r'\b(gabarito|folha\s+de\s+respostas?|quadro\s+de\s+respostas?|respostas?\s+das?\s+quest[õo]es|gabarito\s+oficial|gabarito\s+preliminar|gabarito\s+definitivo)\b', re.IGNORECASE)
+
+
+def _normalize_code_text(raw_text: str) -> str:
+    """Normaliza acentos e artefatos comuns de extração antes de ler códigos."""
+    text = str(raw_text or "")
+    for broken, repaired in (
+        ("Ã³", "o"),
+        ("Ã“", "O"),
+        ("�", "o"),
+    ):
+        text = text.replace(broken, repaired)
+    text = unicodedata.normalize("NFKD", text)
+    return "".join(char for char in text if not unicodedata.combining(char)).lower()
+
+
+def extract_code_ranges_from_text(
+    raw_text: str,
+    *,
+    allow_parenthesized: bool = False,
+) -> List[Tuple[int, int]]:
+    """Extrai códigos individuais ou intervalos, preservando a ordem do documento."""
+    text = _normalize_code_text(raw_text)
+    patterns = [
+        re.compile(
+            r'\bcodigos?\s*(?:n\s*[º°o]?\s*)?[:\-]?\s*'
+            r'(\d{1,5})(?:\s*(?:a|ate|[-–—])\s*(\d{1,5}))?',
+            re.IGNORECASE,
+        )
+    ]
+    if allow_parenthesized:
+        patterns.append(
+            re.compile(
+                r'\(\s*(\d{1,5})\s*(?:a|ate|[-–—])\s*(\d{1,5})\s*\)',
+                re.IGNORECASE,
+            )
+        )
+
+    ranges: List[Tuple[int, int]] = []
+    for pattern in patterns:
+        for match in pattern.finditer(text):
+            start = int(match.group(1))
+            end = int(match.group(2) or start)
+            code_range = (min(start, end), max(start, end))
+            if code_range not in ranges:
+                ranges.append(code_range)
+    return ranges
+
+
+def extract_exam_code_ranges_from_pdf(
+    pdf_input,
+    *,
+    max_pages: int = 3,
+) -> List[Tuple[int, int]]:
+    """Lê os códigos identificadores nas primeiras páginas do caderno de prova."""
+    doc = None
+    should_close = False
+
+    if isinstance(pdf_input, fitz.Document):
+        doc = pdf_input
+    elif isinstance(pdf_input, (bytes, bytearray)):
+        doc = fitz.open(stream=pdf_input, filetype="pdf")
+        should_close = True
+    elif isinstance(pdf_input, str):
+        doc = fitz.open(pdf_input)
+        should_close = True
+    else:
+        return []
+
+    try:
+        ranges: List[Tuple[int, int]] = []
+        for page_index in range(min(len(doc), max_pages)):
+            for code_range in extract_code_ranges_from_text(doc[page_index].get_text()):
+                if code_range not in ranges:
+                    ranges.append(code_range)
+        return ranges
+    finally:
+        if should_close and doc:
+            doc.close()
 
 def extract_gabarito_from_doc(doc):
     """
@@ -292,7 +372,77 @@ def extract_all_matrix_gabaritos(gab_doc) -> List[Dict[str, Any]]:
                             
     return results
 
-def parse_gabarito_from_pdf(pdf_input, cargo_or_title: Optional[str] = None, tipo: Optional[str] = None):
+
+def _code_range_matches(
+    target_range: Tuple[int, int],
+    candidate_range: Tuple[int, int],
+) -> bool:
+    """Aceita igualdade ou um código único contido no intervalo do gabarito."""
+    if target_range == candidate_range:
+        return True
+    target_start, target_end = target_range
+    candidate_start, candidate_end = candidate_range
+    return target_start == target_end and candidate_start <= target_start <= candidate_end
+
+
+def _extract_gabarito_by_code_ranges(
+    doc,
+    target_ranges: List[Tuple[int, int]],
+) -> Tuple[Dict[int, str], bool]:
+    """
+    Procura primeiro o bloco cujo código corresponde ao caderno.
+
+    O segundo item informa se o documento possui blocos de gabarito indexados por
+    código. Assim, quando há índice mas nenhum código bate, o chamador pode falhar
+    de forma segura em vez de atribuir respostas de outro cargo.
+    """
+    indexed_pages_found = False
+    matching_gabaritos: List[Dict[int, str]] = []
+
+    for page in doc:
+        page_text = page.get_text()
+        if not GABARITO_HEADER_REGEX.search(page_text):
+            continue
+
+        candidate_ranges = extract_code_ranges_from_text(
+            page_text,
+            allow_parenthesized=True,
+        )
+        if not candidate_ranges:
+            continue
+
+        answer_text = "\n".join(
+            line
+            for line in page_text.splitlines()
+            if not extract_code_ranges_from_text(line, allow_parenthesized=True)
+        )
+        page_gabarito = parse_fgv_vertical_gabarito(answer_text)
+        if not page_gabarito:
+            page_gabarito = parse_gabarito_from_text(answer_text)
+        if len(page_gabarito) < 5:
+            continue
+
+        indexed_pages_found = True
+        if any(
+            _code_range_matches(target_range, candidate_range)
+            for target_range in target_ranges
+            for candidate_range in candidate_ranges
+        ):
+            matching_gabaritos.append(page_gabarito)
+
+    if not matching_gabaritos:
+        return {}, indexed_pages_found
+
+    matching_gabaritos.sort(key=len, reverse=True)
+    return matching_gabaritos[0], indexed_pages_found
+
+
+def parse_gabarito_from_pdf(
+    pdf_input,
+    cargo_or_title: Optional[str] = None,
+    tipo: Optional[str] = None,
+    exam_code_ranges: Optional[List[Tuple[int, int]]] = None,
+):
     """
     Extrai gabarito oficial de um arquivo PDF avulso ou folha de respostas.
     Suporta filtragem por cargo/tipo para PDFs com múltiplos cargos (como IBAM, FGV e FCC),
@@ -315,7 +465,20 @@ def parse_gabarito_from_pdf(pdf_input, cargo_or_title: Optional[str] = None, tip
     try:
         gabarito = {}
 
-        # 0. Extração de Gabaritos Matriciais Multi-Cargo (Padrão IBAM / VUNESP / Quadrix)
+        # 0. Integridade por código do caderno. Quando prova e gabarito publicam
+        # códigos, este identificador prevalece sobre escolaridade, cargo e título.
+        target_code_ranges = exam_code_ranges or []
+        if target_code_ranges:
+            code_gabarito, has_indexed_code_pages = _extract_gabarito_by_code_ranges(
+                doc,
+                target_code_ranges,
+            )
+            if code_gabarito:
+                return code_gabarito
+            if has_indexed_code_pages:
+                return {}
+
+        # 1. Extração de Gabaritos Matriciais Multi-Cargo (Padrão IBAM / VUNESP / Quadrix)
         matrix_gabs = extract_all_matrix_gabaritos(doc)
         if matrix_gabs:
             if cargo_or_title:
@@ -330,7 +493,7 @@ def parse_gabarito_from_pdf(pdf_input, cargo_or_title: Optional[str] = None, tip
             elif len(matrix_gabs) == 1:
                 return matrix_gabs[0]['gabarito']
 
-        # 1. Se houver cargo/título de prova especificado, procura pela página exata do cargo (Padrão FGV)
+        # 2. Se houver cargo/título de prova especificado, procura pela página exata do cargo (Padrão FGV)
         if cargo_or_title:
             clean_kw = re.sub(r'\[\d+\]', '', cargo_or_title).strip()
             keywords = [w.lower() for w in clean_kw.split() if len(w) >= 4 and w.lower() not in ['para', 'com', 'pelo', 'sobre', 'geral', 'tarde', 'manha', 'branca']]
@@ -360,7 +523,7 @@ def parse_gabarito_from_pdf(pdf_input, cargo_or_title: Optional[str] = None, tip
                 if gab_cargo and len(gab_cargo) >= 5:
                     return gab_cargo
 
-        # 1. Extração Estruturada via PyMuPDF Table Extractor (find_tables)
+        # 3. Extração Estruturada via PyMuPDF Table Extractor (find_tables)
         for page in doc:
             if hasattr(page, 'find_tables'):
                 try:
@@ -427,12 +590,12 @@ def parse_gabarito_from_pdf(pdf_input, cargo_or_title: Optional[str] = None, tip
         if gabarito and len(gabarito) >= 5:
             return gabarito
 
-        # 2. Tenta extrair com o extrator determinístico integrado
+        # 4. Tenta extrair com o extrator determinístico integrado
         gabarito_fallback = _extract_gabarito_from_doc(doc)
         if gabarito_fallback and len(gabarito_fallback) >= 5:
             return gabarito_fallback
 
-        # 3. Se não encontrou, faz varredura textual direta página por página (suporta vertical FGV)
+        # 5. Se não encontrou, faz varredura textual direta página por página (suporta vertical FGV)
         for page in doc:
             p_text = page.get_text()
             p_gab = parse_fgv_vertical_gabarito(p_text)
@@ -450,7 +613,7 @@ def parse_gabarito_from_pdf(pdf_input, cargo_or_title: Optional[str] = None, tip
         if text_gabarito and len(text_gabarito) >= 5:
             return text_gabarito
 
-        # 4. Se for PDF escaneado (sem texto), aplica RapidOCR
+        # 6. Se for PDF escaneado (sem texto), aplica RapidOCR
         from services.pdf_pipeline.media.diagram_cropper import _get_rapidocr_engine
         engine = _get_rapidocr_engine()
         if engine and len(doc) <= 5:
@@ -474,12 +637,18 @@ def parse_gabarito_from_pdf(pdf_input, cargo_or_title: Optional[str] = None, tip
         if should_close and doc:
             doc.close()
 
-def merge_exam_with_gabarito(questions, gabarito_dict):
+def merge_exam_with_gabarito(questions, gabarito_dict, *, strict: bool = False):
     """
     Cruza a lista de questões extraídas do caderno com o gabarito oficial.
     """
     if not questions:
-        return [], {"total_questions": 0, "matched_answers": 0, "coverage_pct": 0.0, "has_official_answers": False}
+        return [], {
+            "total_questions": 0,
+            "matched_answers": 0,
+            "coverage_pct": 0.0,
+            "has_official_answers": False,
+            "integrity_conflicts": [],
+        }
 
     def _q_sort_key(q):
         raw = str(q.get('numero_questao', '') if isinstance(q, dict) else getattr(q, 'numero_questao', '')).strip()
@@ -492,6 +661,30 @@ def merge_exam_with_gabarito(questions, gabarito_dict):
 
     sorted_questions = sorted(questions, key=_q_sort_key)
     gabarito_dict = gabarito_dict or {}
+    integrity_conflicts = []
+    normalized_gabarito = {}
+    for raw_number, raw_answer in gabarito_dict.items():
+        try:
+            normalized_gabarito[int(raw_number)] = raw_answer
+        except (TypeError, ValueError):
+            continue
+
+    if strict and normalized_gabarito:
+        expected_numbers = []
+        for idx, question in enumerate(sorted_questions, start=1):
+            raw_number = question.get('numero_questao') if isinstance(question, dict) else getattr(question, 'numero_questao', None)
+            match = re.match(r'^\s*(\d+)', str(raw_number or ''))
+            expected_numbers.append(int(match.group(1)) if match else idx)
+
+        if len(normalized_gabarito) != len(sorted_questions):
+            integrity_conflicts.append("question_count_mismatch")
+        if len(set(expected_numbers)) != len(expected_numbers):
+            integrity_conflicts.append("duplicate_exam_question_numbers")
+        elif set(normalized_gabarito) != set(expected_numbers):
+            integrity_conflicts.append("question_sequence_mismatch")
+
+        if integrity_conflicts:
+            normalized_gabarito = {}
     matched_count = 0
     updated_questions = []
 
@@ -503,7 +696,14 @@ def merge_exam_with_gabarito(questions, gabarito_dict):
         except Exception:
             q_num_int = idx
             
-        official_ans = gabarito_dict.get(q_num_int) or gabarito_dict.get(idx) or gabarito_dict.get(str(q_num))
+        if strict:
+            official_ans = normalized_gabarito.get(q_num_int)
+        else:
+            official_ans = (
+                normalized_gabarito.get(q_num_int)
+                or normalized_gabarito.get(idx)
+                or gabarito_dict.get(str(q_num))
+            )
         
         if official_ans:
             q_copy['resposta'] = str(official_ans).upper()
@@ -518,13 +718,14 @@ def merge_exam_with_gabarito(questions, gabarito_dict):
 
     total = len(questions)
     coverage = round((matched_count / total) * 100, 1) if total > 0 else 0.0
-    has_official = coverage >= 50.0
+    has_official = coverage == 100.0 if strict else coverage >= 50.0
 
     stats = {
         "total_questions": total,
         "matched_answers": matched_count,
         "coverage_pct": coverage,
-        "has_official_answers": has_official
+        "has_official_answers": has_official,
+        "integrity_conflicts": integrity_conflicts,
     }
 
     return updated_questions, stats
