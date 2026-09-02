@@ -54,6 +54,42 @@ const THEME_OPTIONS: { id: ThemeMode; label: string; description: string; previe
     description: 'Roxo e azul escuro inspirado no VS Code',
     preview: { bg: '#282a36', surface: '#44475a', text: '#f8f8f2', primary: '#bd93f9' },
   },
+  {
+    id: 'nord',
+    label: 'Nord',
+    description: 'Tons gélidos e minimalistas escandinavos',
+    preview: { bg: '#2e3440', surface: '#3b4252', text: '#eceff4', primary: '#88c0d0' },
+  },
+  {
+    id: 'tokyo-night',
+    label: 'Tokyo Night',
+    description: 'Neon e azul marinho das noites de Tóquio',
+    preview: { bg: '#1a1b26', surface: '#24283b', text: '#a9b1d6', primary: '#7aa2f7' },
+  },
+  {
+    id: 'catppuccin',
+    label: 'Catppuccin',
+    description: 'Tons pastéis aconchegantes e modernos',
+    preview: { bg: '#1e1e2e', surface: '#313244', text: '#cdd6f4', primary: '#cba6f7' },
+  },
+  {
+    id: 'gruvbox',
+    label: 'Gruvbox',
+    description: 'Estilo retro aquecido com tons terra',
+    preview: { bg: '#282828', surface: '#3c3836', text: '#ebdbb2', primary: '#fe8019' },
+  },
+  {
+    id: 'monokai',
+    label: 'Monokai Pro',
+    description: 'Clássico vibrante e de alto contraste',
+    preview: { bg: '#2d2a2e', surface: '#3a373b', text: '#fcfcfa', primary: '#ff6188' },
+  },
+  {
+    id: 'solarized',
+    label: 'Solarized',
+    description: 'Cianocentro desenhado para conforto visual',
+    preview: { bg: '#002b36', surface: '#073642', text: '#839496', primary: '#268bd2' },
+  },
 ];
 
 const FONT_OPTIONS: { id: FontSizeScale; label: string; detail: string }[] = [

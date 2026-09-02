@@ -11,8 +11,9 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 
 export type ViewType = 'home' | 'search' | 'folders' | 'stats' | 'errors' | 'ranking' | 'exam' | 'profile';
-export type ThemeMode = 'light' | 'dark' | 'oled' | 'sepia' | 'emerald' | 'dracula';
+export type ThemeMode = 'light' | 'dark' | 'oled' | 'sepia' | 'emerald' | 'dracula' | 'nord' | 'tokyo-night' | 'catppuccin' | 'gruvbox' | 'monokai' | 'solarized';
 export type FontSizeScale = 'sm' | 'base' | 'lg' | 'xl';
+
 
 
 export interface ToastMessage {
@@ -102,7 +103,10 @@ const readPreferences = (): StoredPreferences => {
       fontSize?: string;
       enableEliminationMode?: boolean;
     };
-    const validThemes: ThemeMode[] = ['light', 'dark', 'oled', 'sepia', 'emerald', 'dracula'];
+    const validThemes: ThemeMode[] = [
+      'light', 'dark', 'oled', 'sepia', 'emerald', 'dracula',
+      'nord', 'tokyo-night', 'catppuccin', 'gruvbox', 'monokai', 'solarized'
+    ];
     const validFontSizes: FontSizeScale[] = ['sm', 'base', 'lg', 'xl'];
 
     const theme: ThemeMode = validThemes.includes(saved.theme as ThemeMode)
@@ -154,7 +158,11 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
 
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.remove('theme-light', 'theme-dark', 'theme-paper', 'theme-oled', 'theme-sepia', 'theme-emerald', 'theme-dracula');
+    root.classList.remove(
+      'theme-light', 'theme-dark', 'theme-paper', 'theme-oled', 'theme-sepia',
+      'theme-emerald', 'theme-dracula', 'theme-nord', 'theme-tokyo-night',
+      'theme-catppuccin', 'theme-gruvbox', 'theme-monokai', 'theme-solarized'
+    );
     root.classList.add(`theme-${theme}`);
     root.dataset.theme = theme;
     root.style.colorScheme = (theme === 'light' || theme === 'sepia') ? 'light' : 'dark';
