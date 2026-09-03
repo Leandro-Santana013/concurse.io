@@ -167,7 +167,7 @@ class Exam(Base):
     error_type = Column(String(50), nullable=True)
     
     folder = relationship("Folder", back_populates="exams")
-    questions = relationship("Question", back_populates="exam", cascade="all, delete-orphan")
+    questions = relationship("Question", order_by="Question.id", back_populates="exam", cascade="all, delete-orphan")
     attempts = relationship("ExamAttempt", back_populates="exam", cascade="all, delete-orphan")
     generated_session = relationship(
         "GeneratedExamSession",
@@ -197,6 +197,12 @@ class Question(Base):
     subject = Column(String(100), nullable=True, default='Geral', index=True)
     images = Column(Text, nullable=True)
     numero_questao = Column(String(50), nullable=True)
+    # Índice Canônico: posição estável 0..N-1 na ordem da Cadeia de Encadeamento,
+    # desacoplada do rótulo textual `numero_questao` (que pode repetir/falhar
+    # na extração, ex: subitens "1. 2. 3. 4." da DATAPREV). O async worker
+    # sempre (re)atribui o Número Canônico a partir deste índice quando a
+    # sequência de rótulos apresenta duplicatas, lacunas ou valores não numéricos.
+    question_index = Column(Integer, nullable=True, index=True)
     latex_support = Column(Integer, default=0)
     difficulty_level = Column(String(20), default='Média')
     
@@ -346,6 +352,21 @@ class ExamCatalog(Base):
     source = Column(String(50), default='web')
     created_at = Column(String(30), nullable=True)
 
+def _ensure_question_index_column():
+    """Garante a coluna `questions.question_index` (Índice da Cadeia de Encadeamento)
+    em bancos pré-existentes, pois create_all não altera tabelas já criadas."""
+    from sqlalchemy import inspect
+    inspector = inspect(engine)
+    if 'questions' not in inspector.get_table_names():
+        return
+    cols = {c['name'] for c in inspector.get_columns('questions')}
+    if 'question_index' in cols:
+        return
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE questions ADD COLUMN question_index INTEGER"))
+    print("[Schema] Coluna 'question_index' adicionada à tabela 'questions'.")
+
+
 def _ensure_user_security_columns():
     """Migração aditiva mínima para bancos criados antes da criptografia de PII."""
     inspector = inspect(engine)
@@ -439,6 +460,7 @@ def _migrate_user_security_rows() -> int:
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    _ensure_question_index_column()
     _ensure_user_security_columns()
     migrated = _migrate_user_security_rows()
     if migrated:

@@ -18,6 +18,13 @@ const API_BASE = '/api/v1';
 const apiFetch = (input: RequestInfo | URL, init: RequestInit = {}) =>
   fetch(input, { ...init, credentials: 'include' });
 
+export class AuthRequiredError extends Error {
+  constructor(message = 'Sua sessão expirou. Faça login novamente para ver sua biblioteca.') {
+    super(message);
+    this.name = 'AuthRequiredError';
+  }
+}
+
 export const api = {
   async getAuthConfig(): Promise<AuthConfig> {
     const res = await apiFetch(`${API_BASE}/auth/config`);
@@ -53,6 +60,7 @@ export const api = {
 
   async getFolders(): Promise<Folder[]> {
     const res = await apiFetch(`${API_BASE}/folders`);
+    if (res.status === 401) throw new AuthRequiredError();
     if (!res.ok) throw new Error('Falha ao carregar pastas de provas');
     return res.json();
   },
@@ -116,6 +124,7 @@ export const api = {
 
   async getNotebookStats(): Promise<NotebookSubjectStat[]> {
     const res = await apiFetch(`${API_BASE}/notebook/stats`);
+    if (res.status === 401) throw new AuthRequiredError();
     if (!res.ok) throw new Error('Falha ao carregar dados do caderno de erros');
     return res.json();
   },

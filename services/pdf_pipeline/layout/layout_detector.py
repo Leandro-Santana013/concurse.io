@@ -12,6 +12,55 @@ class LayoutConfig:
     min_overlapping_pairs: int = 2           # Mínimo de pares de linhas concorrentes para confirmar modo 2 colunas
     stitch_gap_max: float = 20.0             # Distância horizontal máxima (pt) para juntar spans adjacentes
     line_height_multiplier: float = 1.2      # Fator de altura de linha para agrupamento de parágrafos
+    topology: str = "AUTO"                   # 'AUTO' | 'N_ORDER' | 'Z_ORDER'
+
+
+def infer_document_topology(doc: fitz.Document, watermarks: Optional[Set[Tuple[int, int, int, int]]] = None) -> str:
+    """
+    Herança Topológica de Caderno (ADR 0002):
+    Analisa páginas com 2+ questões para determinar a topologia predominante do caderno ('N_ORDER' vs 'Z_ORDER').
+    """
+    z_votes = 0
+    n_votes = 0
+    q_header_pat = re.compile(r'(?:^|\n)\s*(?:QUEST[AÃ\ufffd\?]?O\s+|ITEM\s+|0*)(\d{1,3})\b', re.IGNORECASE)
+
+    for p_idx in range(min(12, len(doc))):
+        page = doc[p_idx]
+        width = page.rect.width
+        mid_x = width * 0.5
+        text_page = page.get_text('dict')
+        
+        left_headers = []
+        right_headers = []
+        
+        for block in text_page.get('blocks', []):
+            if block.get('type') != 0:
+                continue
+            for line in block.get('lines', []):
+                lx0, ly0, lx1, ly1 = line['bbox']
+                if ly0 < 30 or ly1 > page.rect.height - 40:
+                    continue
+                line_text = ' '.join(s.get('text', '') for s in line.get('spans', [])).strip()
+                m = q_header_pat.search(line_text)
+                if m:
+                    try:
+                        q_num = int(m.group(1))
+                        if 1 <= q_num <= 200:
+                            if (lx0 + lx1) / 2.0 < mid_x:
+                                left_headers.append((q_num, ly0))
+                            else:
+                                right_headers.append((q_num, ly0))
+                    except ValueError:
+                        pass
+        
+        for q_l, y_l in left_headers:
+            for q_r, y_r in right_headers:
+                if q_r == q_l + 1 and abs(y_r - y_l) < 120.0:
+                    z_votes += 1
+                elif q_r > q_l and y_l < y_r:
+                    n_votes += 1
+
+    return "Z_ORDER" if z_votes > n_votes and z_votes >= 2 else "N_ORDER"
 
 
 CONTEXT_TEXT_HEADER_REGEX = re.compile(
@@ -612,6 +661,42 @@ def detect_layout_and_ordered_blocks(
         else:
             col_right.append(l)
 
+    # 3. Detecção Two-Pass da Topologia da Página (Z-order vs N-order)
+    # Se os cabeçalhos de questões progredirem horizontalmente (Q1 à esquerda, Q2 à direita na mesma altura),
+    # a página é lida em Z-order (linha a linha cruzando colunas).
+    is_z_order = False
+    if getattr(cfg, 'topology', 'AUTO') == 'Z_ORDER':
+        is_z_order = True
+    elif getattr(cfg, 'topology', 'AUTO') == 'AUTO':
+        # Localiza candidatos a cabeçalhos nas linhas da esquerda e da direita
+        q_header_pat = re.compile(r'(?:^|\n)\s*(?:QUEST[AÃ\ufffd\?]?O\s+|ITEM\s+|0*)(\d{1,3})\b', re.IGNORECASE)
+        left_q_headers = []
+        for l in left_cands:
+            m = q_header_pat.search(l['text'])
+            if m:
+                try:
+                    left_q_headers.append((int(m.group(1)), l['y0']))
+                except ValueError:
+                    pass
+
+        right_q_headers = []
+        for l in right_cands:
+            m = q_header_pat.search(l['text'])
+            if m:
+                try:
+                    right_q_headers.append((int(m.group(1)), l['y0']))
+                except ValueError:
+                    pass
+
+        # Se temos Q1 na esquerda e Q2 na direita na mesma faixa Y (ou Q_k e Q_k+1 concorrentes em Y)
+        for q_num_l, y_l in left_q_headers:
+            for q_num_r, y_r in right_q_headers:
+                if q_num_r == q_num_l + 1 and abs(y_r - y_l) < 120.0:
+                    is_z_order = True
+                    break
+            if is_z_order:
+                break
+
     # Costura horizontal estritamente DENTRO de cada grupo de coluna
     if not force_ocr:
         top_headers = stitch_lines_within_group(top_headers)
@@ -626,12 +711,21 @@ def detect_layout_and_ordered_blocks(
     if top_headers:
         t_raw = '\n'.join(l['text'] for l in top_headers)
         ordered_groups.append({'page': page.number, 'x0': 0, 'y0': 0, 'x1': width, 'y1': y_col_start, 'text': normalize_paragraph_flow(t_raw)})
-    if col_left:
-        t_raw = '\n'.join(l['text'] for l in col_left)
-        ordered_groups.append({'page': page.number, 'x0': 0, 'y0': y_col_start, 'x1': mid_x_page, 'y1': height, 'text': normalize_paragraph_flow(t_raw)})
-    if col_right:
-        t_raw = '\n'.join(l['text'] for l in col_right)
-        ordered_groups.append({'page': page.number, 'x0': mid_x_page, 'y0': y_col_start, 'x1': width, 'y1': height, 'text': normalize_paragraph_flow(t_raw)})
+
+    if is_z_order:
+        # Modo Z-order: interleaving ordenado por faixas horizontais de leitura
+        all_col_lines = col_left + col_right
+        all_col_lines.sort(key=lambda l: (round(l['y0'] / 15.0) * 15.0, l['x0']))
+        t_raw = '\n'.join(l['text'] for l in all_col_lines)
+        ordered_groups.append({'page': page.number, 'x0': 0, 'y0': y_col_start, 'x1': width, 'y1': height, 'text': normalize_paragraph_flow(t_raw)})
+    else:
+        # Modo N-order: coluna esquerda completa, depois coluna direita
+        if col_left:
+            t_raw = '\n'.join(l['text'] for l in col_left)
+            ordered_groups.append({'page': page.number, 'x0': 0, 'y0': y_col_start, 'x1': mid_x_page, 'y1': height, 'text': normalize_paragraph_flow(t_raw)})
+        if col_right:
+            t_raw = '\n'.join(l['text'] for l in col_right)
+            ordered_groups.append({'page': page.number, 'x0': mid_x_page, 'y0': y_col_start, 'x1': width, 'y1': height, 'text': normalize_paragraph_flow(t_raw)})
 
     return ordered_groups
 

@@ -94,6 +94,62 @@ def download_pdf_file(url: str, dest_path: str, timeout: int = 30) -> bool:
 
 from services.crawlers import parse_html_exam, extract_pci_page_pdfs
 
+
+def _parse_q_numero(q: Dict[str, Any]) -> Optional[int]:
+    """Extrai o Número Canônico numérico do rótulo textual da questão, se houver."""
+    raw = str(q.get('numero_questao', '')).strip()
+    if raw.isdigit():
+        return int(raw)
+    m = re.match(r'^(\d+)', raw)
+    return int(m.group(1)) if m else None
+
+
+def enforce_question_numeric_integrity(questions, gabarito_dict):
+    """Ancora a integridade numérica da prova no índice da Cadeia de Encadeamento.
+
+    1. Ordena as questões pelo índice de cadeia (`question_index`, 0-based), a âncora
+       imutável de ordem documental; o rótulo `numero_questao` é apenas desempate.
+    2. Se os rótulos numéricos estiverem íntegros (únicos e estritamente
+       crescentes na ordem da cadeia), mantém — lacunas não corrompem o
+       pareamento do gabarito, que é feito por número.
+    3. Se houver duplicatas ou rótulos não numéricos, reatribui o Número Canônico
+       sequencialmente a partir do índice (1..N), preferindo a chave do gabarito
+       quando a contagem bate.
+    Retorna (questões ordenadas, renumbered: bool).
+    """
+    ordered = sorted(
+        questions,
+        key=lambda q: (
+            0 if isinstance(q.get('question_index'), int) else 1,
+            q.get('question_index') if isinstance(q.get('question_index'), int) else 0,
+            _parse_q_numero(q) or 0,
+        ),
+    )
+    for idx, q in enumerate(ordered):
+        q['question_index'] = idx
+
+    labels = [_parse_q_numero(q) for q in ordered]
+    n = len(ordered)
+    intact = (
+        all(v is not None for v in labels)
+        and len(set(labels)) == n
+        and all(labels[i] < labels[i + 1] for i in range(n - 1))
+    )
+    if intact:
+        return ordered, False
+
+    gab_keys = sorted(int(k) for k in (gabarito_dict or {}).keys() if str(k).strip().isdigit())
+    renumber_map = gab_keys if len(gab_keys) == n else list(range(1, n + 1))
+    for q, canon in zip(ordered, renumber_map):
+        q['numero_questao'] = str(canon)
+    print(
+        f"[Integrity] Numeração reatribuída a partir do índice de cadeia: "
+        f"rótulos anteriores={labels} -> 1..{n}",
+        flush=True,
+    )
+    return ordered, True
+
+
 def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
     """
     Worker completo de ingestão e processamento assíncrono com tolerância a falhas:
@@ -311,6 +367,15 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
         )
 
         # 5. Pareamento e Persistência no Banco de Dados
+        # Integridade numérica ANTES do merge: a Cadeia de Encadeamento é a âncora
+        # da ordem; rótulos inválidos/duplicados são reatribuídos aqui para que o
+        # cruzamento com o gabarito oficial ocorra sobre números já sanitizados.
+        extracted_questions, renumbered = enforce_question_numeric_integrity(
+            extracted_questions, gabarito_dict
+        )
+        if renumbered:
+            print(f"[Integrity] Exame {exam_id}: numeração reatribuída a partir do índice de cadeia.", flush=True)
+
         strict_match = bool(
             match_result.accepted
             and answer_source in {"attached_pdf", "embedded_pdf"}
@@ -371,18 +436,12 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
                     # Remove questões antigas se houver
                     session.query(Question).filter_by(exam_id=exam.id).delete()
 
-                    def _q_sort_key(q):
-                        raw = str(q.get('numero_questao', '')).strip()
-                        if raw.isdigit():
-                            return (0, int(raw))
-                        m = re.match(r'^(\d+)', raw)
-                        if m:
-                            return (0, int(m.group(1)))
-                        return (1, 99999)
+                    # Ordenação e integridade numérica ancoradas no índice da cadeia
+                    sorted_questions, renumbered = enforce_question_numeric_integrity(
+                        updated_questions, gabarito_dict
+                    )
 
-                    sorted_questions = sorted(updated_questions, key=_q_sort_key)
-
-                    # Insere novas questões ordenadas com sanitização completa
+                    # Insere novas questões na ordem canônica da cadeia, com sanitização completa
                     for idx, q_data in enumerate(sorted_questions, start=1):
                         raw_enunciado = q_data.get('enunciado') or f"Questão {idx}"
                         statement_clean = str(raw_enunciado).replace('\x00', '').strip()
@@ -418,6 +477,7 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
                             images_json = None
 
                         num_q = str(q_data.get('numero_questao') or idx).replace('\x00', '').strip()[:50]
+                        q_index = q_data.get('question_index') if isinstance(q_data.get('question_index'), int) else (idx - 1)
 
                         new_q = Question(
                             exam_id=exam.id,
@@ -427,6 +487,7 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
                             subject=subject_clean,
                             images=images_json,
                             numero_questao=num_q,
+                            question_index=q_index,
                             latex_support=int(q_data.get('latex_support', 0) or 0)
                         )
                         session.add(new_q)
