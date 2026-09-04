@@ -101,6 +101,7 @@ def list_folders(
             gabarito_coverage=exam.gabarito_coverage or 0.0,
             gabarito_summary=exam.gabarito_text,
             source_url=exam.source_url,
+            gabarito_url=exam.gabarito_url,
         )
 
         owns_folder = exam.folder is not None and exam.folder.user_id == current_user.id

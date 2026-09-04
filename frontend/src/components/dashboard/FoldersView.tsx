@@ -18,6 +18,7 @@ import { Folder } from '../../types/exam';
 import { useExam } from '../../context/ExamContext';
 import { useUI } from '../../context/UIContext';
 import { useExamStore } from '../../store/useExamStore';
+import { SourceModal, SourceModalData } from '../ui/SourceModal';
 
 interface FoldersViewProps {
   onStartExam?: () => void;
@@ -33,6 +34,8 @@ export const FoldersView: React.FC<FoldersViewProps> = ({ onStartExam }) => {
   const [query, setQuery] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('title');
   const [loadingExamId, setLoadingExamId] = useState<number | 'custom' | null>(null);
+  const [sourceModalData, setSourceModalData] = useState<SourceModalData | null>(null);
+  const [isSourceModalOpen, setIsSourceModalOpen] = useState(false);
   const { loadAndStartExam, generateCustomExam } = useExam();
   const { showToast, openDirectIngestModal } = useUI();
 
@@ -198,11 +201,24 @@ export const FoldersView: React.FC<FoldersViewProps> = ({ onStartExam }) => {
                       <span className={exam.has_official_answers ? 'status-success' : 'status-warning'}>
                         <CheckCircle2 aria-hidden="true" /> {exam.has_official_answers ? `Gabarito ${Math.round(exam.gabarito_coverage)}%` : 'Gabarito não confirmado'}
                       </span>
-                      {exam.source_url && <span className="status-neutral"><BookOpen aria-hidden="true" /> Fonte disponível</span>}
+                      <button
+                        type="button"
+                        className="status-neutral inline-flex items-center gap-1 cursor-pointer transition-colors hover:bg-[var(--surface-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus)]"
+                        onClick={() => {
+                          setSourceModalData({
+                            title: exam.title,
+                            source_url: exam.source_url,
+                            gabarito_url: exam.gabarito_url,
+                          });
+                          setIsSourceModalOpen(true);
+                        }}
+                      >
+                        <BookOpen aria-hidden="true" className="h-3.5 w-3.5" /> Fonte
+                      </button>
                     </div>
                   </div>
                   <button className="button-primary shrink-0" onClick={() => handleLaunchExam(exam.id)} disabled={loadingExamId === exam.id}>
-                    {loadingExamId === exam.id ? <Loader2 aria-hidden="true" /> : <Play aria-hidden="true" />} Iniciar prova
+                    {loadingExamId === exam.id ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Play aria-hidden="true" />} Iniciar prova
                   </button>
                 </article>
               ))}
@@ -210,6 +226,12 @@ export const FoldersView: React.FC<FoldersViewProps> = ({ onStartExam }) => {
           </section>
         ))}
       </div>
+
+      <SourceModal
+        isOpen={isSourceModalOpen}
+        onClose={() => setIsSourceModalOpen(false)}
+        data={sourceModalData}
+      />
     </div>
   );
 };

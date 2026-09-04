@@ -47,7 +47,7 @@ export const ErrorNotebookView: React.FC<ErrorNotebookViewProps> = ({ onStartExa
       <section className="flex flex-col gap-5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 md:flex-row md:items-center md:justify-between">
         <div className="max-w-2xl"><p className="eyebrow">Revisão direcionada</p><h2 className="section-title mt-1">Caderno de Erros</h2><p className="mt-2 text-sm leading-relaxed text-[var(--text-muted)]">Retome as questões que você errou e transforme cada dificuldade em uma sessão objetiva.</p></div>
         <button className="button-primary shrink-0" disabled={total === 0 || Boolean(launching)} onClick={() => void launch()}>
-          {launching === 'all' ? <Loader2 aria-hidden="true" /> : <RotateCcw aria-hidden="true" />} Revisar todos ({total})
+          {launching === 'all' ? <Loader2 className="animate-spin" aria-hidden="true" /> : <RotateCcw aria-hidden="true" />} Revisar todos ({total})
         </button>
       </section>
 
@@ -59,7 +59,7 @@ export const ErrorNotebookView: React.FC<ErrorNotebookViewProps> = ({ onStartExa
             <article key={item.subject} className="flex flex-col gap-4 border-b border-[var(--border)] p-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 text-[var(--warning)]" aria-hidden="true" /><div><h3 className="font-semibold">{item.subject}</h3><p className="mt-1 text-sm text-[var(--text-muted)]">{item.count} {item.count === 1 ? 'erro registrado' : 'erros registrados'}</p></div></div>
               <button className="button-secondary shrink-0" disabled={Boolean(launching)} onClick={() => void launch(item.subject)}>
-                {launching === item.subject ? <Loader2 aria-hidden="true" /> : <Play aria-hidden="true" />} Revisar disciplina
+                {launching === item.subject ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Play aria-hidden="true" />} Revisar disciplina
               </button>
             </article>
           ))}

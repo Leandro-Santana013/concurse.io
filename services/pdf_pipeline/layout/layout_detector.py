@@ -29,7 +29,7 @@ CONTEXT_TEXT_HEADER_REGEX = re.compile(
     r'[Tt]exto\s+(?:I|II|III|1|2|3)?\s*(?:\(?[^)]*\))?\s*[-–—:]?\s*(?:para\s+(?:as\s+)?quest[oõa\ufffd\?]?es|base\s+para\s+as\s+quest[oõa\ufffd\?]?es)'
     r')'
     r'[^\.\:]{0,100}?'
-    r'quest[oõa\ufffd\?]?es?\s*(?:de\s+n[úu]meros?\s+|de\s+)?((?:0*\d{1,3}\s*(?:,|e|a|ao?|at[eé\ufffd\?]?|-)\s*)+0*\d{1,3})'
+    r'quest[oõa\ufffd\?]?es?\s*(?:de\s+(?:n[úu]meros?|n[º°\.\s]*\s*|num\.?)\s*|de\s+)?((?:0*\d{1,3}\s*(?:,|e|a|ao?|at[eé\ufffd\?]?|-)\s*)+0*\d{1,3})'
     r'[\.\:\–\—]?'
     r')',
     re.IGNORECASE
@@ -314,13 +314,17 @@ def extract_tables_from_page(page: fitz.Page) -> List[Dict[str, Any]]:
             ]):
                 continue
 
-            # Filtra se for falso positivo de alternativas de questão (A, B, C, D, E)
+            # Filtra se for falso positivo de alternativas de questão (A, B, C, D, E) ou comandos de questão
             opt_count = 0
+            has_question_keywords = False
             for r in valid_rows:
                 for c in r:
-                    if re.match(r'^\s*\(?[A-Ea-e]\)[\.\s]*', c):
+                    if re.search(r'\b\(?[a-eA-E]\)[\.\s]', c) or re.search(r'^\s*\(?[a-eA-E]\)\s*', c):
                         opt_count += 1
-            if opt_count >= 2:
+                    c_lower = c.lower()
+                    if any(kw in c_lower for kw in ['exceto', 'assinale', 'incorret', 'corret', 'alternativa', 'todas abaixo', 'podemos afirmar', 'é correto', 'é incorreto']):
+                        has_question_keywords = True
+            if opt_count >= 1 or has_question_keywords:
                 continue
 
             # Filtra se a primeira linha tiver palavras soltas de continuação sintática
