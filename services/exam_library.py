@@ -217,6 +217,13 @@ def claim_exam_for_user(
                 not created_exam and exam.user_id == user_id
             )
 
+            incoming_gabarito_url = str(gabarito_url or "").strip()
+            stored_gabarito_url = str(exam.gabarito_url or "").strip()
+            gabarito_changed = bool(
+                incoming_gabarito_url
+                and incoming_gabarito_url != stored_gabarito_url
+            )
+
             if library_entry is None:
                 db.add(UserExam(
                     user_id=user_id,
@@ -226,7 +233,12 @@ def claim_exam_for_user(
 
             ready = is_exam_ready(db, exam)
             processing = is_exam_processing(exam)
-            should_process = created_exam or force_reprocess or (not ready and not processing)
+            should_process = (
+                created_exam
+                or force_reprocess
+                or gabarito_changed
+                or (not ready and not processing)
+            )
 
             if should_process:
                 exam.status = "Processando"
@@ -239,8 +251,8 @@ def claim_exam_for_user(
                 exam.error_type = None
                 if created_exam or not exam.title or exam.title.startswith("Nova Prova"):
                     exam.title = (title or "Nova Prova de Concurso")[:300]
-                if gabarito_url and (created_exam or not exam.gabarito_url):
-                    exam.gabarito_url = gabarito_url[:500]
+                if incoming_gabarito_url and (created_exam or gabarito_changed or should_process):
+                    exam.gabarito_url = incoming_gabarito_url[:500]
 
             db.commit()
             db.refresh(exam)

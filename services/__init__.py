@@ -37,6 +37,7 @@ from .gabarito import (
     format_gabarito_summary,
     extract_gabarito_from_doc,
     extract_exam_code_ranges_from_pdf,
+    extract_answer_key_blocks,
 )
 from .diagnostics import (
     inspect_pdf_document,
@@ -78,6 +79,7 @@ __all__ = [
     "format_gabarito_summary",
     "extract_gabarito_from_doc",
     "extract_exam_code_ranges_from_pdf",
+    "extract_answer_key_blocks",
     "inspect_pdf_document",
     "parse_exam_document",
     "detect_layout_and_ordered_blocks",

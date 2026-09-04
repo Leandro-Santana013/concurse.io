@@ -5,6 +5,7 @@ import json
 import asyncio
 import threading
 import requests
+from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, Any, Tuple
 
@@ -24,12 +25,20 @@ from services.gabarito import (
     extract_exam_code_ranges_from_pdf,
     explicit_answer_key_result,
     format_gabarito_summary,
+    has_complete_official_answer_key,
     match_gabarito_from_pdf,
     merge_exam_with_gabarito,
     parse_gabarito_from_text,
 )
 from services.search import standardize_card_title, interpret_search_query_deterministic
 from services.exam_library import register_exam_source_alias
+from services.exam_files import (
+    canonical_answer_key_pdf_path,
+    canonical_exam_pdf_path,
+    find_local_answer_key_pdf,
+    find_local_exam_pdf,
+    is_pdf_file,
+)
 
 def set_exam_progress(exam_id: int, status_msg: str, pct: int, error_type: Optional[str] = None):
     """Atualiza o progresso do exame no banco de dados de forma thread-safe com retentativas e garantias de integridade."""
@@ -175,25 +184,17 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
         set_exam_progress(exam_id, "Iniciando download da prova...", 10)
 
         os.makedirs('pdfs', exist_ok=True)
-        ts = int(time.time())
-        pdf_path = os.path.join('pdfs', f"{exam_id}_{ts}.pdf")
+        pdf_path = canonical_exam_pdf_path(exam_id)
 
         # 1. Resolução Determinística e Download do Arquivo Exato
         is_html_source = False
         # 1. Verifica se já existe um PDF válido localmente na pasta pdfs/
-        existing_local = [f for f in os.listdir('pdfs') if f.startswith(f"{exam_id}_") and not f.startswith(f"{exam_id}_gab_") and f.endswith('.pdf')]
-        if existing_local:
-            local_candidate = os.path.join('pdfs', existing_local[0])
-            if os.path.exists(local_candidate) and os.path.getsize(local_candidate) > 5000:
-                try:
-                    with open(local_candidate, 'rb') as f_chk:
-                        if f_chk.read(4) == b'%PDF':
-                            pdf_path = local_candidate
-                except Exception:
-                    pass
+        local_candidate = find_local_exam_pdf(exam_id)
+        if local_candidate:
+            pdf_path = local_candidate
 
         # 2. Se a URL for página do PCI Concursos, extrai diretamente os PDFs oficiais daquela página
-        if not os.path.exists(pdf_path) and source_url and ('pciconcursos.com.br' in source_url) and not source_url.lower().endswith('.pdf') and ('arquivo.pciconcursos.com.br' not in source_url):
+        if not local_candidate and source_url and ('pciconcursos.com.br' in source_url) and not source_url.lower().endswith('.pdf') and ('arquivo.pciconcursos.com.br' not in source_url):
             set_exam_progress(exam_id, "Obtendo PDF oficial direto do PCI Concursos...", 15)
             pci_prova, pci_gab, pci_title = extract_pci_page_pdfs(source_url)
             if pci_prova:
@@ -218,7 +219,7 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
                     source_session.commit()
                     register_exam_source_alias(source_session, exam_id, source_url)
 
-        if not os.path.exists(pdf_path) and source_url and source_url.startswith('http'):
+        if not local_candidate and source_url and source_url.startswith('http'):
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf,*/*;q=0.8',
@@ -230,6 +231,7 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
                     if resp.content[:4] == b'%PDF':
                         with open(pdf_path, 'wb') as f:
                             f.write(resp.content)
+                        local_candidate = pdf_path
                     elif (b'<html' in resp.content[:300].lower() or b'<!doctype' in resp.content[:300].lower()) and (b'verificac' not in resp.content[:1000].lower() and b'cloudflare' not in resp.content[:1000].lower()):
                         # É uma página HTML real com questões/simulado
                         is_html_source = True
@@ -237,7 +239,7 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
             except Exception as e:
                 print(f"[Download Error] {e}")
 
-        elif source_url and os.path.exists(source_url):
+        elif not local_candidate and source_url and os.path.exists(source_url):
             pdf_path = source_url
 
         extracted_questions = []
@@ -251,7 +253,7 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
             extracted_questions = parse_html_exam(html_data, source_url)
             answer_source = "embedded_html"
         else:
-            if not os.path.exists(pdf_path):
+            if not is_pdf_file(Path(pdf_path)):
                 set_exam_progress(exam_id, "Não foi possível obter o arquivo da prova.", -1, "DOWNLOAD_FAILED")
                 return
 
@@ -301,40 +303,28 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
                     source_relation="manual",
                 )
             )
-        elif gabarito_url:
-            gab_pdf_path = os.path.join('pdfs', f"{exam_id}_gab_{ts}.pdf")
-            if gabarito_url.startswith('http'):
-                if download_pdf_file(gabarito_url, gab_pdf_path):
-                    candidate_match = match_gabarito_from_pdf(
-                        gab_pdf_path,
-                        exam_profile,
-                        source_relation="paired",
-                        document_hint=gabarito_url,
-                    )
-                    answer_key_attempts.append(candidate_match)
-                    if candidate_match.accepted:
-                        gabarito_dict = candidate_match.answers
-                        answer_source = "attached_pdf"
-                else:
-                    # Tenta reaproveitar PDF de gabarito local existente
-                    existing_gab = [f for f in os.listdir('pdfs') if f.startswith(f"{exam_id}_gab_") and f.endswith('.pdf')]
-                    if existing_gab:
-                        candidate_match = match_gabarito_from_pdf(
-                            os.path.join('pdfs', existing_gab[0]),
-                            exam_profile,
-                            source_relation="paired",
-                            document_hint=gabarito_url,
-                        )
-                        answer_key_attempts.append(candidate_match)
-                        if candidate_match.accepted:
-                            gabarito_dict = candidate_match.answers
-                            answer_source = "attached_pdf"
-            elif os.path.exists(gabarito_url):
+        elif gabarito_url or find_local_answer_key_pdf(exam_id):
+            # O gabarito extraído localmente pertence ao exame pelo prefixo do
+            # arquivo. Ele tem precedência sobre a rede e continua disponível
+            # mesmo quando o registro perdeu a URL original.
+            gab_pdf_path = None
+            if gabarito_url and gabarito_url.startswith('http'):
+                # Um URL informado explicitamente é a fonte de verdade. Isso
+                # evita reutilizar um gabarito local antigo com o mesmo ID.
+                downloaded_path = canonical_answer_key_pdf_path(exam_id)
+                if download_pdf_file(gabarito_url, downloaded_path):
+                    gab_pdf_path = downloaded_path
+            elif gabarito_url and os.path.exists(gabarito_url):
+                gab_pdf_path = gabarito_url
+            if not gab_pdf_path:
+                gab_pdf_path = find_local_answer_key_pdf(exam_id)
+
+            if gab_pdf_path:
                 candidate_match = match_gabarito_from_pdf(
-                    gabarito_url,
+                    gab_pdf_path,
                     exam_profile,
                     source_relation="paired",
-                    document_hint=gabarito_url,
+                    document_hint=gabarito_url or gab_pdf_path,
                 )
                 answer_key_attempts.append(candidate_match)
                 if candidate_match.accepted:
@@ -398,6 +388,34 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
             updated_questions, stats = merge_exam_with_gabarito(extracted_questions, {})
 
         set_exam_progress(exam_id, "Salvando prova e questões no banco de dados...", 88)
+
+        if not has_complete_official_answer_key(match_result, stats, answer_source):
+            # Nunca transforme respostas ausentes/parciais no valor padrão A
+            # nem marque o exame como aprovado.
+            with Session() as session:
+                exam = session.query(Exam).filter_by(id=exam_id).first()
+                if exam:
+                    exam.has_official_answers = 0
+                    exam.answer_key_source = "none"
+                    exam.gabarito_coverage = stats.get("coverage_pct", 0.0)
+                    exam.gabarito_text = format_gabarito_summary(gabarito_dict)
+                    exam.status = "Erro"
+                    exam.progress = -1
+                    exam.progress_message = "Gabarito oficial não foi validado; prova não aprovada."
+                    exam.error_type = "ANSWER_KEY_NOT_FOUND"
+                    session.add(AnswerKeyMatchAudit(
+                        exam_id=exam.id,
+                        accepted=0,
+                        status=match_result.status,
+                        confidence=match_result.confidence,
+                        answer_source="none",
+                        method=match_result.method,
+                        candidate_page=match_result.candidate_page,
+                        decision_json=match_result.to_audit_json(),
+                        created_at=datetime.now().isoformat(),
+                    ))
+                    session.commit()
+            return
 
         db_save_success = False
         max_save_retries = 5

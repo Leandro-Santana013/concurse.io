@@ -95,6 +95,14 @@ def extract_gabarito_from_doc(doc):
     if total_pages == 0:
         return gabarito_map
 
+    # Sem um caderno associado nÃ£o hÃ¡ como escolher entre blocos de cargos
+    # diferentes. A extraÃ§Ã£o embutida deve falhar fechada nesse caso.
+    structured_blocks = extract_answer_key_blocks(doc)
+    if structured_blocks:
+        if len(structured_blocks) == 1:
+            return dict(structured_blocks[0]["gabarito"])
+        return gabarito_map
+
     pages_to_scan = list(range(total_pages - 1, -1, -1))
 
     for p_idx in pages_to_scan:
@@ -271,31 +279,117 @@ def parse_fgv_vertical_gabarito(text: str) -> Dict[int, str]:
             
     return gabarito
 
+
+_ANSWER_KEY_BLOCK_HEADER_REGEX = re.compile(
+    r"^(?P<cargo>.+?)\s+(?:[-\u2013\u2014\ufffd])\s*"
+    r"PROVA\s+TIPO\s*(?P<tipo>[0-9]{1,2}|[A-E])\b",
+    re.IGNORECASE,
+)
+
+
+def _cargo_identity_tokens(value: str) -> List[str]:
+    """Retorna tokens de identidade, tolerando siglas e acentos danificados."""
+    normalized = unicodedata.normalize("NFKD", str(value or ""))
+    normalized = "".join(char for char in normalized if not unicodedata.combining(char))
+    normalized = normalized.lower().replace("\ufffd", " ")
+    tokens = re.findall(r"[a-z0-9]{3,}", normalized)
+    stop_words = {
+        "agente", "analista", "assistente", "auxiliar", "cargo", "com", "concurso",
+        "edital", "fundamental", "geral", "municipal", "municipio", "para", "pela",
+        "pelo", "pref", "prefeitura", "prova", "sobre", "superior", "tecnico", "tipo",
+    }
+    tokens = [token for token in tokens if token not in stop_words]
+
+    # A banca frequentemente publica a sigla do cargo no gabarito e o nome
+    # expandido no caderno. Esta é uma expansão semântica, não um match por
+    # substring: ela só participa depois que o bloco já foi identificado.
+    aliases = {
+        "ati": ("tecnologia", "informacao"),
+    }
+    expanded = list(dict.fromkeys(tokens))
+    for token in tokens:
+        expanded.extend(alias for alias in aliases.get(token, ()) if alias not in expanded)
+    return expanded
+
+
+def _cargo_match_score(exam_title: str, candidate_cargo: str) -> float:
+    expected = _cargo_identity_tokens(exam_title)
+    actual = _cargo_identity_tokens(candidate_cargo)
+    if not expected or not actual:
+        return 0.0
+
+    matched = 0
+    for expected_token in expected:
+        if any(
+            expected_token == actual_token
+            or (
+                len(expected_token) >= 6
+                and len(actual_token) >= 6
+                and (expected_token.startswith(actual_token) or actual_token.startswith(expected_token))
+            )
+            for actual_token in actual
+        ):
+            matched += 1
+    coverage = matched / len(set(expected))
+    if coverage == 1.0:
+        return 100.0
+    if coverage >= 0.75:
+        return coverage * 100.0
+    return 0.0
+
+
+def extract_answer_key_blocks(gab_doc) -> List[Dict[str, Any]]:
+    """Extrai blocos completos delimitados por cargo e ``PROVA TIPO``.
+
+    Alguns editais consolidam dezenas de cargos no mesmo PDF. Nesse formato a
+    página contém dois ou mais blocos independentes, cada um com suas próprias
+    questões e respostas. Retornar o bloco, em vez de uma linha matricial
+    isolada ou da página inteira, preserva a identidade que o matcher precisa.
+    """
+    results: List[Dict[str, Any]] = []
+    for page_number, page in enumerate(gab_doc, start=1):
+        lines = [line.strip() for line in page.get_text().splitlines()]
+        headers: List[Tuple[int, re.Match[str]]] = []
+        for index, line in enumerate(lines):
+            match = _ANSWER_KEY_BLOCK_HEADER_REGEX.match(line)
+            if match:
+                headers.append((index, match))
+        if not headers:
+            continue
+
+        for block_index, (header_index, header) in enumerate(headers, start=1):
+            end_index = headers[block_index][0] if block_index < len(headers) else len(lines)
+            block_lines = lines[header_index:end_index]
+            block_text = "\n".join(block_lines)
+            answers = parse_fgv_vertical_gabarito(block_text)
+            if not answers:
+                answers = parse_gabarito_from_text(block_text)
+            if len(answers) < 5:
+                continue
+            results.append(
+                {
+                    "page": page_number,
+                    "block_index": block_index,
+                    "cargo": header.group("cargo").strip(" -\u2013\u2014\ufffd"),
+                    "tipo": header.group("tipo").lstrip("0") or "0",
+                    "total_q": len(answers),
+                    "gabarito": answers,
+                    "text": block_text,
+                }
+            )
+    return results
+
 def _compute_cargo_match_score(exam_title: str, candidate_cargo: str, target_tipo: Optional[str], candidate_tipo: Optional[str]) -> float:
     if not candidate_cargo:
         return 0.0
-    score = 0.0
-    t_clean = re.sub(r'\[\d+\]', '', exam_title).lower()
-    c_clean = candidate_cargo.lower()
-    
-    stop_words = {'para', 'com', 'pelo', 'pela', 'sobre', 'geral', 'tarde', 'manha', 'tipo', 'prova', 'edital', 'concurso', 'prefeitura', 'pref', 'banca', 'ibam', 'fgv', 'vunesp', 'cebraspe', 'fcc'}
-    keywords = [w for w in re.findall(r'[a-z\u00C0-\u00FC]{4,}', t_clean) if w not in stop_words]
-    
-    matched_kws = [kw for kw in keywords if kw in c_clean]
-    if keywords:
-        score += (len(matched_kws) / len(keywords)) * 100.0
-        
-    nums_in_title = re.findall(r'\b\d{4}\b', t_clean)
-    nums_in_cand = re.findall(r'\b\d{4}\b', c_clean)
-    if any(n in nums_in_cand for n in nums_in_title):
-        score += 50.0
-        
+    score = _cargo_match_score(exam_title, candidate_cargo)
     if target_tipo and candidate_tipo:
         t_target_clean = re.sub(r'\D', '', target_tipo)
         t_cand_clean = re.sub(r'\D', '', candidate_tipo)
         if t_target_clean and t_cand_clean and t_target_clean == t_cand_clean:
             score += 30.0
-            
+        elif t_target_clean and t_cand_clean:
+            return 0.0
     return score
 
 def extract_all_matrix_gabaritos(gab_doc) -> List[Dict[str, Any]]:
@@ -478,6 +572,30 @@ def parse_gabarito_from_pdf(
             if has_indexed_code_pages:
                 return {}
 
+        answer_key_blocks = extract_answer_key_blocks(doc)
+        if answer_key_blocks:
+            target_tipo = tipo or "1"
+            if cargo_or_title:
+                scored_blocks = [
+                    (
+                        _compute_cargo_match_score(
+                            cargo_or_title,
+                            block["cargo"],
+                            target_tipo,
+                            block["tipo"],
+                        ),
+                        block,
+                    )
+                    for block in answer_key_blocks
+                ]
+                scored_blocks.sort(key=lambda item: item[0], reverse=True)
+                if scored_blocks and scored_blocks[0][0] > 0:
+                    return scored_blocks[0][1]["gabarito"]
+                return {}
+            if len(answer_key_blocks) == 1:
+                return answer_key_blocks[0]["gabarito"]
+            return {}
+
         # 1. Extração de Gabaritos Matriciais Multi-Cargo (Padrão IBAM / VUNESP / Quadrix)
         matrix_gabs = extract_all_matrix_gabaritos(doc)
         if matrix_gabs:
@@ -495,26 +613,12 @@ def parse_gabarito_from_pdf(
 
         # 2. Se houver cargo/título de prova especificado, procura pela página exata do cargo (Padrão FGV)
         if cargo_or_title:
-            clean_kw = re.sub(r'\[\d+\]', '', cargo_or_title).strip()
-            keywords = [w.lower() for w in clean_kw.split() if len(w) >= 4 and w.lower() not in ['para', 'com', 'pelo', 'sobre', 'geral', 'tarde', 'manha', 'branca']]
-            
             best_page_text = None
             for page in doc:
                 p_text = page.get_text()
-                p_lower = p_text.lower()
-                if any(kw in p_lower for kw in keywords):
-                    target_tipo = tipo or "1"
-                    if f"tipo  {target_tipo}" in p_lower or f"tipo {target_tipo}" in p_lower:
-                        m_start = re.search(rf'TIPO\s*{target_tipo}\b', p_text, re.I)
-                        if m_start:
-                            sub_text = p_text[m_start.start():]
-                            next_tipo = str(int(target_tipo) + 1) if target_tipo.isdigit() else "2"
-                            m_next = re.search(rf'TIPO\s*{next_tipo}\b', sub_text, re.I)
-                            if m_next:
-                                sub_text = sub_text[:m_next.start()]
-                            best_page_text = sub_text
-                            break
+                if _cargo_match_score(cargo_or_title, p_text) >= 100.0:
                     best_page_text = p_text
+                    break
             
             if best_page_text:
                 gab_cargo = parse_fgv_vertical_gabarito(best_page_text)

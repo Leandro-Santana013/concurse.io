@@ -20,7 +20,9 @@ import fitz
 from .gabarito_service import (
     GABARITO_HEADER_REGEX,
     _code_range_matches,
+    _cargo_identity_tokens,
     extract_all_matrix_gabaritos,
+    extract_answer_key_blocks,
     extract_code_ranges_from_text,
     extract_exam_code_ranges_from_pdf,
     parse_fgv_vertical_gabarito,
@@ -155,6 +157,7 @@ class AnswerKeyCandidate:
     metadata: IdentityMetadata
     has_header: bool
     cargo_text: str = ""
+    block_index: Optional[int] = None
     raw_text: str = field(default="", repr=False)
 
     def snapshot(self) -> Dict[str, Any]:
@@ -165,6 +168,7 @@ class AnswerKeyCandidate:
             "question_numbers": sorted(self.answers),
             "has_header": self.has_header,
             "cargo_text": self.cargo_text[:300],
+            "block_index": self.block_index,
             "metadata": asdict(self.metadata),
         }
 
@@ -328,6 +332,31 @@ def _title_identity(title: str) -> Tuple[List[str], List[str]]:
     return cargo_tokens, locality_tokens
 
 
+def _exam_header_cargo(text: str) -> str:
+    """Obtém o cargo impresso no cabeçalho do caderno, quando disponível."""
+    lines = [_normalize_text(line) for line in str(text or "").splitlines()]
+    header_pattern = re.compile(
+        r"\bn.{0,2}vel\s+(?:fundamental|medio|superior)\s+"
+        r"tipo\s*(?:[0-9]{1,2}|[a-e])\b",
+        re.IGNORECASE,
+    )
+
+    for index, line in enumerate(lines):
+        match = header_pattern.search(line)
+        if not match:
+            continue
+        cargo = line[: match.start()].strip(" -:;|\t")
+        if not cargo and index > 0:
+            for previous_line in reversed(lines[:index]):
+                previous_line = previous_line.strip(" -:;|\t")
+                if previous_line:
+                    cargo = previous_line
+                    break
+        if cargo and len(_normalized_tokens(cargo)) >= 1:
+            return cargo
+    return ""
+
+
 def _question_number(question: Any) -> Optional[int]:
     if isinstance(question, dict):
         raw = question.get("numero_questao")
@@ -425,6 +454,11 @@ def build_exam_answer_key_profile(
     )
     subject_counts = dict(Counter(_question_subject(question) for question in questions))
     cargo_tokens, locality_tokens = _title_identity(title)
+    header_cargo = _exam_header_cargo(header_text)
+    if header_cargo:
+        header_cargo_tokens, _ = _title_identity(header_cargo)
+        if header_cargo_tokens:
+            cargo_tokens = header_cargo_tokens
     return ExamAnswerKeyProfile(
         title=title,
         metadata=metadata,
@@ -464,27 +498,55 @@ def _extract_candidates(
     page_texts = [page.get_text() for page in doc]
     matrix_pages = set()
 
-    for matrix in extract_all_matrix_gabaritos(doc):
-        page_number = int(matrix.get("page") or 0) or None
-        if page_number is not None:
-            matrix_pages.add(page_number)
-        page_text = page_texts[page_number - 1] if page_number else ""
+    # Em PDFs agregados, o cabeÃ§alho cargo/tipo delimita o bloco completo.
+    # Essas candidaturas tÃªm precedÃªncia sobre linhas matriciais parciais.
+    structured_blocks = extract_answer_key_blocks(doc)
+    structured_pages = {int(block["page"]) for block in structured_blocks}
+    for block in structured_blocks:
+        page_number = int(block["page"])
+        block_text = str(block.get("text") or "")
         metadata = _extract_identity_metadata(
-            f"{document_hint}\n{page_text}\n{matrix.get('cargo', '')}\nTIPO {matrix.get('tipo', '')}"
+            f"{document_hint}\n{block_text}"
         )
-        candidate = AnswerKeyCandidate(
-            answers={int(number): str(answer).upper() for number, answer in matrix["gabarito"].items()},
-            page=page_number,
-            method="matrix_row",
-            metadata=metadata,
-            has_header=True,
-            cargo_text=str(matrix.get("cargo") or ""),
-            raw_text=page_text,
+        candidates.append(
+            AnswerKeyCandidate(
+                answers={
+                    int(number): str(answer).upper()
+                    for number, answer in block["gabarito"].items()
+                },
+                page=page_number,
+                method="structured_block",
+                metadata=metadata,
+                has_header=True,
+                cargo_text=str(block.get("cargo") or ""),
+                block_index=int(block.get("block_index") or 0) or None,
+                raw_text=block_text,
+            )
         )
-        candidates.append(candidate)
+
+    if not structured_blocks:
+        for matrix in extract_all_matrix_gabaritos(doc):
+            page_number = int(matrix.get("page") or 0) or None
+            if page_number is not None:
+                matrix_pages.add(page_number)
+            page_text = page_texts[page_number - 1] if page_number else ""
+            metadata = _extract_identity_metadata(
+                f"{document_hint}\n{page_text}\n{matrix.get('cargo', '')}\nTIPO {matrix.get('tipo', '')}"
+            )
+            candidates.append(
+                AnswerKeyCandidate(
+                    answers={int(number): str(answer).upper() for number, answer in matrix["gabarito"].items()},
+                    page=page_number,
+                    method="matrix_row",
+                    metadata=metadata,
+                    has_header=True,
+                    cargo_text=str(matrix.get("cargo") or ""),
+                    raw_text=page_text,
+                )
+            )
 
     for page_index, page_text in enumerate(page_texts, start=1):
-        if page_index in matrix_pages:
+        if page_index in matrix_pages or page_index in structured_pages:
             continue
         metadata = _extract_identity_metadata(f"{document_hint}\n{page_text}")
         has_header = bool(
@@ -511,7 +573,13 @@ def _extract_candidates(
     deduplicated: List[AnswerKeyCandidate] = []
     seen = set()
     for candidate in candidates:
-        key = (candidate.page, tuple(sorted(candidate.answers.items())))
+        key = (
+            candidate.page,
+            candidate.block_index,
+            candidate.method,
+            candidate.cargo_text,
+            tuple(sorted(candidate.answers.items())),
+        )
         if key in seen:
             continue
         seen.add(key)
@@ -539,6 +607,29 @@ def _token_coverage(expected: Sequence[str], candidate_text: str) -> float:
         return 0.0
     candidate_tokens = set(_normalized_tokens(candidate_text, remove_generic=False))
     return len(set(expected).intersection(candidate_tokens)) / len(set(expected))
+
+
+def _cargo_token_coverage(expected: Sequence[str], candidate_text: str) -> float:
+    """Compara cargo expandindo siglas e tolerando acento truncado no PDF."""
+    if not expected:
+        return 0.0
+    candidate_tokens = set(_cargo_identity_tokens(candidate_text))
+    matched = 0
+    for expected_token in set(expected):
+        if any(
+            expected_token == candidate_token
+            or (
+                len(expected_token) >= 6
+                and len(candidate_token) >= 6
+                and (
+                    expected_token.startswith(candidate_token)
+                    or candidate_token.startswith(expected_token)
+                )
+            )
+            for candidate_token in candidate_tokens
+        ):
+            matched += 1
+    return matched / len(set(expected))
 
 
 def _candidate_subject_counts(
@@ -679,7 +770,7 @@ def _score_candidate(
             reasons.append("option_alphabet_compatible")
 
     cargo_source = candidate.cargo_text or candidate.raw_text
-    cargo_coverage = _token_coverage(profile.cargo_tokens, cargo_source)
+    cargo_coverage = _cargo_token_coverage(profile.cargo_tokens, cargo_source)
     if profile.cargo_tokens:
         if cargo_coverage == 1.0:
             score += 60
@@ -930,4 +1021,19 @@ def explicit_answer_key_result(
         reasons=["explicit_user_or_source_answer_key"] if normalized_answers else [],
         conflicts=[] if normalized_answers else ["no_answers"],
         profile=profile,
+    )
+
+
+def has_complete_official_answer_key(
+    match_result: AnswerKeyMatchResult,
+    stats: Dict[str, Any],
+    answer_source: str,
+) -> bool:
+    """Indica se o resultado pode ser persistido como gabarito oficial."""
+    coverage = float(stats.get("coverage_pct") or 0.0)
+    return bool(
+        match_result.accepted
+        and answer_source in {"attached_pdf", "embedded_pdf", "manual_text"}
+        and stats.get("has_official_answers")
+        and coverage >= 99.99
     )

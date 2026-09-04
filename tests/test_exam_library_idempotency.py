@@ -154,7 +154,6 @@ def test_ready_exam_is_hidden_for_owner_and_reused_for_another_user(library_api)
     reused = client.post("/api/v1/exams/ingest", json={
         "url": source_url,
         "title": "Título enviado novamente",
-        "gabarito_url": "https://example.test/outro-gabarito.pdf",
     })
     assert reused.status_code == 200
     assert reused.json()["exam_id"] == exam_id
@@ -184,6 +183,27 @@ def test_ready_exam_is_hidden_for_owner_and_reused_for_another_user(library_api)
 
     active_user["id"] = 1
     assert client.get("/api/v1/stats/overview").json()["total_questions"] == 0
+
+
+def test_new_answer_key_url_reprocesses_existing_exam(library_api):
+    client, session_factory, active_user, dispatched_exam_ids = library_api
+    source_url = "https://example.test/provas/dataprev-ati-contabilidade.pdf"
+    exam_id = _seed_ready_exam(session_factory, source_url)
+    active_user["id"] = 2
+
+    response = client.post("/api/v1/exams/ingest", json={
+        "url": source_url,
+        "title": "ATI - Contabilidade",
+        "gabarito_url": "https://example.test/provas/dataprev-ati-contabilidade-gabarito.pdf",
+    })
+
+    assert response.status_code == 200
+    assert response.json()["exam_id"] == exam_id
+    assert dispatched_exam_ids == [exam_id]
+    with session_factory() as db:
+        refreshed = db.get(Exam, exam_id)
+        assert refreshed.gabarito_url == "https://example.test/provas/dataprev-ati-contabilidade-gabarito.pdf"
+        assert refreshed.status == "Processando"
 
 
 def test_claim_processed_exam_only_creates_user_link(library_api):

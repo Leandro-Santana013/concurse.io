@@ -7,7 +7,6 @@ import os
 import re
 import sys
 import json
-import glob
 from datetime import datetime
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -26,8 +25,14 @@ from services.gabarito import (
     format_gabarito_summary,
     match_gabarito_from_pdf,
     merge_exam_with_gabarito,
-    parse_gabarito_from_text,
 )
+from services.exam_files import (
+    canonical_answer_key_pdf_path,
+    canonical_exam_pdf_path,
+    find_local_answer_key_pdf,
+    find_local_exam_pdf,
+)
+from app_core.async_worker import download_pdf_file
 
 def reprocess_all_exams():
     print("=================================================================")
@@ -54,21 +59,16 @@ def reprocess_all_exams():
             answer_key_source = exam.answer_key_source
 
         print(f"--- Processando Exame ID {exam_id}: '{title}' ---")
-        pdf_path = None
-        if source_url and os.path.exists(source_url):
+        pdf_path = find_local_exam_pdf(exam_id)
+        if not pdf_path and source_url and os.path.exists(source_url):
             pdf_path = source_url
-        else:
-            matching = [f for f in glob.glob(f"pdfs/{exam_id}_*.pdf") if "_gab_" not in f]
-            if matching:
-                pdf_path = matching[0]
 
         # Se não achou localmente, tenta baixar da source_url
         if not pdf_path or not os.path.exists(pdf_path):
             if source_url and source_url.startswith('http'):
                 print(f"   Baixando PDF da URL: {source_url}...")
                 os.makedirs('pdfs', exist_ok=True)
-                dest_file = f"pdfs/{exam_id}_reproc.pdf"
-                from app_core.async_worker import download_pdf_file
+                dest_file = canonical_exam_pdf_path(exam_id)
                 if download_pdf_file(source_url, dest_file):
                     pdf_path = dest_file
 
@@ -106,24 +106,23 @@ def reprocess_all_exams():
             answer_key_attempts = []
             answer_source = answer_key_source or "none"
 
-            gab_matching = glob.glob(f"pdfs/{exam_id}_gab_*.pdf")
-            if gab_matching and os.path.exists(gab_matching[0]):
+            gab_path = None
+            if gabarito_url and gabarito_url.startswith('http'):
+                # O URL fornecido pelo usuário deve substituir um arquivo
+                # local antigo do mesmo exame quando o lote for reprocessado.
+                downloaded_path = canonical_answer_key_pdf_path(exam_id)
+                if download_pdf_file(gabarito_url, downloaded_path):
+                    gab_path = downloaded_path
+            elif gabarito_url and os.path.exists(gabarito_url):
+                gab_path = gabarito_url
+            if not gab_path:
+                gab_path = find_local_answer_key_pdf(exam_id)
+            if gab_path:
                 candidate_match = match_gabarito_from_pdf(
-                    gab_matching[0],
+                    gab_path,
                     exam_profile,
                     source_relation="paired",
-                    document_hint=gabarito_url or gab_matching[0],
-                )
-                answer_key_attempts.append(candidate_match)
-                if candidate_match.accepted:
-                    gabarito_dict = candidate_match.answers
-                    answer_source = "attached_pdf"
-            if not gabarito_dict and gabarito_url and os.path.exists(gabarito_url):
-                candidate_match = match_gabarito_from_pdf(
-                    gabarito_url,
-                    exam_profile,
-                    source_relation="paired",
-                    document_hint=gabarito_url,
+                    document_hint=gabarito_url or gab_path,
                 )
                 answer_key_attempts.append(candidate_match)
                 if candidate_match.accepted:
@@ -170,6 +169,34 @@ def reprocess_all_exams():
                 gabarito_dict = {}
                 answer_source = "none"
                 updated_questions, stats = merge_exam_with_gabarito(questions, {})
+
+            if not has_complete_official_answer_key(match_result, stats, answer_source):
+                with Session() as session:
+                    exam = session.query(Exam).filter_by(id=exam_id).first()
+                    if exam:
+                        exam.has_official_answers = 0
+                        exam.answer_key_source = "none"
+                        exam.gabarito_coverage = stats.get("coverage_pct", 0.0)
+                        exam.gabarito_text = format_gabarito_summary(gabarito_dict)
+                        exam.status = "Erro"
+                        exam.progress = -1
+                        exam.progress_message = "Gabarito oficial não foi validado; prova não aprovada."
+                        exam.error_type = "ANSWER_KEY_NOT_FOUND"
+                        session.add(AnswerKeyMatchAudit(
+                            exam_id=exam.id,
+                            accepted=0,
+                            status=match_result.status,
+                            confidence=match_result.confidence,
+                            answer_source="none",
+                            method=match_result.method,
+                            candidate_page=match_result.candidate_page,
+                            decision_json=match_result.to_audit_json(),
+                            created_at=datetime.now().isoformat(),
+                        ))
+                        session.commit()
+                print(f"   Gabarito não validado para o exame {exam_id}; prova não aprovada.\n")
+                error_count += 1
+                continue
 
             with Session() as session:
                 exam = session.query(Exam).filter_by(id=exam_id).first()
