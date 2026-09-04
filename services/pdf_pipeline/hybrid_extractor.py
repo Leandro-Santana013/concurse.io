@@ -9,6 +9,7 @@ from .layout.layout_detector import (
     detect_layout_and_ordered_blocks,
     extract_context_blocks,
     is_instruction_or_cover_page,
+    infer_document_topology,
     LayoutConfig,
 )
 from .media.diagram_cropper import (
@@ -272,6 +273,11 @@ def parse_exam_document(
                     except ValueError:
                         pass
 
+    doc_topology = infer_document_topology(doc, watermarks)
+    effective_layout_config = layout_config or LayoutConfig(topology=doc_topology)
+    if not effective_layout_config.topology or effective_layout_config.topology == 'AUTO':
+        effective_layout_config.topology = doc_topology
+
     for p_idx in range(start_page, total_pages):
         page = doc[p_idx]
         p_text = page.get_text()
@@ -283,7 +289,7 @@ def parse_exam_document(
 
         page_raw_blocks = page.get_text('blocks')
 
-        ordered_blocks = detect_layout_and_ordered_blocks(page, watermarks, force_ocr=force_ocr, config=layout_config)
+        ordered_blocks = detect_layout_and_ordered_blocks(page, watermarks, force_ocr=force_ocr, config=effective_layout_config)
         for b in ordered_blocks:
             raw_blocks.append(b['text'])
 
@@ -352,6 +358,11 @@ def parse_exam_document(
                         'disciplina': 'Geral'
                     })
                     existing_q_nums.add(h_num)
+
+        # Índice canônico da Cadeia de Encadeamento (ordem documental imutável, 0-based),
+        # atribuído ANTES da ordenação por rótulo para preservar a posição física na prova.
+        for _cidx, _rq in enumerate(rust_questions):
+            _rq['_chain_idx'] = _cidx
 
         rust_questions.sort(key=lambda q: int(q['numero_questao']) if str(q.get('numero_questao', '')).isdigit() else 999)
 
@@ -450,6 +461,7 @@ def parse_exam_document(
                 'disciplina': rq.get('disciplina', 'Geral'),
                 'images': None,
                 'latex_support': 1 if has_latex_enunciado else 0,
+                'question_index': rq.get('_chain_idx'),
                 '_page': approx_page,
                 '_x': q_x,
                 '_y': q_y
@@ -520,6 +532,9 @@ def parse_exam_document(
 
         candidates.append((m.start(), m.end(), q_num, is_explicit))
 
+    # Identifica limites de disciplinas para permitir reinício de cadeia em Q1
+    subject_boundary_positions = [m.start() for m in SUBJECT_REGEX.finditer(full_text)]
+
     # Algoritmo de Encadeamento Ótimo por Programação Dinâmica (favorece sequência contínua)
     if candidates:
         n = len(candidates)
@@ -533,10 +548,14 @@ def parse_exam_document(
                 dist = max(0, candidates[i][0] - candidates[j][1])
                 dist_penalty = 30 if dist > 20000 else (15 if dist > 10000 else (5 if dist > 5000 else 0))
 
+                crosses_section = any(b >= candidates[j][1] and b <= candidates[i][0] for b in subject_boundary_positions)
+
                 if diff == 1:
                     step_score = 1000 + (200 if candidates[i][3] else 0) + (200 if candidates[j][3] else 0) - dist_penalty
                 elif 2 <= diff <= 10:
                     step_score = (200 - diff * 15) + (50 if candidates[i][3] else 0) - dist_penalty
+                elif crosses_section and candidates[i][2] == 1:
+                    step_score = 800 + (200 if candidates[i][3] else 0) - dist_penalty
                 else:
                     continue
 
@@ -764,6 +783,7 @@ def parse_exam_document(
             'disciplina': question_subject,
             'images': None,
             'latex_support': 1 if has_latex_enunciado else 0,
+            'question_index': i,
             '_page': approx_page,
             '_x': q_x,
             '_y': q_y

@@ -13,7 +13,7 @@ use patterns::{
     CONTEXT_TEXT_BANNER_REGEX, RELATIVE_CONTEXT_BANNER_REGEX,
     IMAGE_TRIGGER_REGEX, CAPTION_REGEX
 };
-use dp_chain::{QuestionCandidate, solve_dp_chain};
+use dp_chain::{QuestionCandidate, solve_dp_chain, solve_dp_chain_with_sections, select_best_chain};
 use subject_classifier::{
     classify_subject_canonical as rust_classify_canonical,
     scan_subject_sections as rust_scan_sections
@@ -130,7 +130,14 @@ fn process_exam_text(py: Python, full_text: &str) -> PyResult<PyObject> {
         }
     }
 
-    let optimal_chain = solve_dp_chain(&candidates);
+    let section_boundaries: Vec<usize> = sections.iter().map(|s| s.start).collect();
+    // Compara cadeia estrita (sem reinício) vs com seções e fica com a de maior
+    // integridade numérica (mais números únicos). Corrige DATAPREV onde subitens
+    // "1. 2. 3. 4." dentro da Q13 geravam cadeia falsa 1..12,1..4,14..70 (69 únicos)
+    // em vez da contínua 1..70 (70 únicos).
+    let strict_chain = solve_dp_chain(&candidates);
+    let section_chain = solve_dp_chain_with_sections(&candidates, &section_boundaries);
+    let optimal_chain = select_best_chain(strict_chain, section_chain);
     let py_list = PyList::empty_bound(py);
     let n = optimal_chain.len();
 

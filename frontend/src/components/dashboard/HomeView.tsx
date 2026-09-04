@@ -13,7 +13,7 @@ import {
 import { Link, useNavigate } from 'react-router-dom';
 import { useExam } from '../../context/ExamContext';
 import { useUI } from '../../context/UIContext';
-import { api } from '../../services/api';
+import { api, AuthRequiredError } from '../../services/api';
 import { useExamStore } from '../../store/useExamStore';
 import type { ExamSummary, Folder, NotebookSubjectStat } from '../../types/exam';
 
@@ -51,6 +51,13 @@ export const HomeView: React.FC = () => {
 
     if (foldersResult.status === 'fulfilled') setFolders(foldersResult.value);
     if (notebookResult.status === 'fulfilled') setNotebook(notebookResult.value);
+    const sessionExpired = [foldersResult, notebookResult].some(
+      (result) => result.status === 'rejected' && result.reason instanceof AuthRequiredError,
+    );
+    if (sessionExpired) {
+      navigate(`/login?next=${encodeURIComponent('/')}`, { replace: true });
+      return;
+    }
     setLoadState(
       foldersResult.status === 'rejected' && notebookResult.status === 'rejected'
         ? 'error'

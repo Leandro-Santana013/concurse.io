@@ -39,12 +39,15 @@ def _find_question(exam_q_list, idx_str, is_generated_session=False):
                 return exam_q_list[idx]
         except Exception:
             pass
-    for q in exam_q_list:
-        if str(q.numero_questao or '') == str(idx_str):
-            return q
+    # 1. Busca prioritária por ID imutável da questão (ADR 0001 / ADR 0002)
     for q in exam_q_list:
         if str(q.id) == str(idx_str):
             return q
+    # 2. Fallback por número da questão impresso
+    for q in exam_q_list:
+        if str(q.numero_questao or '') == str(idx_str):
+            return q
+    # 3. Fallback por posição ordinal 1-based
     try:
         idx = int(idx_str) - 1
         if 0 <= idx < len(exam_q_list):

@@ -123,14 +123,18 @@ def list_folders(
     ]
 
 def _sort_questions_key(q):
-    raw = str(getattr(q, 'numero_questao', None) or (q.get('numero_questao') if isinstance(q, dict) else '') or '').strip()
+    q_index = getattr(q, 'question_index', None) if not isinstance(q, dict) else q.get('question_index')
     item_id = getattr(q, 'id', 0) if hasattr(q, 'id') else (q.get('id', 0) if isinstance(q, dict) else 0) or 0
+    # Âncora primária: índice da Cadeia de Encadeamento persistido pelo worker
+    if isinstance(q_index, int):
+        return (0, q_index, item_id)
+    raw = str(getattr(q, 'numero_questao', None) or (q.get('numero_questao') if isinstance(q, dict) else '') or '').strip()
     if raw.isdigit():
-        return (0, int(raw), item_id)
+        return (1, int(raw), item_id)
     m = re.match(r'^(\d+)', raw)
     if m:
-        return (0, int(m.group(1)), item_id)
-    return (1, item_id, raw)
+        return (1, int(m.group(1)), item_id)
+    return (2, item_id, raw)
 
 @router.get("/exams/{exam_id}", response_model=ExamDetailSchema)
 def get_exam_detail(
@@ -285,8 +289,16 @@ def submit_attempt(
     feedback_per_subject = {}
 
     for idx, q in enumerate(exam_questions, start=1):
-        q_num = str(idx) if is_generated_session else str(q.numero_questao or q.id)
-        user_ans = submission.answers.get(q_num, "").strip().upper()
+        q_num = str(idx) if is_generated_session else str(q.numero_questao or idx)
+        
+        # Resolução polimórfica: busca prioritariamente por question.id, com fallback para numero_questao e idx
+        raw_user_ans = (
+            submission.answers.get(str(q.id))
+            or submission.answers.get(q_num)
+            or submission.answers.get(str(idx))
+            or ""
+        )
+        user_ans = str(raw_user_ans).strip().upper()
         correct_ans = q.correct_answer.strip().upper() if q.correct_answer else "A"
         
         is_correct = (user_ans == correct_ans) or (correct_ans == 'X')

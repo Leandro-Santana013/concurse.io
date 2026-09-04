@@ -651,13 +651,16 @@ def merge_exam_with_gabarito(questions, gabarito_dict, *, strict: bool = False):
         }
 
     def _q_sort_key(q):
+        q_index = q.get('question_index') if isinstance(q, dict) else getattr(q, 'question_index', None)
+        if isinstance(q_index, int):
+            return (0, q_index)
         raw = str(q.get('numero_questao', '') if isinstance(q, dict) else getattr(q, 'numero_questao', '')).strip()
         if raw.isdigit():
-            return (0, int(raw))
+            return (1, int(raw))
         m = re.match(r'^(\d+)', raw)
         if m:
-            return (0, int(m.group(1)))
-        return (1, 99999)
+            return (1, int(m.group(1)))
+        return (2, 99999)
 
     sorted_questions = sorted(questions, key=_q_sort_key)
     gabarito_dict = gabarito_dict or {}

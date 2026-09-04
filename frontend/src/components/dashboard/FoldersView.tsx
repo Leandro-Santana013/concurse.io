@@ -13,7 +13,7 @@ import {
   Search,
   Shuffle,
 } from 'lucide-react';
-import { api } from '../../services/api';
+import { api, AuthRequiredError } from '../../services/api';
 import { Folder } from '../../types/exam';
 import { useExam } from '../../context/ExamContext';
 import { useUI } from '../../context/UIContext';
@@ -50,6 +50,10 @@ export const FoldersView: React.FC<FoldersViewProps> = ({ onStartExam }) => {
     try {
       setFolders(await api.getFolders());
     } catch (err) {
+      if (err instanceof AuthRequiredError) {
+        navigate(`/login?next=${encodeURIComponent('/biblioteca')}`, { replace: true });
+        return;
+      }
       const message = err instanceof Error ? err.message : 'Não foi possível carregar a biblioteca.';
       setError(message);
       showToast('error', 'Erro ao carregar a biblioteca', message);
