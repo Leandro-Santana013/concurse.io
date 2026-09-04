@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="pt-br" itemscope itemtype="https://schema.org/WebPage">
+<head>
+    <meta charset="utf-8">
+    <title>Provas para Download - Assistente de Administração e Serviços Públicos - Oficial de Escola - Pref. Indaiatuba/SP</title>
+            <meta name="description" content="Concursos Públicos com inscrições abertas e previstas, empregos, estágios, provas, simulados, apostilas preparatórias e videoaulas.">
+                    <meta name="keywords" content="concursos, concurso, concursos publicos, empregos, estagios, curriculo, apostila">
+                        <meta name="robots" content="index,follow,noarchive">
+                <meta name="viewport" content="width=device-width">
+                <meta name="theme-color" content="#205c98">
+        <meta name="msapplication-TileColor" content="#205c98">
+        <meta name="msapplication-TileImage" content="https://www.pciconcursos.com.br/logo.png">
+                <meta itemprop="name" content="Provas para Download - Assistente de Administração e Serviços Públicos - Oficial de Escola - Pref. Indaiatuba/SP<">
+        <meta itemprop="description" content="Concursos Públicos com inscrições abertas e previstas, empregos, estágios, provas, simulados, apostilas preparatórias e videoaulas.">
+        <meta itemprop="image" content="https://www.pciconcursos.com.br/logo.png">
+                <meta property="og:type" content="webpage">
+        <meta property="og:title" content="Provas para Download - Assistente de Administração e Serviços Públicos - Oficial de Escola - Pref. Indaiatuba/SP">
+        <meta property="og:site_name" content="PCI Concursos">
+                <meta property="og:description" content="Concursos Públicos com inscrições abertas e previstas, empregos, estágios, provas, simulados, apostilas preparatórias e videoaulas.">
+                    <meta property="fb:app_id" content="211905988988008">
+                <meta property="fb:pages" content="115036158551264">
+        <meta property="og:locale" content="pt_BR">
+        <meta property="og:image" content="https://www.pciconcursos.com.br/logo.png">
+                    <meta property="article:publisher" content="https://www.facebook.com/pciconcursos">
+                <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="#205c98">
+    <meta name="apple-mobile-web-app-title" content="PCI Concursos">
+            <link rel="apple-touch-icon" href="https://www.pciconcursos.com.br/logo.png">
+                <link rel="search" type="application/opensearchdescription+xml" title="PCI Concursos"
+              href="https://www.pciconcursos.com.br/pesquisa.xml">
+                <link rel="manifest" href="https://www.pciconcursos.com.br/manifest.json">
+                <link rel="shortcut icon" href="https://www.pciconcursos.com.br/favicon.ico">
+            <base target="_top">
+<link rel="dns-prefetch" href="https://cdn.pci.app.br">
+<link rel="preconnect" href="https://cdn.pci.app.br">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap">
+<link rel="stylesheet" href="https://www.pciconcursos.com.br/css/bootstrap.css?31987212">
+<link rel="stylesheet" href="https://www.pciconcursos.com.br/css/custom.css?31987212?31987212">
+<link rel="stylesheet" href="https://www.pciconcursos.com.br/css/all.min.css?31987212">
+<link rel="stylesheet" href="https://www.pciconcursos.com.br/css/slicknav.min.css?31987212">
+<link rel="stylesheet" href="https://www.pciconcursos.com.br/css/site.css?31987212?31987212">
+<script src="https://www.pciconcursos.com.br/js/jquery.js"></script>
+</head>
+<body>
+<div id="menu_nav"></div>
+
+<div id="center">
+    <div id="g-login">
+    <div class="header-bar">
+                    <i class="fab fa-google google-icon"></i>
+            <span id="btn-login" class="login-btn">Entrar com Google</span>
+            </div>
+</div>
+<script>
+    // Aguarda DOM carregar
+    document.addEventListener('DOMContentLoaded', function () {
+        // Botão de login
+        const btnLogin = document.getElementById('btn-login');
+        if (btnLogin) {
+            btnLogin.addEventListener('click', function () {
+                fazerLogin();
+            });
+        }
+        // Botão de logout
+        const btnLogout = document.getElementById('btn-logout');
+        if (btnLogout) {
+            btnLogout.addEventListener('click', function () {
+                fazerLogout();
+            });
+        }
+    });
+
+    // Função de login
+    function fazerLogin() {
+        fetch('/google-auth-api?action=getAuthUrl')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Abre popup
+                    window.open(data.authUrl, 'googleLogin', 'width=500,height=600');
+                    // Verifica login a cada 3 segundos
+                    const verificar = setInterval(() => {
+                        fetch('/google-auth-api?action=checkLogin')
+                            .then(r => r.json())
+                            .then(resultado => {
+                                if (resultado.success && resultado.logged_in) {
+                                    clearInterval(verificar);
+                                    window.location.reload();
+                                }
+                            });
+                    }, 3000);
+                    // Para verificação após 5 minutos
+                    setTimeout(() => clearInterval(verificar), 300000);
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+            });
+    }
+
+    // Função de logout
+    function fazerLogout() {
+        fetch('/google-auth-api?action=logout')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.reload();
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+            });
+    }
+</script>    <div id="header">
+        <h1 id="logo"><a href="https://www.pciconcursos.com.br/"><img src="https://cdn.pci.app.br/img/p/pci_logo.png" alt="PCI Concursos"
+                                                       title="PCI Concursos"></a></h1>
+        <nav id="menu-topo">
+            <ul>
+                <li><a href="https://www.pciconcursos.com.br/concursos/">23.657 vagas em concursos</a></li>
+                <li><a href="https://www.pciconcursos.com.br/apostilas/">apostilas</a></li>
+                <li><a href="https://www.pciconcursos.com.br/noticias/">notícias</a></li>
+                <li><a href="https://www.pciconcursos.com.br/provas/">267.877 provas</a></li>
+                <li><a href="https://www.pciconcursos.com.br/contato/">contato</a></li>
+            </ul>
+        </nav>
+    </div>
+
+
+    <nav id="menu">
+        <ul id="menu_lateral">
+            <li class="pginicial"><a href="https://www.pciconcursos.com.br/" class="m_paginainicial"><i class="menu-i fas fa-home"></i>Página Inicial</a></li>
+            <li><a href="https://www.pciconcursos.com.br/apostilas/" class="m_apostilas"><i class="menu-i fas fa-book"></i>Apostilas</a></li>
+            <li><a href="https://www.pciconcursos.com.br/noticias/" class="m_noticias"><i class="menu-i fas fa-newspaper"></i>Notícias</a></li>
+            <li><a href="https://www.pciconcursos.com.br/concursos/" class="m_concursos"><i class="menu-i fa-kit fa-i-br"></i>Concursos</a></li>
+            <li><a href="https://www.pciconcursos.com.br/concursos/nacional/" class="m_nacional"><i class="menu-i fas fa-flag"></i>Nacional</a></li>
+            <li><a href="https://www.pciconcursos.com.br/concursos/sudeste/" class="m_sudeste"><i class="menu-i fa-kit fa-i-sudeste"></i>Sudeste</a></li>
+            <li><a href="https://www.pciconcursos.com.br/concursos/sul/" class="m_sul"><i class="menu-i fa-kit fa-i-sul"></i>Sul</a></li>
+            <li><a href="https://www.pciconcursos.com.br/concursos/norte/" class="m_norte"><i class="menu-i fa-kit fa-i-norte"></i>Norte</a></li>
+            <li><a href="https://www.pciconcursos.com.br/concursos/nordeste/" class="m_nordeste"><i class="menu-i fa-kit fa-i-nordeste"></i>Nordeste</a></li>
+            <li><a href="https://www.pciconcursos.com.br/concursos/centrooeste/" class="m_centrooeste"><i class="menu-i fa-kit fa-i-centrooeste"></i>Centro-Oeste</a></li>
+            <li><a href="https://www.pciconcursos.com.br/ultimas/" class="m_ultimas"><i class="menu-i fas fa-clock"></i>Últimas</a></li>
+            <li><a href="https://www.pciconcursos.com.br/mcp-e-gpt" class="m_mcp"><i class="menu-i fas fa-robot"></i>MCP e GPT</a></li>
+            <li><a href="https://www.pciconcursos.com.br/professores/" class="m_professores"><i class="menu-i fas fa-chalkboard-teacher"></i>Professores</a></li>
+            <!-- <li><a href="https://www.pciconcursos.com.br/previstos/" class="m_previstos"><i class="menu-i fas fa-eye"></i>Previstos</a></li> -->
+            <li><a href="https://www.pciconcursos.com.br/cargos/" class="m_cargos"><i class="menu-i fas fa-briefcase"></i>Cargos</a></li>
+            <li><a href="https://www.pciconcursos.com.br/concursos/cidades/" class="m_cidades"><i class="menu-i fas fa-city"></i>Cidades</a></li>
+            <li><a href="https://www.pciconcursos.com.br/vagas/" class="m_vagas"><i class="menu-i fas fa-user-friends"></i>Vagas</a></li>
+            <li><a href="https://www.pciconcursos.com.br/simulados/" class="m_simulados"><i class="menu-i fas fa-tasks"></i>Simulados</a></li>
+            <li><a href="https://www.pciconcursos.com.br/provas/" class="m_provas"><i class="menu-i fas fa-file-alt"></i>Provas</a></li>
+            <li class="l_aulas"><a href="https://www.pciconcursos.com.br/aulas/" class="m_video"><i class="menu-i fas fa-graduation-cap"></i>Aulas</a>
+                <!-- <ul>
+                    <li><a href="https://www.pciconcursos.com.br/aulas/lingua-portuguesa" class="m_video"><i class="menu-i fas fa-graduation-cap"></i>Aulas Português</a></li>
+                    <li><a href="https://www.pciconcursos.com.br/aulas/matematica/" class="m_video"><i class="menu-i fas fa-graduation-cap"></i>Aulas Matemática</a></li>
+                    <li><a href="https://www.pciconcursos.com.br/aulas/raciocinio-logico/" class="m_video"><i class="menu-i fas fa-graduation-cap"></i>Aulas Rac. Lógico</a></li>
+                    <li><a href="https://www.pciconcursos.com.br/aulas/informatica/" class="m_video"><i class="menu-i fas fa-graduation-cap"></i>Aulas Informática</a></li>
+                    <li><a href="https://www.pciconcursos.com.br/aulas/direito-constitucional/" class="m_video"><i class="menu-i fas fa-graduation-cap"></i>D. Constitucional</a></li>
+                    <li><a href="https://www.pciconcursos.com.br/aulas/direito-administrativo/" class="m_video"><i class="menu-i fas fa-graduation-cap"></i>D. Administrativo</a></li>
+                    <li><a href="https://www.pciconcursos.com.br/aulas/direito-empresarial/" class="m_video"><i class="menu-i fas fa-graduation-cap"></i>D. Empresarial</a></li>
+                    <li><a href="https://www.pciconcursos.com.br/aulas/direito-eleitoral/" class="m_video"><i class="menu-i fas fa-graduation-cap"></i>D. Eleitoral</a></li>
+                    <li><a href="https://www.pciconcursos.com.br/aulas/direito-tributario/" class="m_video"><i class="menu-i fas fa-graduation-cap"></i>D. Tributário</a></li>
+                    <li><a href="https://www.pciconcursos.com.br/aulas/direito-do-trabalho/" class="m_video"><i class="menu-i fas fa-graduation-cap"></i>D. Trabalho</a></li>
+                    <li><a href="https://www.pciconcursos.com.br/aulas/direito-civil/" class="m_video"><i class="menu-i fas fa-graduation-cap"></i>D. Civil</a></li>
+                    <li><a href="https://www.pciconcursos.com.br/aulas/direito-penal/" class="m_video"><i class="menu-i fas fa-graduation-cap"></i>D. Penal</a></li>
+                    <li><a href="https://www.pciconcursos.com.br/aulas/direito-processual-civil/" class="m_video"><i class="menu-i fas fa-graduation-cap"></i>D. Proc. Civil</a></li>
+                    <li><a href="https://www.pciconcursos.com.br/aulas/direito-processual-penal/" class="m_video"><i class="menu-i fas fa-graduation-cap"></i>D. Proc. Penal</a></li>
+                    <li><a href="https://www.pciconcursos.com.br/aulas/direito-processual-do-trabalho/" class="m_video"><i class="menu-i fas fa-graduation-cap"></i>D. Proc. Trabalho</a></li>
+                    <li><a href="https://www.pciconcursos.com.br/aulas/direitos-humanos/" class="m_video"><i class="menu-i fas fa-graduation-cap"></i>D. Humanos</a></li>
+                    <li><a href="https://www.pciconcursos.com.br/aulas/questoes-comentadas/" class="m_video"><i class="menu-i fas fa-graduation-cap"></i>Q. Comentadas</a></li>
+                    <li><a href="https://www.pciconcursos.com.br/aulas/" class="m_video"><i class="menu-i fas fa-graduation-cap"></i>+ Várias Aulas</a></li>
+                </ul>
+            -->
+            </li>
+            <li><a href="https://www.pciconcursos.com.br/organizadoras/" class="m_organizadoras"><i class="menu-i fas fa-building"></i>Organizadoras</a></li>
+            <li><a href="https://www.pciconcursos.com.br/colaborar/" class="m_colaborar"><i class="menu-i fas fa-handshake"></i>Colaborar</a></li>
+            <li><a href="https://www.pciconcursos.com.br/contato/" class="m_contato"><i class="menu-i fas fa-envelope"></i>Contato</a></li>
+        </ul>
+    </nav>
+    <div id="conteudo">
+        <style>
+#provas #download .pdf-item {
+    position: relative;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+    padding: 5px;
+    margin-bottom: 15px;
+}
+#provas #download .pdf-item:hover {
+    background-color: #f7f8f8;
+}
+#provas #download .pdf-item a.item-link {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    text-indent: -9999px;
+    z-index: 1;
+}
+#provas #download .pdf-icon,
+#provas #download .pdf-text {
+    position: relative;
+    z-index: 0;
+}
+#provas ul.btn-provas {
+    list-style: none;
+    padding: 10px 0;
+    margin: 0;
+    text-align: center;
+}
+#provas ul.btn-provas li {
+    display: inline-block;
+    padding-top: 30px;
+}
+#provas ul.btn-provas li a {
+    border: 1px solid #205c98;
+    border-radius: 15px;
+    margin-right: 10px;
+    margin-top: 10px;
+    padding: 5px 7px;
+    font-size: 14px;
+    color: #205c98;
+}
+#provas ul.btn-provas li a:hover {
+    background-color: #f7f8f8;
+    text-decoration: none;
+}
+</style>
+<div id="provas">
+    <div id="download">
+        <h1>Provas para Download</h1>
+        <div style="position: relative;">
+            <div style="position: absolute; right:0; top:-45px;"><div class="sharelink"><a href="#" onclick="shareLink('Provas para Download - Assistente de Administração e Serviços Públicos - Oficial de Escola - Pref. Indaiatuba/SP', '', 'https://www.pciconcursos.com.br/provas/download/assistente-de-administracao-e-servicos-publicos-oficial-de-escola-prefeitura-indaiatuba-sp-ibc-2013'); return false;" rel="nofollow"><i class="fa-light fa-share-nodes"></i> </a></div></div>
+        </div>
+        <div class="breadcrumbs"><a href="https://www.pciconcursos.com.br" title="Início">Início</a> › <a href="https://www.pciconcursos.com.br/provas/" title="Provas">Provas</a> › <strong>Assistente de Administração e Serviços Públicos - Oficial de Escola - Pref. Indaiatuba/SP</strong></div>
+        <div>
+            <div class="ads_mobi"><div style="width:320px; height:100px; margin:20px auto 0 auto;"><ins class="adsbygoogle" style="display:inline-block;width:320px;height:100px" data-ad-client="ca-pub-2622407619291980" data-ad-slot="1797634041"></ins><script>(adsbygoogle = window.adsbygoogle || []).push({});</script></div></div>
+<div class="ads10"><div class="ads11"><ins class="adsbygoogle" style="display:inline-block;width:300px;height:250px" data-ad-client="ca-pub-2622407619291980" data-ad-slot="9825760010"></ins><script>(adsbygoogle = window.adsbygoogle || []).push({});</script></div><div class="ads12"><ins class="adsbygoogle" style="display:inline-block;width:300px;height:250px" data-ad-client="ca-pub-2622407619291980" data-ad-slot="9825760010"></ins><script>(adsbygoogle = window.adsbygoogle || []).push({});</script></div></div>
+
+            <div class="container text-center my-3">
+                <ul class="nav justify-content-center">
+                    <li class="nav-item mx-2 mt-2">
+                        <a class="btn btn-outline-pci btn-sm" href="https://www.pciconcursos.com.br/provas/top">
+                            <i class="fa-light fa-star"></i> Mais acessadas
+                        </a>
+                    </li>
+                    <li class="nav-item mx-2 mt-2">
+                        <a class="btn btn-outline-pci btn-sm" href="https://www.pciconcursos.com.br/organizadoras/">
+                            <i class="fa-light fa-building"></i> Organizadoras
+                        </a>
+                    </li>
+                    <li class="nav-item mx-2 mt-2">
+                        <a class="btn btn-outline-pci btn-sm" href="https://www.pciconcursos.com.br/colaborar/">
+                            <i class="fa-light fa-plus-circle"></i> Colabore enviando provas
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        <div class="container my-5">
+            <form method="post" action="https://www.pciconcursos.com.br/provas/">
+                <div class="row justify-content-center">
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <input type="text" name="prova" class="form-control" placeholder="Digite sua pesquisa" value="">
+                            <div class="input-group-append">
+                                <button type="submit" name="botao" class="btn btn-pci">
+                                    <i class="fas fa-search"></i> Pesquisar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+        
+        <div class="card mb-4">
+            <div class="card-header bg-white">
+                <h5 class="mb-0 text-pci" style="line-height:1.8rem;">
+                    <i class="fas fa-clipboard-list mr-3"></i>Prova Assistente de Administração e Serviços Públicos - Oficial de Escola - Pref. Indaiatuba/SP
+                </h5>
+            </div>
+            <div class="card-body" style="padding-left:18px;">
+                <ul class="list-unstyled mb-0">
+            <li class="mb-2">
+                <div class="d-flex">
+                    <div class="mr-3 text-center text-pci" style="width:20px;"><i class="fas fa-briefcase"></i></div>
+                    <div><strong>Cargo:</strong> <a href="https://www.pciconcursos.com.br/provas/assistente-de-administracao-e-servicos-publicos-oficial-de-escola-abrangente" class="text-pci">Assistente de Administração e Serviços Públicos - Oficial de Escola</a></div>
+                </div>
+            </li>
+            <li class="mb-2">
+                <div class="d-flex">
+                    <div class="mr-3 text-center text-pci" style="width:20px;"><i class="fas fa-calendar-alt"></i></div>
+                    <div><strong>Ano:</strong> <span class="text-pci">2013</span></div>
+                </div>
+            </li>
+            <li class="mb-2">
+                <div class="d-flex">
+                    <div class="mr-3 text-center text-pci" style="width:20px;"><i class="fas fa-university"></i></div>
+                    <div><strong>Órgão:</strong> <a href="https://www.pciconcursos.com.br/provas/pref-indaiatuba-sp" class="text-pci">Pref. Indaiatuba/SP</a></div>
+                </div>
+            </li>
+            <li class="mb-2">
+                <div class="d-flex">
+                    <div class="mr-3 text-center text-pci" style="width:20px;"><i class="fas fa-building"></i></div>
+                    <div><strong>Organizadora:</strong> <a href="https://www.pciconcursos.com.br/provas/ibc" class="text-pci">IBC</a></div>
+                </div>
+            </li></ul>
+            </div>
+        </div>
+        <div class="card mb-4" id="captcha-provas">
+            <div class="card-header bg-white">
+                <h5 class="mb-0 text-pci"><i class="fas fa-shield-alt mr-3"></i>Verificação de segurança</h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-0">Complete a verificação abaixo para acessar os arquivos desta página.</p>
+                <noscript>
+                    <div class="alert alert-warning mb-0 mt-3">
+                        Para visualizar ou baixar os arquivos desta página é necessário habilitar o JavaScript no seu navegador.
+                    </div>
+                </noscript>
+                <div style="margin:0; margin-top:30px;" class="cf-turnstile" data-sitekey="0x4AAAAAADNbfLtQAd1xDiAm" data-callback="provasCaptchaOk"></div><div id="turnstile-error" style="margin-top:20px; color:red; display:none;"></div><script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer onload="window.turnstileScriptOk = true;"></script><script>
+/* chamada pelo Turnstile (data-callback) ao concluir a verificação:
+   limpa a mensagem de erro que ficou de uma tentativa anterior */
+function turnstileCleanError() {
+    var el = document.getElementById('turnstile-error');
+    if (el) { el.innerHTML = ''; el.style.display = 'none'; }
+}
+function validateTurnstile() {
+    var ok = false;
+    try {
+        if (typeof turnstile !== 'undefined') {
+            var resp = turnstile.getResponse();
+            ok = resp && resp.length > 0;
+        }
+    } catch (e) {}
+    var el = document.getElementById('turnstile-error');
+    if (ok) {
+        if (el) { el.innerHTML = ''; el.style.display = 'none'; }
+        return true;
+    }
+    if (el) {
+        el.style.display = 'block';
+        el.innerHTML = 'Por favor, complete a verificação de segurança.';
+    }
+    return false;
+}
+</script>
+            </div>
+        </div>
+        <div class="card mb-4">
+            <div class="card-header bg-white">
+                <h5 class="mb-0 text-pci"><i class="fas fa-file-pdf mr-3"></i>Visualizar os arquivos PDF</h5>
+            </div>
+            <div class="card-body">
+        <div class="d-flex align-items-center pdf-item">
+            <a href="javascript:void(0);" rel="nofollow" class="item-link prova-pdf-link"
+               data-code="db873836f199506082f3e2c4a3f52a68" data-arquivo="assist_admin_serv_publicos_oficial_escola.pdf" data-acao="ver">Ver assist-admin-serv-publicos-oficial-escola.pdf</a>
+            <div class="pdf-icon mr-0">
+                <img src="https://www.pciconcursos.com.br/img/icon_pdf.png" alt="PDF" width="70" height="70">
+            </div>
+            <div class="pdf-text">
+                <span class="text-pci">assist-admin-serv-publicos-oficial-escola.pdf</span>
+            </div>
+        </div>
+        <div class="d-flex align-items-center pdf-item">
+            <a href="javascript:void(0);" rel="nofollow" class="item-link prova-pdf-link"
+               data-code="db873836f199506082f3e2c4a3f52a68" data-arquivo="gabaritos.pdf" data-acao="ver">Ver gabaritos.pdf</a>
+            <div class="pdf-icon mr-0">
+                <img src="https://www.pciconcursos.com.br/img/icon_pdf.png" alt="PDF" width="70" height="70">
+            </div>
+            <div class="pdf-text">
+                <span class="text-pci">gabaritos.pdf</span>
+            </div>
+        </div></div>
+        </div>
+        <div class="card mb-4">
+            <div class="card-header bg-white">
+                <h5 class="mb-0 text-pci"><i class="fas fa-download mr-3"></i>Download dos arquivos PDF</h5>
+            </div>
+            <div class="card-body">
+        <div class="d-flex align-items-center pdf-item">
+            <a href="javascript:void(0);" rel="nofollow" class="item-link prova-pdf-link"
+               data-code="db873836f199506082f3e2c4a3f52a68" data-arquivo="assist_admin_serv_publicos_oficial_escola.pdf" data-acao="baixar">Baixar assist-admin-serv-publicos-oficial-escola.pdf</a>
+            <div class="pdf-icon mr-0">
+                <img src="https://www.pciconcursos.com.br/img/icon_pdf_download.png" alt="PDF" width="70" height="70">
+            </div>
+            <div class="pdf-text">
+                <span class="text-pci">assist-admin-serv-publicos-oficial-escola.pdf</span>
+            </div>
+        </div>
+        <div class="d-flex align-items-center pdf-item">
+            <a href="javascript:void(0);" rel="nofollow" class="item-link prova-pdf-link"
+               data-code="db873836f199506082f3e2c4a3f52a68" data-arquivo="gabaritos.pdf" data-acao="baixar">Baixar gabaritos.pdf</a>
+            <div class="pdf-icon mr-0">
+                <img src="https://www.pciconcursos.com.br/img/icon_pdf_download.png" alt="PDF" width="70" height="70">
+            </div>
+            <div class="pdf-text">
+                <span class="text-pci">gabaritos.pdf</span>
+            </div>
+        </div></div>
+        </div>
+        <div class="card mb-4">
+            <div class="card-header bg-white">
+                <h5 class="mb-0 text-pci"><i class="fas fa-share-alt mr-3"></i>Compartilhar os arquivos PDF</h5>
+            </div>
+            <div class="card-body">
+        <div class="d-flex align-items-center pdf-item">
+            <a href="javascript:void(0);" class="item-link prova-pdf-link"
+               data-code="db873836f199506082f3e2c4a3f52a68" data-arquivo="assist_admin_serv_publicos_oficial_escola.pdf" data-acao="compartilhar"
+               data-nome="assist-admin-serv-publicos-oficial-escola.pdf">Compartilhar assist-admin-serv-publicos-oficial-escola.pdf</a>
+            <div class="pdf-icon mr-0">
+                <img src="https://www.pciconcursos.com.br/img/icon_pdf_c.png" alt="PDF" width="70" height="70">
+            </div>
+            <div class="pdf-text">
+                <span class="text-pci">assist-admin-serv-publicos-oficial-escola.pdf</span>
+            </div>
+        </div>
+        <div class="d-flex align-items-center pdf-item">
+            <a href="javascript:void(0);" class="item-link prova-pdf-link"
+               data-code="db873836f199506082f3e2c4a3f52a68" data-arquivo="gabaritos.pdf" data-acao="compartilhar"
+               data-nome="gabaritos.pdf">Compartilhar gabaritos.pdf</a>
+            <div class="pdf-icon mr-0">
+                <img src="https://www.pciconcursos.com.br/img/icon_pdf_c.png" alt="PDF" width="70" height="70">
+            </div>
+            <div class="pdf-text">
+                <span class="text-pci">gabaritos.pdf</span>
+            </div>
+        </div></div>
+        </div><script>
+(function() {
+    var processando = false;
+    var liberado = false;
+    function resetCaptcha() {
+        try { if (typeof turnstile !== 'undefined') turnstile.reset(); } catch (e) {}
+    }
+    function mostraErro(msg) {
+        var el = document.getElementById('turnstile-error');
+        if (el) { el.style.display = 'block'; el.innerHTML = msg; }
+    }
+    /* escreve as URLs com hash nos links da página; o captcha continua visível */
+    function aplicaLinks(arquivos) {
+        var mapa = {};
+        arquivos.forEach(function(a) { mapa[a.arquivo] = a; });
+        document.querySelectorAll('.prova-pdf-link').forEach(function(el) {
+            var item = mapa[el.dataset.arquivo];
+            if (!item) return;
+            if (el.dataset.acao === 'ver') {
+                el.href = item.ver;
+                el.target = '_blank';
+            } else if (el.dataset.acao === 'baixar') {
+                /* mesma página: o servidor de provas entrega como anexo */
+                el.href = item.baixar;
+            } else if (el.dataset.acao === 'compartilhar') {
+                el.dataset.url = item.ver;
+            }
+        });
+        liberado = true;
+    }
+    function liberaArquivos(token) {
+        if (liberado || processando) return;
+        try { if (!token && typeof turnstile !== 'undefined') token = turnstile.getResponse() || ''; } catch (e) {}
+        if (!token) return;
+        processando = true;
+        var primeiro = document.querySelector('.prova-pdf-link');
+        var dados = new FormData();
+        dados.append('prova_code', primeiro ? primeiro.dataset.code : '');
+        dados.append('cf-turnstile-response', token);
+        fetch('https://www.pciconcursos.com.br/provas/link', { method: 'POST', body: dados })
+            .then(function(r) { return r.json(); })
+            .then(function(resp) {
+                if (!resp.ok || !resp.arquivos) {
+                    resetCaptcha();
+                    mostraErro(resp.erro || 'Falha na verificação de segurança. Tente novamente.');
+                    return;
+                }
+                /* uma verificação libera todos os arquivos da prova */
+                aplicaLinks(resp.arquivos);
+            })
+            .catch(function() {
+                resetCaptcha();
+                mostraErro('Não foi possível concluir a verificação. Tente novamente.');
+            })
+            .finally(function() { processando = false; });
+    }
+    /* chamado pelo Turnstile (data-callback) ao concluir a verificação:
+       libera os links de imediato, antes de qualquer clique */
+    window.provasCaptchaOk = function(token) {
+        if (typeof turnstileCleanError === 'function') turnstileCleanError();
+        liberaArquivos(token);
+    };
+    document.addEventListener('click', function(e) {
+        var link = e.target.closest('.prova-pdf-link');
+        if (!link) return;
+        if (liberado) {
+            /* links liberados: navegação nativa; só o compartilhar usa JS,
+               de forma síncrona dentro do gesto do usuário */
+            if (link.dataset.acao === 'compartilhar') {
+                e.preventDefault();
+                shareLink(link.dataset.nome, 'PCI Concursos :: Provas para Download', link.dataset.url);
+            }
+            return;
+        }
+        e.preventDefault();
+        if (processando) {
+            mostraErro('Aguarde, liberando os arquivos...');
+            return;
+        }
+        if (typeof validateTurnstile === 'function' && validateTurnstile()) {
+            /* captcha resolvido mas links ainda não liberados
+               (ex.: falha de rede anterior): tenta liberar de novo */
+            liberaArquivos('');
+            return;
+        }
+        /* captcha ainda não resolvido: a mensagem já foi mostrada; leva até o card */
+        var box = document.getElementById('captcha-provas');
+        if (box) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+})();
+</script>
+        <div class="pb-4">
+            
+        <div class="compartilhe">
+        <div style="padding-bottom:10px; font-size:13px;">Compartilhe:</div>
+        <a href="#" onclick="shareOnWhatsApp('Prova: Assistente de Administração e Serviços Públicos - Oficial de Escola - Pref. Indaiatuba/SP https://www.pciconcursos.com.br/provas/download/assistente-de-administracao-e-servicos-publicos-oficial-de-escola-prefeitura-indaiatuba-sp-ibc-2013'); return false;" rel="nofollow" style="background-color:#25D366;" title="Compartilhar no WhatsApp">
+        <i class="fab fa-whatsapp" style="font-size:36px; padding-left:2px;"></i>
+        </a><a href="https://t.me/share/url?url=https://www.pciconcursos.com.br/provas/download/assistente-de-administracao-e-servicos-publicos-oficial-de-escola-prefeitura-indaiatuba-sp-ibc-2013&text=Prova%3A+Assistente+de+Administra%C3%A7%C3%A3o+e+Servi%C3%A7os+P%C3%BAblicos+-+Oficial+de+Escola+-+Pref.+Indaiatuba%2FSP" target="_blank" style="background-color:#0088cc;" title="Compartilhar no Telegram">
+        <i class="fas fa-paper-plane" style="font-size:22px;"></i>
+        </a><a href="https://www.linkedin.com/shareArticle?mini=true&url=https://www.pciconcursos.com.br/provas/download/assistente-de-administracao-e-servicos-publicos-oficial-de-escola-prefeitura-indaiatuba-sp-ibc-2013&title=Prova%3A+Assistente+de+Administra%C3%A7%C3%A3o+e+Servi%C3%A7os+P%C3%BAblicos+-+Oficial+de+Escola+-+Pref.+Indaiatuba%2FSP&summary=PCI+Concursos+%3A%3A+Provas+para+Download&source=PCIConcursos" rel="nofollow" target="_blank" style="background-color:#0077B5;" title="Compartilhar no Linkedin">
+        <i class="fab fa-linkedin-in" style="font-size:28px;"></i>
+        </a><a href="https://www.facebook.com/sharer/sharer.php?u=https://www.pciconcursos.com.br/provas/download/assistente-de-administracao-e-servicos-publicos-oficial-de-escola-prefeitura-indaiatuba-sp-ibc-2013" rel="nofollow" target="_blank" style="background-color:#3b5998;" title="Compartilhar no Facebook">
+        <i class="fab fa-facebook-f" style="font-size:28px;"></i>
+        </a><a href="https://x.com/intent/tweet?url=https://www.pciconcursos.com.br/provas/download/assistente-de-administracao-e-servicos-publicos-oficial-de-escola-prefeitura-indaiatuba-sp-ibc-2013&text=Prova%3A+Assistente+de+Administra%C3%A7%C3%A3o+e+Servi%C3%A7os+P%C3%BAblicos+-+Oficial+de+Escola+-+Pref.+Indaiatuba%2FSP" rel="nofollow" target="_blank" style="background-color:#000000;" title="Compartilhar no X">
+        <i class="fab fa-x-twitter" style="font-size:28px;"></i>
+        </a><a href="#" onclick="shareLink('Prova: Assistente de Administração e Serviços Públicos - Oficial de Escola - Pref. Indaiatuba/SP','Prova: Assistente de Administração e Serviços Públicos - Oficial de Escola - Pref. Indaiatuba/SP','https://www.pciconcursos.com.br/provas/download/assistente-de-administracao-e-servicos-publicos-oficial-de-escola-prefeitura-indaiatuba-sp-ibc-2013'); return false;" rel="nofollow" style="background-color:#205c98;" title="Compartilhar">
+        <i class="fa-thin fa-share" style="font-size:28px;"></i>
+        </a>
+        </div>
+        </div>
+        <div class="pt-2 pb-5">
+            <a href="javascript:window.history.go(-1);" class="btn btn-lg btn-outline-pci">
+                <i class="fas fa-arrow-left mr-2"></i>Voltar
+            </a>
+        </div>
+        <div style="padding:10px; margin:0 auto;"><ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-2622407619291980" data-ad-slot="4406933812" data-ad-format="auto" data-full-width-responsive="true"></ins><script>(adsbygoogle = window.adsbygoogle || []).push({});</script></div>
+
+        
+        
+    </div>
+</div>    </div>
+    <div id="lateral">
+        <div id="lateralnoticias">
+            <ul id="lista_lateral_noticias" class="lateral_social">
+                <li><a href="https://www.pciconcursos.com.br/noticias/transpetro-publica-editais-retificados-de-processos-seletivos-para-diversos-cargos"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAADUlEQVQImWP4//8/AwAI/AL+hc2rNAAAAABJRU5ErkJggg=="  data-src="https://cdn.pci.app.br/img/c/d3c82a6dd9f97957d60cca473ef2dea9.png" style="height:35px; width:auto; max-width:60px;" class="lazyload"><br>Transpetro publica editais retificados de processos seletivos para diversos cargos</a></li>
+<li><a href="https://www.pciconcursos.com.br/noticias/inova-oz-sp-abre-concurso-publico-com-salarios-de-ate-5435"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAADUlEQVQImWP4//8/AwAI/AL+hc2rNAAAAABJRU5ErkJggg=="  data-src="https://cdn.pci.app.br/img/c/9389a9846326b0a933104400680374f2.png" style="height:35px; width:auto; max-width:60px;" class="lazyload"><br>INOVA OZ - SP abre concurso público com salários de até R$ 5.435,64</a></li>
+<li><a href="https://www.pciconcursos.com.br/noticias/autarquia-municipal-de-saude-de-itapecerica-da-serra-sp-abre-concurso-publico-com-salarios-de-ate-11576"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAADUlEQVQImWP4//8/AwAI/AL+hc2rNAAAAABJRU5ErkJggg=="  data-src="https://cdn.pci.app.br/img/c/b7d2ab192f0ef227bc807a08031af5c3.png" style="height:35px; width:auto; max-width:60px;" class="lazyload"><br>Autarquia Municipal de Saúde de Itapecerica da Serra - SP abre concurso público com salários de até R$ 11.576,25</a></li>
+<li><a href="https://www.pciconcursos.com.br/noticias/prefeitura-de-ilhabela-sp-retifica-edital-de-concurso-publico-com-remuneracoes-de-ate-12579"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAADUlEQVQImWP4//8/AwAI/AL+hc2rNAAAAABJRU5ErkJggg=="  data-src="https://cdn.pci.app.br/img/c/f7a23bed067f3bf8bd9970dfad59b5cc.png" style="height:35px; width:auto; max-width:60px;" class="lazyload"><br>Prefeitura de Ilhabela - SP retifica edital de concurso público com remunerações de até R$ 12.579,96</a></li>
+<li><a href="https://www.pciconcursos.com.br/noticias/ses-e-iaserj-rj-abrem-concurso-publico-com-vagas-de-nivel-medio-e-superior"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAADUlEQVQImWP4//8/AwAI/AL+hc2rNAAAAABJRU5ErkJggg=="  data-src="https://cdn.pci.app.br/img/c/b4a398a5175d65a5e0712eaad0af145d.png" style="height:35px; width:auto; max-width:60px;" class="lazyload"><br>SES e IASERJ - RJ abrem concurso público com vagas de nível médio e superior</a></li>
+<li><a href="https://www.pciconcursos.com.br/noticias/prefeitura-de-guapimirim-rj-abre-concurso-publico-com-vagas-para-professores"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAADUlEQVQImWP4//8/AwAI/AL+hc2rNAAAAABJRU5ErkJggg=="  data-src="https://cdn.pci.app.br/img/c/7331e3ed3a86a954e5eb8e8b44f02405.png" style="height:35px; width:auto; max-width:60px;" class="lazyload"><br>Prefeitura de Guapimirim - RJ abre concurso público com vagas para professores</a></li>
+<li><a href="https://www.pciconcursos.com.br/noticias/prefeitura-de-contagem-mg-abre-concurso-publico-com-salarios-de-ate-13305"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAADUlEQVQImWP4//8/AwAI/AL+hc2rNAAAAABJRU5ErkJggg=="  data-src="https://cdn.pci.app.br/img/c/7de2c0dbeff437f4cd0052b4d16f8acf.png" style="height:35px; width:auto; max-width:60px;" class="lazyload"><br>Prefeitura de Contagem - MG abre concurso público com salários de até R$ 13.305,57</a></li>
+<li><a href="https://www.pciconcursos.com.br/noticias/emater-mg-anuncia-concurso-publico-com-salarios-de-ate-7321"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAADUlEQVQImWP4//8/AwAI/AL+hc2rNAAAAABJRU5ErkJggg=="  data-src="https://cdn.pci.app.br/img/c/3530c5a26ef24c02aab4a129801f2852.png" style="height:35px; width:auto; max-width:60px;" class="lazyload"><br>EMATER - MG anuncia concurso público com salários de até R$ 7.321,75</a></li>
+<li><a href="https://www.pciconcursos.com.br/noticias/itabiraprev-mg-abre-concurso-publico-com-salarios-de-ate-6280"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAADUlEQVQImWP4//8/AwAI/AL+hc2rNAAAAABJRU5ErkJggg=="  data-src="https://cdn.pci.app.br/img/c/8e3ffaecb3529d9e088ecb195a777c57.png" style="height:35px; width:auto; max-width:60px;" class="lazyload"><br>ITABIRAPREV - MG abre concurso público com salários de até R$ 6.280,77</a></li>
+<li><a href="https://www.pciconcursos.com.br/noticias/dmae-de-uberlandia-mg-abre-concurso-publico-com-vagas-para-diversos-niveis-de-escolaridade"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAADUlEQVQImWP4//8/AwAI/AL+hc2rNAAAAABJRU5ErkJggg=="  data-src="https://cdn.pci.app.br/img/c/eed57af4c8ee7b02770437af8c9a81aa.png" style="height:35px; width:auto; max-width:60px;" class="lazyload"><br>DMAE de Uberlândia - MG abre concurso público com vagas para diversos níveis de escolaridade</a></li>
+<li><a href="https://www.pciconcursos.com.br/noticias/prefeitura-de-paracatu-mg-prorroga-inscricoes-do-concurso-publico-com-salarios-de-ate-9600"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAADUlEQVQImWP4//8/AwAI/AL+hc2rNAAAAABJRU5ErkJggg=="  data-src="https://cdn.pci.app.br/img/c/1a01383a1c4b883e2ced032e05bafc10.png" style="height:35px; width:auto; max-width:60px;" class="lazyload"><br>Prefeitura de Paracatu - MG prorroga inscrições do concurso público com salários de até R$ 9.600,00</a></li>
+<li><a href="https://www.pciconcursos.com.br/noticias/camara-e-prefeitura-de-trindade-go-divulgam-retificacoes-do-processo-seletivo-e-do-concurso-publico"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAADUlEQVQImWP4//8/AwAI/AL+hc2rNAAAAABJRU5ErkJggg=="  data-src="https://cdn.pci.app.br/img/c/65ebeb4397bb4670c4dff40e3f626f71.png" style="height:35px; width:auto; max-width:60px;" class="lazyload"><br>Câmara e Prefeitura de Trindade - GO divulgam retificações do processo seletivo e do concurso público</a></li>
+<li><a href="https://www.pciconcursos.com.br/noticias/prefeitura-de-cristalina-go-retifica-edital-de-concurso-publico-para-a-secretaria-de-educacao"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAADUlEQVQImWP4//8/AwAI/AL+hc2rNAAAAABJRU5ErkJggg=="  data-src="https://cdn.pci.app.br/img/c/5e4a78018311b115573271dae3808917.png" style="height:35px; width:auto; max-width:60px;" class="lazyload"><br>Prefeitura de Cristalina - GO retifica edital de concurso público para a Secretaria de Educação</a></li>
+<li><a href="https://www.pciconcursos.com.br/noticias/camara-de-ponta-pora-ms-abre-concurso-publico-com-salarios-de-ate-7999"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAADUlEQVQImWP4//8/AwAI/AL+hc2rNAAAAABJRU5ErkJggg=="  data-src="https://cdn.pci.app.br/img/c/7b07707bbfc00efd330774d4eb0fa052.png" style="height:35px; width:auto; max-width:60px;" class="lazyload"><br>Câmara de Ponta Porã - MS abre concurso público com salários de até R$ 7.999,59</a></li>
+<li><a href="https://www.pciconcursos.com.br/noticias/prefeitura-de-chapada-dos-guimaraes-mt-divulga-retificacao-de-concurso-publico"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAADUlEQVQImWP4//8/AwAI/AL+hc2rNAAAAABJRU5ErkJggg=="  data-src="https://cdn.pci.app.br/img/c/310728ca7bd2835142ae67f7a5e53754.png" style="height:35px; width:auto; max-width:60px;" class="lazyload"><br>Prefeitura de Chapada dos Guimarães - MT divulga retificação de concurso público</a></li>
+<li><a href="https://www.pciconcursos.com.br/noticias/prefeitura-de-abaetetuba-pa-divulga-nova-retificacao-de-concurso-publico"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAADUlEQVQImWP4//8/AwAI/AL+hc2rNAAAAABJRU5ErkJggg=="  data-src="https://cdn.pci.app.br/img/c/5db6bfa25f7a20b8cae061baeeede361.png" style="height:35px; width:auto; max-width:60px;" class="lazyload"><br>Prefeitura de Abaetetuba - PA divulga nova retificação de concurso público</a></li>
+<li><a href="https://www.pciconcursos.com.br/noticias/governo-do-tocantins-to-retifica-edital-de-concurso-com-vagas-de-nivel-medio-e-superior"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAADUlEQVQImWP4//8/AwAI/AL+hc2rNAAAAABJRU5ErkJggg=="  data-src="https://cdn.pci.app.br/img/c/c55be454d34ece8304547e17a2bddd4d.png" style="height:35px; width:auto; max-width:60px;" class="lazyload"><br>Governo do Tocantins - TO retifica edital de concurso com vagas de nível médio e superior</a></li>
+<li><a href="https://www.pciconcursos.com.br/noticias/seplag-al-publica-edital-de-concurso-publico-para-agente-e-escrivao-na-policia-civil"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAADUlEQVQImWP4//8/AwAI/AL+hc2rNAAAAABJRU5ErkJggg=="  data-src="https://cdn.pci.app.br/img/c/f681581b2817b353708f0feb1cfc747f.png" style="height:35px; width:auto; max-width:60px;" class="lazyload"><br>SEPLAG - AL publica edital de concurso público para Agente e Escrivão na Polícia Civil</a></li>
+<li><a href="https://www.pciconcursos.com.br/noticias/prefeitura-de-conceicao-do-almeida-ba-abre-concurso-publico-com-vagas-para-diversos-cargos"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAADUlEQVQImWP4//8/AwAI/AL+hc2rNAAAAABJRU5ErkJggg=="  data-src="https://cdn.pci.app.br/img/c/96858695a1105b414cd1e47c68af14f2.png" style="height:35px; width:auto; max-width:60px;" class="lazyload"><br>Prefeitura de Conceição do Almeida - BA abre concurso público com vagas para diversos cargos</a></li>
+<li><a href="https://www.pciconcursos.com.br/noticias/policia-civil-ba-abre-concurso-publico-para-delegado-investigador-e-escrivao"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAADUlEQVQImWP4//8/AwAI/AL+hc2rNAAAAABJRU5ErkJggg=="  data-src="https://cdn.pci.app.br/img/c/a3aad046a724ea363a2dcd39ef66581f.png" style="height:35px; width:auto; max-width:60px;" class="lazyload"><br>Polícia Civil - BA abre concurso público para Delegado, Investigador e Escrivão</a></li>
+<li><a href="https://www.pciconcursos.com.br/noticias/seduc-e-seplag-ce-abrem-concurso-publico-com-vagas-para-professores"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAADUlEQVQImWP4//8/AwAI/AL+hc2rNAAAAABJRU5ErkJggg=="  data-src="https://cdn.pci.app.br/img/c/a68845a2093cef1cfee6774e9169748d.png" style="height:35px; width:auto; max-width:60px;" class="lazyload"><br>SEDUC e SEPLAG - CE abrem concurso público com vagas para professores</a></li>
+<li><a href="https://www.pciconcursos.com.br/noticias/seap-ma-abre-concurso-publico-com-vagas-imediatas-e-cadastro-de-reserva"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAADUlEQVQImWP4//8/AwAI/AL+hc2rNAAAAABJRU5ErkJggg=="  data-src="https://cdn.pci.app.br/img/c/db5cb9d2f69fbdfab82391b60c986cea.png" style="height:35px; width:auto; max-width:60px;" class="lazyload"><br>SEAP - MA abre concurso público com vagas imediatas e cadastro de reserva</a></li>
+<li><a href="https://www.pciconcursos.com.br/noticias/prefeitura-de-cruz-do-espirito-santo-pb-abre-concurso-publico-com-vagas-para-diversas-areas"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAADUlEQVQImWP4//8/AwAI/AL+hc2rNAAAAABJRU5ErkJggg=="  data-src="https://cdn.pci.app.br/img/c/02aa91950f1e442e8122f5532393141c.png" style="height:35px; width:auto; max-width:60px;" class="lazyload"><br>Prefeitura de Cruz do Espírito Santo - PB abre concurso público com vagas para diversas áreas</a></li>
+<li><a href="https://www.pciconcursos.com.br/noticias/prefeitura-de-caruaru-pe-abre-concurso-publico-para-auditores-e-analistas-fiscais"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAADUlEQVQImWP4//8/AwAI/AL+hc2rNAAAAABJRU5ErkJggg=="  data-src="https://cdn.pci.app.br/img/c/e532acefe81d5739cb8e1b3fdfa621c2.png" style="height:35px; width:auto; max-width:60px;" class="lazyload"><br>Prefeitura de Caruaru - PE abre concurso público para auditores e analistas fiscais</a></li>
+<li><a href="https://www.pciconcursos.com.br/noticias/ufpe-publica-retificacao-do-concurso-para-cargos-tecnico-administrativos"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAADUlEQVQImWP4//8/AwAI/AL+hc2rNAAAAABJRU5ErkJggg=="  data-src="https://cdn.pci.app.br/img/c/182d1b16398db308195d2e9a4dbc8ee8.png" style="height:35px; width:auto; max-width:60px;" class="lazyload"><br>UFPE publica retificação do concurso para cargos técnico-administrativos</a></li>
+<li><a href="https://www.pciconcursos.com.br/noticias/sead-e-pm-pi-retificam-concurso-publico-para-soldado-e-oficial-capelao"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAADUlEQVQImWP4//8/AwAI/AL+hc2rNAAAAABJRU5ErkJggg=="  data-src="https://cdn.pci.app.br/img/c/4cdf88d31e37d9a578a9d87ddc84af22.png" style="height:35px; width:auto; max-width:60px;" class="lazyload"><br>SEAD e PM - PI retificam concurso público para Soldado e Oficial Capelão</a></li>
+            </ul>
+        </div>
+    </div>
+    <div id="footer">
+        <div>
+            <div class="footer-politica-de-privacidade"><a href="https://www.pciconcursos.com.br/politica-de-privacidade/">Política de
+                    Privacidade e Cancelamento</a></div>
+            <div class="footer-copyright">2000-2026 PCI Concursos ®</div>
+            <div class="footer-redes-sociais">
+                <a target="_blank" href="https://whatsapp.com/channel/0029VaHULn4BFLgS0MkR0M0d"
+                   style="background-color:#25D366;" title="Canal no WhatsApp"><i class="fab fa-whatsapp"
+                                                                                  style="font-size:16px;"></i></a>
+                <a target="_blank" href="https://t.me/pciconcursos" style="background-color:#0088cc;"
+                   title="Telegram"><i class="fas fa-paper-plane" style="font-size:12px;"></i></a>
+                <a target="_blank" href="https://www.linkedin.com/company/pciconcursos/posts/"
+                   style="background-color:#0077B5;" title="Linkedin"><i class="fab fa-linkedin-in"
+                                                                         style="font-size:18px;"></i></a>
+                <a target="_blank" href="https://www.facebook.com/pciconcursos" style="background-color:#3b5998;"
+                   title="Facebook"><i class="fab fa-facebook-f" style="font-size:18px;"></i></a>
+                <a target="_blank" href="https://x.com/pciconcursos" style="background-color:#000000;" title="X"><i
+                            class="fab fa-x-twitter" style="font-size:16px;"></i></a>
+                <a target="_blank" href="https://www.instagram.com/pciconcursos_oficial"
+                   style="background-color:#C13584;" title="Instagram"><i class="fab fa-instagram"
+                                                                          style="font-size:18px; margin-top:1px;"></i></a>
+            </div>
+            <!-- <div class="footer-tel"><a href="https://www.pciconcursos.com.br/contato/">Atendimento /contato</a></div> -->
+            <div id="lgpd" style="display:none;"></div>
+        </div>
+    </div>
+</div>
+<script src="https://www.pciconcursos.com.br/js/jquery.slicknav.min.js"></script>
+<script src="https://www.pciconcursos.com.br/js/js.cookie.min.js"></script>
+<script src="https://www.pciconcursos.com.br/js/site.js?31987212"></script>
+<script src="https://www.pciconcursos.com.br/js/popper.min.js"></script>
+<script src="https://www.pciconcursos.com.br/js/bootstrap.js"></script>
+
+<script>if ('serviceWorker' in navigator && location.hostname === 'www.pciconcursos.com.br') { navigator.serviceWorker.register('/sw.js').catch(() => {}); }</script>
+<script src="https://www.pciconcursos.com.br/js/lazy.js" defer></script>
+<script src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2622407619291980" crossorigin="anonymous" defer></script>
+<script src="https://www.googletagmanager.com/gtag/js?id=G-ELMBY7KMP0" defer></script>
+<script>window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-ELMBY7KMP0');
+</script></body>
+</html>

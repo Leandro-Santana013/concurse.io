@@ -1,0 +1,329 @@
+Exam ID: 76
+Exam Title: [2013] ASSISTENTE DE ADMINISTRAÇÃO E SERVIÇOS PÚBLICOS (OFICIAL DE ESCOLA) - PREF. INDAIATUBA/SP (2013)
+Exam Source URL: https://arq.pciconcursos.com.br/provas/19106657/8469e16cebc5/assist_admin_serv_publicos_oficial_escola.pdf
+Exam Gabarito URL: https://arq.pciconcursos.com.br/provas/19106657/17f21f99e5ec/gabaritos.pdf
+Total questions: 40
+============================================================
+Questao ID: 25131, Num: 1, Subject: Geral
+Statement:
+De acordo com o texto acima, podemos afirmar que:
+Options:
+{"A": "A maioria dos jogadores não quiseram responder a pergunta.", "B": "Mais da metade dos entrevistados bebem todos os dias.", "C": "A maioria dos jogadores bebem pelo menos uma vez por semana.", "D": "Todos os entrevistados fazem uso de bebidas alcoólicas."}
+Correct Answer: C
+============================================================
+Questao ID: 25132, Num: 2, Subject: Geral
+Statement:
+Na frase: “Dos entrevistados, 24% <u>**não**</u> quiseram responder a pergunta.”, a palavra destacada pode ser classificada como:
+Options:
+{"A": "Advérbio de negação.", "B": "Advérbio de tempo.", "C": "Advérbio de intensidade.", "D": "Locução adverbial de negação."}
+Correct Answer: A
+============================================================
+Questao ID: 25133, Num: 3, Subject: Geral
+Statement:
+Observe as seguintes orações:
+
+I. Deixe- **as** dormir.
+
+II. Deixaram tudo para **mim** fazer.
+
+III. Fizeram- **nos** esperar.
+
+IV. Mandaram- **me** entrar.
+
+Quanto à colocação dos pronomes em destaque podemos afirmar que:
+Options:
+{"A": "As orações dos quatro itens apresentam colocação pronominal correta.", "B": "Apenas orações I, II e III estão corretas.", "C": "As orações dos quatro itens apresentam colocação pronominal incorreta.", "D": "Apenas as orações I, III e IV estão corretas."}
+Correct Answer: D
+============================================================
+Questao ID: 25134, Num: 4, Subject: Geral
+Statement:
+Lendo atentamente as orações dos períodos a seguir, indique a única alternativa que apresenta erro quanto à pontuação:
+Options:
+{"A": "“Findas as lições, espaçou as visitas, sumiuse afinal.” (Graciliano Ramos)", "B": "“Dentro do navio homens e mulheres conversavam.” (Jorge Amado)", "C": "“Mas padre Anselmo, era assim mesmo: amigo dos pobres.” (João Bezerra)", "D": "“-Aonde? Perguntou Dona Plácida.” (Machado de Assis)"}
+Correct Answer: C
+============================================================
+Questao ID: 25135, Num: 5, Subject: Geral
+Statement:
+Na frase: “Meu sonho sempre foi visitar a **cidade-luz**.”A expressão em destaque tratase de uma:
+Options:
+{"A": "Paráfrase.", "B": "Ideia central.", "C": "Síntese.", "D": "Perífrase."}
+Correct Answer: D
+============================================================
+Questao ID: 25136, Num: 6, Subject: Geral
+Statement:
+assinale a alternativa que apresenta oração com sujeito indeterminado.
+Options:
+{"A": "Ela tem boa educação.", "B": "Atropelaram uma senhora na esquina.", "C": "Eu viajarei amanhã.", "D": "O operário feriu-se durante o trabalho."}
+Correct Answer: B
+============================================================
+Questao ID: 25137, Num: 7, Subject: Geral
+Statement:
+Examinando a grafia das seguintes palavras:
+
+I. Discussão
+
+II. Excesso
+
+III. Antessala
+
+IV. Ojeriza Podemos afirmar que:
+Options:
+{"A": "Todas as palavras estão corretas.", "B": "Apenas as palavras I, II e IV estão corretas.", "C": "Todas as palavras estão incorretas. <u>d) Apenas a palavra IV está incorreta</u>. PÚBLICOS – (ANTIGO OFICIAL DE ESCOLA)"}
+Correct Answer: A
+============================================================
+Questao ID: 25138, Num: 8, Subject: Geral
+Statement:
+Nas frases: “ <u>**A**</u> Argentina é o segundo maior país da América do sul.” “ A renúncia do papa Bento <u>**XVI**</u> foi anunciada na do dia 11 de fevereiro de 2013.” “ O conclave de 2013 elegeu <u>seu</u> sucessor, Francisco.” As palavras destacadas classificam-se
+Options:
+{"A": "respectivamente como:", "B": "Artigo definido/ numeral / pronome possessivo", "C": "Artigo indefinido/ numeral/ pronome demonstrativo", "D": "Numeral / numeral / pronome possessivo", "E": "Artigo definido / numeral / pronome demonstrativo"}
+Correct Answer: A
+============================================================
+Questao ID: 25139, Num: 9, Subject: Geral
+Statement:
+assinale a opção que apresenta a regência verbal incorreta:
+Options:
+{"A": "Os camponeses aspiram a uma vida mais confortável.", "B": "Ao assinar o contrato, o empresário visou, apenas, ao lucro pretendido.", "C": "O rapaz presenciou o trabalho dos agricultores.", "D": "O ladrão agrediu-lhe sem necessidade."}
+Correct Answer: D
+============================================================
+Questao ID: 25140, Num: 10, Subject: Geral
+Statement:
+assinale a opção que completa corretamente as lacunas da frase:
+Options:
+{"A": "Este meu amigo.................vai..................-se para* *ter direito ao título de eleitor*.", "B": "Extrangeiro / naturalizar.", "C": "Estrangeiro / naturalisar.", "D": "Estrangeiro / naturalizar.", "E": "Extrangeiro / naturalisar"}
+Correct Answer: C
+============================================================
+Questao ID: 25141, Num: 11, Subject: Geral
+Statement:
+A porção pintada da figura abaixo corresponde
+Options:
+{"A": "a que fração da figura total?", "B": "1/3", "C": "10", "D": "3/10", "E": "2/3"}
+Correct Answer: A
+============================================================
+Questao ID: 25142, Num: 12, Subject: Geral
+Statement:
+Qual a solução para a seguinte expressão
+Options:
+{"A": "aritmética:", "B": "1", "C": "1/15", "D": "1/25", "E": "1/35"}
+Correct Answer: B
+============================================================
+Questao ID: 25143, Num: 13, Subject: Geral
+Statement:
+As águas ocupam três quartos de toda superfície terrestre, em termos de volume de água isso corresponde a aproximadamente 1,4 x 10 18 litros de água. No entanto, apenas 4,2 x 10 16 litros deste valor corresponde à água doce. Sabendo que nosso planeta possui cerca de 7 bilhões de habitantes segundo dados da divisão de estudos da
+Options:
+{"A": "população da ONU. Qual seria o volume de água doce por habitante do nosso planeta?", "B": "6 x 10 6 l/hab", "C": "5 x 10 18 l/hab", "D": "2 x 10 16 l/hab", "E": "0,2 x 10 9 l/hab"}
+Correct Answer: A
+============================================================
+Questao ID: 25144, Num: 14, Subject: Geral
+Statement:
+Um passageiro embarcou em um ônibus na cidade A às 14h 32 min 18s, esse ônibus saiu da rodoviária desta cidade às 14h 55min 40s e chegou na rodoviária da cidade B às 19h 27min 15s, do mesmo dia. Quanto tempo o passageiro permaneceu no interior do ônibus?
+Options:
+{"A": "05h 54min 09s", "B": "04h 05min 57s", "C": "05h 05min 09s", "D": "04h 54min 57s"}
+Correct Answer: D
+============================================================
+Questao ID: 25145, Num: 15, Subject: Geral
+Statement:
+Qual é a forma decimal de se escrever a seguinte medida 3 km + 38 cm, exprimindo-a em metros.
+Options:
+{"A": "3038,00", "B": "3003,80", "C": "3380,00 <u>d</u>) <u>3000,38</u> PÚBLICOS – (ANTIGO OFICIAL DE ESCOLA)"}
+Correct Answer: D
+============================================================
+Questao ID: 25146, Num: 16, Subject: Geral
+Statement:
+Ao comprar um eletrodoméstico em uma loja que estava dando 20%de desconto, o cliente ganhou um desconto de R$500,00. Qual era o preço do eletrodoméstico e quanto foi pago
+Options:
+{"A": "por ele respectivamente.", "B": "R$2.720,00 e R$2.240,00", "C": "R$1.900,00 e R$1.400,00", "D": "R$2.500,00 e R$2.000,00", "E": "R$3.500,00 e R$3.000,00"}
+Correct Answer: C
+============================================================
+Questao ID: 25147, Num: 17, Subject: Geral
+Statement:
+Todo mês vem descontado na folha de pagamento de um trabalhador o valor de 280,00 reais. Sabendo que o salário bruto deste trabalhador é de R$1.400, 00. este desconto equivale a quantos por cento do salário do trabalhador?
+Options:
+{"A": "5%", "B": "20%", "C": "2%", "D": "25%"}
+Correct Answer: B
+============================================================
+Questao ID: 25148, Num: 18, Subject: Geral
+Statement:
+Ao abastecer um automóvel, o seu dono pagou em trinta litros de um combustível R$ 90, 00. quanto custará se o automóvel for abastecido com setenta litros do mesmo combustível?
+Options:
+{"A": "210,00 reais", "B": "200,00 reais", "C": "95,00 reais", "D": "150,00 reais"}
+Correct Answer: A
+============================================================
+Questao ID: 25149, Num: 19, Subject: Geral
+Statement:
+Qual a área da coroa (destacada em cinza), sabendo que R = 6 m e r = 2 m? Por
+Options:
+{"A": "simplificação adote π = 3.", "B": "8 m²", "C": "96 m²", "D": "4 m²", "E": "40 m²"}
+Correct Answer: B
+============================================================
+Questao ID: 25150, Num: 20, Subject: Geral
+Statement:
+Qual será a medida da capacidade, em litros, de um latão de gasolina, de forma de paralelepípedo retângulo com 2 m de comprimento, 3 m de largura e 1,5 m de altura. Dado que 1 m³ = 1000I.
+Options:
+{"A": "9 l", "B": "9 m³", "C": "9000 l", "D": "9000 m³"}
+Correct Answer: C
+============================================================
+Questao ID: 25151, Num: 21, Subject: Ética no Serviço Público
+Statement:
+Para garantir uma efetiva conduta ética no âmbito dos departamentos da administração pública, é necessário:
+Options:
+{"A": "Estabelecer um rígido código de ética a ser imposto a todos os membros da organização, sob pena de severas punições.", "B": "Oferecer um manual de ética para cada empregado, a fim de que eles possam notificar os superiores sobre possíveis deslizes e erros praticados pelos colegas.", "C": "Desenvolver um clima organizacional no qual a reflexão ética possa ser exercida.", "D": "Criar forte estrutura hierárquica, pois só com clara definição de poder no departamento é que pode haver ética."}
+Correct Answer: C
+============================================================
+Questao ID: 25152, Num: 22, Subject: Geral
+Statement:
+A cidadania exige ações do cidadão. Os acontecimentos não dependem apenas do um. Não podemos deixar de reconhecer a responsabilidade que temos pelo nosso destino.O uso do poder de influenciar nos acontecimentos da sociedade é exercido,
+Options:
+{"A": "principalmente, pela exigência:", "B": "Das Administrações Públicas", "C": "Das leis.", "D": "Dos Prefeitos.", "E": "Dos desfavorecidos."}
+Correct Answer: B
+============================================================
+Questao ID: 25153, Num: 23, Subject: Geral
+Statement:
+São atitudes positivas para uma boa relação humana no trabalho todas abaixo, exceto:
+Options:
+{"A": "Quando estiver participando de discussões em grupo, defina bem o sentido das palavras para evitar duplo sentido e mal-entendidos. PÚBLICOS – (ANTIGO OFICIAL DE ESCOLA)", "B": "Não procure as causas da sua antipatia, afim de vencê-las! Isso poderá não contaminar seu ambiente de trabalho.", "C": "Seja prestativo na medida certa para não ser mal interpretado.", "D": "Dê atenção com quem fala com você. Evite interromper a palavra; espere sua vez."}
+Correct Answer: B
+============================================================
+Questao ID: 25154, Num: 24, Subject: Geral
+Statement:
+Para evitar acidentes em decorrência de levantamento e transporte manual de cargas pesadas, os mesmos devem ser evitados, devendo ser realizados por equipamentos mecânicos. Se isto não for possível, várias pessoas devem trabalhar juntas, sendo importante que todas utilizem os métodos corretos de levantamento. O levantamento de peso deve ser realizado com:
+Options:
+{"A": "O auxílio das pernas.", "B": "O auxilio das costas.", "C": "O auxilio das mãos.", "D": "O auxilio dos pés."}
+Correct Answer: A
+============================================================
+Questao ID: 25155, Num: 25, Subject: Geral
+Statement:
+Sobre os diretos individuais e coletivos, assinale a
+alternativa correta:
+Options:
+{"A": "É violável o sigilo da correspondência e das comunicações telegráficas, de dados e das comunicações telefônicas, salvo, no último caso, por ordem judicial, nas hipóteses e na forma que a lei estabelecer para fins de investigação criminal ou instrução processual.", "B": "É restrito o exercício de qualquer trabalho, ofício ou profissão, atendidas as qualificações profissionais que a lei estabelecer.", "C": "É livre a locomoção no território nacional em tempo de paz, podendo qualquer pessoa, nos termos da lei, nele entrar, permanecer ou dele sair com seus bens.", "D": "É restrito a manifestação do pensamento, sendo livre o anonimato."}
+Correct Answer: C
+============================================================
+Questao ID: 25156, Num: 26, Subject: Geral
+Statement:
+Defronte a um acidente com vítima, antes de providenciar sua remoção é essencial que seja executada as seguintes ações:
+
+I. Realizar o Controle de hemorragias e respiração
+
+II. Imobilizar todos os pontos suspeitos de <u>fraturas</u>.
+
+III. Promova e/ou descontrole o estado de choque.
+
+IV. Providencie uma maca.
+Options:
+{"A": "I e II apenas são verdadeiras.", "B": "II e IV apenas são verdadeiras.", "C": "III e IV apenas são verdadeiras.", "D": "I, II e IV apenas são verdadeiras"}
+Correct Answer: D
+============================================================
+Questao ID: 25157, Num: 27, Subject: Geral
+Statement:
+O governo decidiu garantir a redução na conta de luz, cujo prazo de validade da MP terminou na última segunda-feira $\frac{03}{06}$. Na manhã de quarta-feira dia 29 de maio, a ministra Gleisi Hoffmann, da Casa Civil, disse que o governo tem a solução para manter o desconto: um decreto e uma Medida Provisória que já está tramitando no Congresso. Essa atitude do governo foi em decorrência de:
+Options:
+{"A": "O Senado não ter votado a Medida Provisória.", "B": "O ministro de minas e Energia ser exonerado do cargo sob suspeita de corrupção ativa", "C": "A presidenta Dilma não ter tido força política suficiente para negociar com as empresas fornecedoras e geradoras de energia.", "D": "Recesso dos deputados em virtude do Feriado de 3º de maio."}
+Correct Answer: A
+============================================================
+Questao ID: 25158, Num: 28, Subject: Geral
+Statement:
+Quando escolhemos um nome a um arquivo no Windows não podemos
+Options:
+{"A": "utilizar o caractere:", "B": "$ (Cifrão)", "C": "% (Porcentagem)", "D": "+ (Adição)", "E": "(Interrogação)"}
+Correct Answer: D
+============================================================
+Questao ID: 25159, Num: 29, Subject: Geral
+Statement:
+Em uma planilha do Excel, considere os valores de células A1 = 1000 e B1 = 50%, assinale a alternativa onde o resultado da fórmula será 25. a) =1+A1*B1/24 b) =A1*B1/24+1 c) =A1*B1/19+1 d) =A1*B1/(19+1)
+
+PÚBLICOS – (ANTIGO OFICIAL DE ESCOLA) Observando a imagem a seguir, assinale a alternativa correta:
+Options:
+{"A": "Para selecionadas arquivos em sequência no Windows Explorer como exibe a imagem, se faz necessário utilizar a tecla CTRL + Botão Esquerdo do Mouse.", "B": "Para selecionadas arquivos em sequência no Windows Explorer como exibe a imagem, se faz necessário utilizar a tecla CTRL + Botão Direito do Mouse.", "C": "Para selecionadas arquivos em sequência no Windows Explorer como exibe a imagem, se faz necessário utilizar a tecla Alt + Botão Esquerdo do Mouse.", "D": "Para selecionadas arquivos em sequência no Windows Explorer como exibe a imagem, se faz necessário utilizar a tecla Shift + Botão Esquerdo do Mouse."}
+Correct Answer: D
+============================================================
+Questao ID: 25160, Num: 30, Subject: Geral
+Statement:
+QUESTÃO 31 No Excel, qual tecla de atalho poderá ser utilizada para realizar
+Options:
+{"A": "a substituição de informações em uma planilha?", "B": "CTRL + F", "C": "CTRL + X", "D": "CTRL + A", "E": "CTRL + L"}
+Correct Answer: D
+============================================================
+Questao ID: 25161, Num: 31, Subject: Geral
+Statement:
+No Excel, qual tecla de atalho poderá ser utilizada para realizar a substituição de informações em uma planilha?
+Options:
+{"A": "CTRL + F", "B": "CTRL + X", "C": "CTRL + A", "D": "CTRL + L"}
+Correct Answer: A
+============================================================
+Questao ID: 25162, Num: 32, Subject: Geral
+Statement:
+No Word, o ícone abaixo éconhecido como:
+Options:
+{"A": "Listagem.", "B": "Numeração.", "C": "Lista de vários níveis.", "D": "Recuo de nível."}
+Correct Answer: A
+============================================================
+Questao ID: 25163, Num: 33, Subject: Geral
+Statement:
+No que concerne o art. 3º - da lei Federal
+9394/
+96. os itens abaixo são considerados:
+*I- Igualdade de condições para o acesso e* *permanência na escola*;
+*II- Liberdade de aprender, ensinar, pesquisar* *e divulgar a cultura, o pensamento, a arte e* *o saber*;
+*III- Pluralismo de ideias e de concepções* *pedagógicas*;
+Options:
+{"A": "IV- Respeito à liberdade e apreço à* *tolerância*;", "B": "Metas da educação.", "C": "Princípios da educação.", "D": "Diretrizes da educação.", "E": "Garantias da educação."}
+Correct Answer: A
+============================================================
+Questao ID: 25164, Num: 34, Subject: Geral
+Statement:
+Segundo o
+
+Art. 30 - da lei Federal $\frac{9394}{96}$ a
+Options:
+{"C": "Certo", "E": "Errado"}
+Correct Answer: D
+============================================================
+Questao ID: 25165, Num: 35, Subject: Geral
+Statement:
+De acordo com o
+
+Art. 4º - da lei Federal $\frac{8069}{90}$ é dever da família, da comunidade, da sociedade em geral e do poder público assegurar, com absoluta prioridade, a efetivação dos direitos referentes à vida, à saúde, à alimentação, à educação, ao esporte, ao lazer, à profissionalização, à cultura, à dignidade, ao respeito, à liberdade e à convivência familiar e comunitária.
+
+Parágrafo único-A garantia de prioridade compreende, exceto:
+Options:
+{"A": "Primazia de receber proteção e socorro em quaisquer circunstâncias.", "B": "Precedência de atendimento nos serviços públicos ou de relevância privada.", "C": "Preferência na formulação e na execução das políticas sociais públicas,", "D": "Destinação privilegiada de recursos públicos nas áreas relacionadas com a proteção à infância e à juventude."}
+Correct Answer: B
+============================================================
+Questao ID: 25166, Num: 36, Subject: Geral
+Statement:
+A educação básica, nos níveis fundamental e médio, será organizada de acordo com a carga horária mínima anual de:
+Options:
+{"A": "De duzentas horas, distribuídas por um mínimo de duzentos dias de efetivo trabalho escolar, excluído o tempo reservado aos exames finais, quando houver.", "B": "De quatrocentas horas, distribuídas por um mínimo de duzentos dias de efetivo trabalho escolar, excluído o tempo reservado aos exames finais, quando houver.", "C": "De seiscentas horas, distribuídas por um mínimo de duzentos dias de efetivo trabalho escolar, excluído o tempo reservado aos exames finais, quando houver.", "D": "De oitocentas horas, distribuídas por um mínimo de duzentos dias de efetivo trabalho escolar, excluído o tempo reservado aos exames finais, quando houver."}
+Correct Answer: A
+============================================================
+Questao ID: 25167, Num: 37, Subject: Geral
+Statement:
+É dever dos pais ou responsáveis efetuar a matrícula das crianças na educação básica a partir dos:
+Options:
+{"A": "4 (quatro) anos de idade.", "B": "5 (cinco) anos de idade.", "C": "6 ( seis) anos de idade.", "D": "7 (sete) anos de idade."}
+Correct Answer: D
+============================================================
+Questao ID: 25168, Num: 38, Subject: Geral
+Statement:
+Há três tipos de expedientes que se diferenciam antes pela finalidade do que pela forma: o *ofício*, o *aviso* e o *memorando*.
+
+Com o fito de uniformizá-los, pode-se adotar uma diagramação única, que siga o que chamamos de *padrão* *ofício*. O *aviso*, o *ofício* e o *memorando* devem conter as seguintes partes, exceto:
+Options:
+{"A": "Tipo e número do expediente, seguido da sigla do órgão que o expede.", "B": "Local e data em que foi assinado, por extenso, com alinhamento centralizado.", "C": "Assunto: resumo do teor do documento.", "D": "Destinatário: o nome e o cargo da pessoa a quem é dirigida a comunicação. No caso do ofício deve ser incluído também o *endereço*."}
+Correct Answer: B
+============================================================
+Questao ID: 25169, Num: 39, Subject: Geral
+Statement:
+Quando se trata de planejar a organização de um arquivo ou fichário, os elementos constantes de um documento a considerar são: I- *Nome *( do remetente do destinatário ou da pessoa a quem se refere o documento); *II*- *Local*; *III*- *Número*; *IV*- *Data*, *V*- *Assunto*.
+Options:
+{"A": "I apenas é correta.", "B": "I, II e V apenas é correta.", "C": "III, e IV apenas é correta.", "D": "I, II, III, IV e V são corretas."}
+Correct Answer: A
+============================================================
+Questao ID: 25170, Num: 40, Subject: Geral
+Statement:
+assinale a alternativa incorreta de acordo com o atendimento ao público prestado pelo Servidor Público:
+
+PÚBLICOS – (ANTIGO OFICIAL DE ESCOLA)
+Options:
+{"A": "Deixar o servidor público qualquer pessoa à espera de solução que compete ao setor em que exerça suas funções, permitindo a formação de longas filas, ou qualquer outra espécie de atraso na prestação do serviço, não caracteriza apenas atitude contra a ética ou ato de desumanidade, mas principalmente grave dano moral aos usuários dos serviços públicos.", "B": "A cortesia, a boa vontade, o cuidado e o tempo dedicados ao serviço público caracterizam o esforço pela disciplina. Tratar mal uma pessoa que paga seus tributos direta ou indiretamente significa causar-lhe dano moral.", "C": "O trabalho desenvolvido pelo servidor público perante a comunidade deve ser entendido como acréscimo ao seu próprio bem-estar, já que, como cidadão, integrante da sociedade, o êxito desse trabalho pode ser considerado como seu maior patrimônio.", "D": "Toda pessoa tem direito à verdade. Contudo, o servidor pode omiti-la, ainda que contrária aos interesses da própria pessoa interessada ou da Administração Pública."}
+Correct Answer: B
