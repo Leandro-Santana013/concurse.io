@@ -2223,6 +2223,10 @@ progress::-moz-progress-bar { background: var(--primary); }
   animation: ui-spin 700ms linear infinite;
 }
 
+.animate-spin {
+  animation: ui-spin 1s linear infinite;
+}
+
 @keyframes ui-spin {
   to {
     transform: rotate(360deg);

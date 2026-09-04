@@ -225,7 +225,7 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
 
           {(stage === 'submitting' || stage === 'processing') && (
             <section className="rounded-lg border border-[var(--border)] bg-[var(--surface-subtle)] p-4" aria-live="polite" aria-busy="true">
-              <div className="flex items-center justify-between gap-4 text-sm"><span className="flex items-center gap-2 font-medium text-[var(--text)]"><Loader2 aria-hidden="true" />{statusMessage}</span><span className="font-mono">{progress}%</span></div>
+              <div className="flex items-center justify-between gap-4 text-sm"><span className="flex items-center gap-2 font-medium text-[var(--text)]"><Loader2 className="animate-spin" aria-hidden="true" />{statusMessage}</span><span className="font-mono">{progress}%</span></div>
               <progress className="mt-3 h-2 w-full" max="100" value={Math.max(5, progress)}>{progress}%</progress>
               <p className="mt-2 text-xs text-[var(--text-muted)]">Você pode fechar esta janela; o processamento continuará em segundo plano.</p>
             </section>
@@ -251,7 +251,7 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
               {stage === 'ready' && readyExamId ? (
                 <button type="button" className="button-primary" onClick={() => { onClose(); onExamReady?.(readyExamId); }}><FileText aria-hidden="true" /> Iniciar simulado</button>
               ) : (
-                <button type="submit" className="button-primary" disabled={isBusy || !examUrl.trim()}>{isBusy ? <Loader2 aria-hidden="true" /> : <FileText aria-hidden="true" />} Processar prova</button>
+                <button type="submit" className="button-primary" disabled={isBusy || !examUrl.trim()}>{isBusy ? <Loader2 className="animate-spin" aria-hidden="true" /> : <FileText aria-hidden="true" />} Processar prova</button>
               )}
             </div>
           </footer>

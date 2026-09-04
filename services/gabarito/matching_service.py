@@ -238,7 +238,12 @@ def _extract_identity_metadata(text: str) -> IdentityMetadata:
 
     cargo_codes: List[str] = []
     for match in re.finditer(
-        r"\b(?:codigo\s+(?:do\s+)?cargo|cargo\s+n\s*[o0]?|cargo\s+codigo)\s*[:#-]?\s*([a-z0-9./-]{1,20})\b",
+        r"\b(?:c[oó]digo\s+(?:do\s+)?cargo|cargo\s*(?:n\s*[o0\º\°]?)?|cargo\s+c[oó]digo)\s*[:#-]?\s*([a-z0-9./-]{1,20})\b",
+        normalized,
+    ):
+        cargo_codes.append(match.group(1).strip(".-/"))
+    for match in re.finditer(
+        r"\b([0-9]{1,2}\.[0-9]{2,3})\b",
         normalized,
     ):
         cargo_codes.append(match.group(1).strip(".-/"))
@@ -544,6 +549,59 @@ def _extract_candidates(
                     raw_text=page_text,
                 )
             )
+    import collections
+    all_matrices = extract_all_matrix_gabaritos(doc)
+    page_matrices = collections.defaultdict(list)
+    for m in all_matrices:
+        pno = int(m.get("page") or 0) or None
+        page_matrices[pno].append(m)
+
+    for page_number, matrix_list in page_matrices.items():
+        if page_number is not None:
+            matrix_pages.add(page_number)
+        page_text = page_texts[page_number - 1] if page_number else ""
+
+        # Deduplica candidatos de tabela idênticos na mesma página (ex: duplicatas causadas por varredura de OCR/PDF)
+        dedup_matrices = []
+        seen_gabs = set()
+        for m in matrix_list:
+            gab_key = tuple(sorted(m.get("gabarito", {}).items()))
+            if gab_key and gab_key not in seen_gabs:
+                seen_gabs.add(gab_key)
+                dedup_matrices.append(m)
+        if not dedup_matrices:
+            dedup_matrices = matrix_list
+
+        # Procura por linhas de cargo no rodapé ou cabeçalho da página (ex: "2.06 - ASSISTENTE...")
+        cargo_lines = re.findall(r'\b[0-9]{1,2}\.[0-9]{2,3}\s*[-–—][^\n]*', page_text)
+        if not cargo_lines:
+            cargo_lines = [
+                line.strip() for line in page_text.splitlines()
+                if re.search(r'\b[0-9]{1,2}\.[0-9]{2,3}\b', line) or re.search(r'\b(?:CARGO|CÓDIGO)\s*:\s*\d', line, re.I)
+            ]
+
+        for r_idx, matrix in enumerate(dedup_matrices):
+            specific_cargo = str(matrix.get("cargo") or "").strip()
+            if not specific_cargo and cargo_lines:
+                specific_cargo = cargo_lines[r_idx % len(cargo_lines)]
+
+            cargo_context = f"{document_hint}\n{specific_cargo if specific_cargo else page_text}\n{matrix.get('cargo', '')}\nTIPO {matrix.get('tipo', '')}"
+            metadata = _extract_identity_metadata(cargo_context)
+            if specific_cargo:
+                spec_meta = _extract_identity_metadata(specific_cargo)
+                if spec_meta.cargo_codes:
+                    metadata.cargo_codes = spec_meta.cargo_codes
+
+            candidate = AnswerKeyCandidate(
+                answers={int(number): str(answer).upper() for number, answer in matrix["gabarito"].items()},
+                page=page_number,
+                method="matrix_row",
+                metadata=metadata,
+                has_header=True,
+                cargo_text=specific_cargo or str(matrix.get("cargo") or ""),
+                raw_text=page_text,
+            )
+            candidates.append(candidate)
 
     for page_index, page_text in enumerate(page_texts, start=1):
         if page_index in matrix_pages or page_index in structured_pages:

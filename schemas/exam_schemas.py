@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 
 class OptionSchema(BaseModel):
-    key: str # 'A', 'B', 'C', 'D', 'E' or 'C', 'E'
+    key: str
     text: str
 
 class QuestionSchema(BaseModel):
@@ -31,6 +31,7 @@ class ExamSummarySchema(BaseModel):
     gabarito_coverage: float = 0.0
     gabarito_summary: Optional[str] = None
     source_url: Optional[str] = None
+    gabarito_url: Optional[str] = None
 
 class FolderSchema(BaseModel):
     id: Union[int, str]
@@ -60,7 +61,6 @@ class SearchResultItem(BaseModel):
     status: Optional[str] = "Pendente"
     reuse_available: bool = False
 
-
 class ExamIngestResponse(BaseModel):
     exam_id: int
     title: str
@@ -70,18 +70,17 @@ class ExamIngestResponse(BaseModel):
     reused: bool = False
     already_in_library: bool = False
 
-
 class ProgressEventSchema(BaseModel):
     exam_id: int
     status: str
-    progress: int # 0 to 100 or -1
+    progress: int
     error_type: Optional[str] = None
     timestamp: float
 
 class AttemptSubmission(BaseModel):
     exam_id: int
     elapsed_seconds: int
-    answers: Dict[str, str] # { "1": "A", "2": "C" }
+    answers: Dict[str, str]
 
 class AttemptResult(BaseModel):
     attempt_id: int

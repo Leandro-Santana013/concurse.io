@@ -34,8 +34,7 @@ def extract_options_from_chunk(chunk: str) -> Tuple[Dict[str, str], Optional[str
         r'\(?\s*([A-Ea-e])\s*\)?\s*[\.\-\–\—\:\)]|'
         r'\(([A-Ea-e])\)|'
         r'\[([A-Ea-e])\]|'
-        r'(?<=[\n\r])[ \t]*(?:\d+[\s\(\)\/]+)?\*?([A-Ea-e])\*?(?:\s*[\)\.\-\–\—\:]|[ \t]+)(?=[\w\u00C0-\u00FF\u201C\u201D\u2018\u2019\u00AB\u00BB\"\'\(\[\$\*\<])|'
-        r'(?<=\s)\*?([A-Ea-e])\*?[ \t]+(?=[\w\u00C0-\u00FF\u201C\u201D\u2018\u2019\u00AB\u00BB\"\'\(\[\$\*\<])'
+        r'(?<=[\n\r])[ \t]*(?:\d+[\s\(\)\/]+)?\*?([A-Ea-e])\*?(?:\s*[\)\.\-\–\—\:]|[ \t]+)(?=[\w\u00C0-\u00FF\u201C\u201D\u2018\u2019\u00AB\u00BB\"\'\(\[\$\*\<])'
         r')'
     )
     matches = []
@@ -322,6 +321,9 @@ def parse_exam_document(
         return []
 
     # 4.1 Normalização resiliente de cabeçalhos gerados por OCR degradado e remoção de rodapés institucionais
+    full_text = re.sub(r'(?m)^[ \t]*pcimarkpci[^\n]*$\n?', '', full_text)
+    full_text = re.sub(r'(?m)^[ \t]*www\.pciconcursos\.com\.br[^\n]*$\n?', '', full_text)
+    full_text = re.sub(r'(?m)^[ \t]*(?:PREFEITURA|CÂMARA|GOVERNO|ESTADO|CONCURSO\s+PÚBLICO|PROVA\s+OBJETIVA|EDITAL|[A-Z0-9_\-]+\s*[-–—]\s*P[áa]gina\s*\d+)[^\n]*$\n?', '', full_text, flags=re.IGNORECASE)
     full_text = re.sub(r'(?m)^\s*[A-Za-z\u00C0-\u00DC\s\-\/\(\)]{3,35}\s*[-–—]\s*\d+\s*$', '', full_text)
     full_text = re.sub(r'(?:\b|(?<=[\s\n]))(\d{1,3})\s*[\,\"\']+[ \t]*(?=[\.\,\:\'\`\~\s]*[A-Za-z\u00C0-\u00DC\"\'\(\[])', r'\n\1. ', full_text)
     full_text = re.sub(r'(?:\b|(?<=[\s\n]))[íI!|](\d)\s*[\.\,\:\-\"\']+[ \t]*(?=[\.\,\:\'\`\~\s]*[A-Za-z\u00C0-\u00DC\"\'\(\[])', r'\n1\1. ', full_text)
@@ -400,11 +402,14 @@ def parse_exam_document(
             raw_options = rq.get('opcoes', {})
             # Detecta se alguma alternativa foi truncada pelo motor nativo ou se faltam opções
             needs_recovery = False
-            for let, opt_val in raw_options.items():
-                v_str = str(opt_val).strip()
-                if len(v_str) <= 3 or v_str.endswith(('de.', 'em.', 'para.', 'com.', 'A.', 'B.', 'C.', 'D.', 'E.')):
-                    needs_recovery = True
-                    break
+            if re.search(r'(?:^|\n|\s+)[a-eA-E]\)\s*[A-ZÁ-Ú]', formatted_enunciado):
+                needs_recovery = True
+            else:
+                for let, opt_val in raw_options.items():
+                    v_str = str(opt_val).strip()
+                    if len(v_str) <= 3 or v_str.endswith(('de.', 'em.', 'para.', 'com.', 'A.', 'B.', 'C.', 'D.', 'E.')):
+                        needs_recovery = True
+                        break
             
             if needs_recovery or len(raw_options) < 4:
                 m_curr = re.search(rf'(?:^|\n)\s*(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+|ITEM\s+)0*{q_num}\b', full_text, re.IGNORECASE)
@@ -416,7 +421,7 @@ def parse_exam_document(
                         m_next = re.search(rf'(?:^|\n)\s*(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+|ITEM\s+|0*)0*{q_num + 1}\b', full_text[m_curr.end():], re.IGNORECASE)
                     chunk_q = full_text[m_curr.start():m_curr.end() + m_next.start()] if m_next else full_text[m_curr.start():]
                     recovered_opts, clean_stmt = extract_options_from_chunk(chunk_q)
-                    if len(recovered_opts) >= len(raw_options):
+                    if len(recovered_opts) >= 4 or len(recovered_opts) >= len(raw_options):
                         raw_options = recovered_opts
                         if clean_stmt and len(clean_stmt) > 10:
                             clean_stmt = re.sub(rf'^(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+|ITEM\s+|0*)0*{q_num}\b[ \t]*[:\.\-]?[ \t]*', '', clean_stmt, flags=re.IGNORECASE).strip()

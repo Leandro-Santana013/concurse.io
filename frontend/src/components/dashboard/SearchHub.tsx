@@ -119,7 +119,7 @@ export const SearchHub: React.FC<SearchHubProps> = ({ onExamReady }) => {
                 aria-describedby="search-help"
               />
               <button type="submit" className="button-primary search-submit" disabled={status === 'loading'} aria-label="Buscar provas">
-                {status === 'loading' ? <Loader2 aria-hidden="true" /> : <Search aria-hidden="true" />}
+                {status === 'loading' ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Search aria-hidden="true" />}
                 <span className="hidden sm:inline">Buscar</span>
               </button>
             </div>

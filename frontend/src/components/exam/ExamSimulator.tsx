@@ -11,6 +11,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Bookmark,
+  BookOpen,
   CheckCircle2,
   Clock3,
   Eye,
@@ -30,6 +31,7 @@ import { useExam } from '../../context/ExamContext';
 import { useUI } from '../../context/UIContext';
 import type { AttemptResult, ExamDetail, Question } from '../../types/exam';
 import { MathRenderer } from './MathRenderer';
+import { SourceModal, SourceModalData } from '../ui/SourceModal';
 
 interface ExamSimulatorProps {
   onBackToDashboard?: () => void;
@@ -63,6 +65,7 @@ interface ExamResultsProps {
   onBack: () => void;
   onRedo: () => void;
   onOpenNotebook?: () => void;
+  onOpenSource?: () => void;
   onOpenImage: (src: string) => void;
 }
 
@@ -304,6 +307,7 @@ const ExamResults: React.FC<ExamResultsProps> = ({
   onBack,
   onRedo,
   onOpenNotebook,
+  onOpenSource,
   onOpenImage,
 }) => {
   const filteredEntries = Object.entries(result.detailed_answers).filter(([, data]) => {
@@ -365,6 +369,12 @@ const ExamResults: React.FC<ExamResultsProps> = ({
               <button type="button" onClick={onOpenNotebook} className={quietButton}>
                 <Bookmark aria-hidden="true" className="h-4 w-4" />
                 Caderno de erros
+              </button>
+            )}
+            {onOpenSource && (
+              <button type="button" onClick={onOpenSource} className={quietButton}>
+                <BookOpen aria-hidden="true" className="h-4 w-4" />
+                Fonte
               </button>
             )}
           </div>
@@ -670,13 +680,27 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
     [flaggedQuestions, questions],
   );
 
+  const [sourceModalData, setSourceModalData] = useState<SourceModalData | null>(null);
+  const [isSourceModalOpen, setIsSourceModalOpen] = useState(false);
+
   const handleBack = onBackToDashboard || (() => navigateTo('folders'));
   const overlayOpen =
     Boolean(selectedImageZoom) ||
     isMobileMapOpen ||
     isShortcutsOpen ||
     isSubmitDialogOpen ||
-    isPreferencesOpen;
+    isPreferencesOpen ||
+    isSourceModalOpen;
+
+  const openSourceModal = useCallback(() => {
+    if (!activeExam) return;
+    setSourceModalData({
+      title: activeExam.title,
+      source_url: activeExam.source_url,
+      gabarito_url: activeExam.gabarito_url,
+    });
+    setIsSourceModalOpen(true);
+  }, [activeExam]);
 
   const openQuestionMap = useCallback(() => {
     if (window.matchMedia('(min-width: 1024px)').matches) {
@@ -852,6 +876,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             startExam(examToRedo);
           }}
           onOpenNotebook={onOpenNotebook}
+          onOpenSource={openSourceModal}
           onOpenImage={setSelectedImageZoom}
         />
         <ImagePreviewDialog src={selectedImageZoom} onClose={() => setSelectedImageZoom(null)} />
@@ -897,6 +922,20 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
               {answeredCount} de {totalQuestions} respondidas
             </p>
           </div>
+
+          <button
+            type="button"
+            onClick={openSourceModal}
+            aria-label="Ver fonte da prova"
+            className={clsx(
+              'inline-flex h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold sm:px-3 sm:text-sm',
+              'text-[var(--text)] hover:bg-[var(--surface-hover)]',
+              focusRing,
+            )}
+          >
+            <BookOpen aria-hidden="true" className="h-4 w-4 text-[var(--primary)]" />
+            <span className="hidden sm:inline">Fonte</span>
+          </button>
 
           <button
             type="button"
@@ -1523,6 +1562,11 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
       </AccessibleDialog>
 
       <ImagePreviewDialog src={selectedImageZoom} onClose={() => setSelectedImageZoom(null)} />
+      <SourceModal
+        isOpen={isSourceModalOpen}
+        onClose={() => setIsSourceModalOpen(false)}
+        data={sourceModalData}
+      />
     </div>
   );
 };

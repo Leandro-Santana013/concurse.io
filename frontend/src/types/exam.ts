@@ -29,6 +29,7 @@ export interface ExamSummary {
   gabarito_coverage: number;
   gabarito_summary?: string | null;
   source_url?: string | null;
+  gabarito_url?: string | null;
 }
 
 export interface Folder {
