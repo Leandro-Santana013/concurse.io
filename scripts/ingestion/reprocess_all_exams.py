@@ -29,6 +29,7 @@ from services.gabarito import (
 from services.exam_files import (
     canonical_answer_key_pdf_path,
     canonical_exam_pdf_path,
+    ensure_canonical_exam_pdf,
     find_local_answer_key_pdf,
     find_local_exam_pdf,
 )
@@ -60,6 +61,8 @@ def reprocess_all_exams():
 
         print(f"--- Processando Exame ID {exam_id}: '{title}' ---")
         pdf_path = find_local_exam_pdf(exam_id)
+        if pdf_path:
+            pdf_path = ensure_canonical_exam_pdf(exam_id, pdf_path) or pdf_path
         if not pdf_path and source_url and os.path.exists(source_url):
             pdf_path = source_url
 

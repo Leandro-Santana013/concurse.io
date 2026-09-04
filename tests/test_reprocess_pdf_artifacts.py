@@ -13,6 +13,7 @@ from services.gabarito import AnswerKeyMatchResult
 from services.exam_files import (
     canonical_answer_key_pdf_path,
     canonical_exam_pdf_path,
+    ensure_canonical_exam_pdf,
     find_local_exam_artifacts,
 )
 
@@ -152,6 +153,17 @@ class ReprocessPdfArtifactsTests(unittest.TestCase):
             canonical_answer_key_pdf_path(7, str(pdf_dir)),
             str(pdf_dir / "7_gab.pdf"),
         )
+
+    def test_legacy_exam_artifact_is_materialized_with_canonical_name(self):
+        pdf_dir = Path(self.temp_dir.name) / "pdfs"
+        pdf_dir.mkdir()
+        legacy_path = pdf_dir / "80_1788542391.pdf"
+        legacy_path.write_bytes(b"%PDF-1.7\n" + (b"fixture\n" * 1000))
+
+        canonical_path = ensure_canonical_exam_pdf(80, str(legacy_path), str(pdf_dir))
+
+        self.assertEqual(canonical_path, str(pdf_dir / "80_prova.pdf"))
+        self.assertTrue((pdf_dir / "80_prova.pdf").is_file())
 
     def test_explicit_answer_key_url_replaces_stale_local_file(self):
         pdf_dir = Path(self.temp_dir.name) / "pdfs"

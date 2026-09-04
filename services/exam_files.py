@@ -1,6 +1,7 @@
 """Resolução e nomenclatura dos PDFs associados a uma prova."""
 
 from pathlib import Path
+import shutil
 from typing import Optional, Tuple
 
 
@@ -10,6 +11,25 @@ def canonical_exam_pdf_path(exam_id: int, pdf_dir: str = "pdfs") -> str:
 
 def canonical_answer_key_pdf_path(exam_id: int, pdf_dir: str = "pdfs") -> str:
     return str(Path(pdf_dir) / f"{int(exam_id)}_gab.pdf")
+
+
+def ensure_canonical_exam_pdf(
+    exam_id: int,
+    source_path: str,
+    pdf_dir: str = "pdfs",
+) -> Optional[str]:
+    """Materializa a prova no nome estável do ID, preservando a origem."""
+    if not source_path:
+        return None
+    source = Path(source_path)
+    target = Path(canonical_exam_pdf_path(exam_id, pdf_dir))
+    try:
+        if source.resolve() != target.resolve():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+        return str(target) if is_pdf_file(target, minimum_bytes=5_000) else None
+    except OSError:
+        return None
 
 
 def is_pdf_file(path: Path, *, minimum_bytes: int = 4) -> bool:

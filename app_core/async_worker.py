@@ -35,6 +35,7 @@ from services.exam_library import register_exam_source_alias
 from services.exam_files import (
     canonical_answer_key_pdf_path,
     canonical_exam_pdf_path,
+    ensure_canonical_exam_pdf,
     find_local_answer_key_pdf,
     find_local_exam_pdf,
     is_pdf_file,
@@ -191,7 +192,7 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
         # 1. Verifica se já existe um PDF válido localmente na pasta pdfs/
         local_candidate = find_local_exam_pdf(exam_id)
         if local_candidate:
-            pdf_path = local_candidate
+            pdf_path = ensure_canonical_exam_pdf(exam_id, local_candidate) or local_candidate
 
         # 2. Se a URL for página do PCI Concursos, extrai diretamente os PDFs oficiais daquela página
         if not local_candidate and source_url and ('pciconcursos.com.br' in source_url) and not source_url.lower().endswith('.pdf') and ('arquivo.pciconcursos.com.br' not in source_url):
