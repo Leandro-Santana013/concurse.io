@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "description": "Phase 5 corpus manifest. Splits are by complete exam_id, never by PDF page.",
+  "entries": [
+    {
+      "id": "phase5-55-a",
+      "pdf": "pdfs/55_1788093381.pdf",
+      "answer_key": "pdfs/55_gab_1788093381.pdf",
+      "split": "TRAIN",
+      "banca": null,
+      "layout_label": "known"
+    },
+    {
+      "id": "phase5-55-b",
+      "pdf": "pdfs/55_1788094679.pdf",
+      "answer_key": "pdfs/55_gab_1788094679.pdf",
+      "split": "VALIDATION",
+      "banca": null,
+      "layout_label": "known"
+    },
+    {
+      "id": "phase5-56-a",
+      "pdf": "pdfs/56_1788095849.pdf",
+      "answer_key": "pdfs/56_gab_1788095849.pdf",
+      "split": "TRAIN",
+      "banca": null,
+      "layout_label": "known"
+    },
+    {
+      "id": "phase5-56-b",
+      "pdf": "pdfs/56_1788100663.pdf",
+      "answer_key": "pdfs/56_gab_1788100663.pdf",
+      "split": "VALIDATION",
+      "banca": null,
+      "layout_label": "known"
+    },
+    {
+      "id": "phase5-72-holdout",
+      "pdf": "pdfs/72_1788299805.pdf",
+      "answer_key": "pdfs/72_gab_1788299805.pdf",
+      "split": "HOLDOUT",
+      "banca": null,
+      "layout_label": "unseen"
+    },
+    {
+      "id": "phase5-79-dataprev",
+      "pdf": "pdfs/79_prova.pdf",
+      "answer_key": "pdfs/79_gab.pdf",
+      "split": "TRAIN",
+      "banca": "DATAPREV",
+      "expected_question_count": 70,
+      "expected_option_count": 5,
+      "layout_label": "known"
+    },
+    {
+      "id": "phase5-80-dataprev",
+      "pdf": "pdfs/80_prova.pdf",
+      "answer_key": "pdfs/80_gab.pdf",
+      "split": "VALIDATION",
+      "banca": "DATAPREV",
+      "expected_question_count": 70,
+      "expected_option_count": 5,
+      "layout_label": "known"
+    },
+    {
+      "id": "phase5-81-dataprev",
+      "pdf": "pdfs/81_prova.pdf",
+      "answer_key": "pdfs/81_gab.pdf",
+      "split": "HOLDOUT",
+      "banca": "DATAPREV",
+      "expected_question_count": 70,
+      "expected_option_count": 5,
+      "layout_label": "known"
+    }
+  ]
+}

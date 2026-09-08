@@ -1,0 +1,1058 @@
+{
+  "adapter": "hybrid_extractor",
+  "pipeline": "legacy",
+  "questions": [
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "1",
+      "options": {
+        "A": "Existe uma oração subordinada que exerce função de sujeito em relação à oração principal",
+        "B": "Nota-se uma oração subordinada substantiva, em que a segunda oração exerce função própria de um substantivo em relação à oração principal",
+        "C": "Observa-se uma oração subordinada reduzida de infinitivo",
+        "D": "Verifica-se a possibilidade de desenvolver a segunda oração em “que se esteja atento e forte”",
+        "E": "Há uma oração subordinada que delimita a informação presente na oração principal."
+      },
+      "question_index": 0,
+      "statement": "*É preciso estar atento e forte*.\n\nSobre a estrutura sintática da frase em destaque, assinale a opção <u>*incorreta*</u>",
+      "subject": "Geral"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "2",
+      "options": {
+        "A": "Não admira que, fora de si, e andando rápido, desse um encontrão em certo homem que ia devagar",
+        "B": "Catete adiante, lembrou-se que a casa de Sofia era na Praia do Flamengo",
+        "C": "Após <u>alguns</u> instantes rápidos, abanou a cabeça voluntariamente",
+        "D": "Este apertou-lhe a mão satisfeitíssimo; ia ver-se livre de um <u>sócio</u>",
+        "E": "Mas diga-me uma coisa, essa proposta traz algum motivo oculto?"
+      },
+      "question_index": 1,
+      "statement": "Assinale a opção em que o elemento destacado <u>***não***</u> funciona como adjunto adnominal",
+      "subject": "Geral"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "3",
+      "options": {
+        "A": "Existe uma visão negativa do fazer poético, já que o poeta é descrito como “fingidor”",
+        "B": "O jogo de palavras em fingidor - *fingir dor* - contribui para caracterizar o poeta como sujeito insubmisso ao sentimento",
+        "C": "O fingimento é matéria de poesia, é a ferramenta da criação literária",
+        "D": "O exercício de fazer poesia torna o poeta imune à dor",
+        "E": "Há uma perspectiva irônica que se sustenta, sobretudo, em fingir a dor que, de fato, sente-se."
+      },
+      "question_index": 2,
+      "statement": "Leia o fragmento a seguir, de Fernando Pessoa:\n\n> *O poeta é um fingidor*\n> *Finge tão completamente*\n> *Que chega a fingir que é dor*\n> *A dor que deveras sente*.\n\nAssinale a opção correta sobre a interpretação dos versos em destaque",
+      "subject": "Geral"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "4",
+      "options": {
+        "A": "É impossível ser feliz e viver.",
+        "B": "Viver pressupõe felicidade.",
+        "C": "Há uma relação paradoxal entre felicidade e vida.",
+        "D": "É preciso esquecer da felicidade para obtê-la.",
+        "E": "Descreve-se o caráter efêmero da felicidade."
+      },
+      "question_index": 3,
+      "statement": "*A felicidade é tão oposta à vida, que estando nela, a gente esquece* *que vive* .\n\nAssinale a opção correta sobre o sentido da frase em destaque.",
+      "subject": "Geral"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "5",
+      "options": {
+        "A": "Não faz sentido obedecer a leis absurdas",
+        "B": "Admito que me simpatizei muito com a nova professora de Literatura",
+        "C": "Nossos vizinhos se mudaram e residem agora à rua das Laranjeiras",
+        "D": "Possuía uma dívida com o açougueiro, paguei-o assim que pude",
+        "E": "Vovó sempre lembra do aniversário de todos os seus netos."
+      },
+      "question_index": 4,
+      "statement": "Assinale a opção que apresenta corretamente a regência dos verbos",
+      "subject": "Geral"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "6",
+      "options": {
+        "A": "Pessoas que não se contentavam com o que tinham - descontentes",
+        "B": "Uma ferida que não se apagava - indelével",
+        "C": "Havia algo em sua imagem que não se podia distinguir - indistinguível",
+        "D": "Tinha a característica de alguém que não se irrita com facilidade – irascível",
+        "E": "Água e álcool são elementos que não se misturam - imiscíveis."
+      },
+      "question_index": 5,
+      "statement": "Assinale a opção que relaciona de modo <u>***incorreto***</u> o adjetivo à locução adjetiva destacada",
+      "subject": "Geral"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "7",
+      "options": {
+        "A": "Acrescia que, em verdade, o doente parecia estar melhorando",
+        "B": "Verdade é, disse ainda Rubião para defender o enfermo, verdade é que o cachorro merece a estima do dono",
+        "C": "Quando este acudiu, já ele mudara outra vez de ideia",
+        "D": "Espreitara uma deixa, e sai-lhe do testamento a massa toda dos bens",
+        "E": "No dia seguinte, Maria Benedita declarou à prima que estava pronta a aprender piano e francês."
+      },
+      "question_index": 6,
+      "statement": "Assinale a opção em que a vírgula se justifica pelo mesmo motivo do que em “se as duas tribos dividirem em paz as batatas do campo, não chegam a nutrir-se suficientemente e morrem de inanição”",
+      "subject": "Geral"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "8",
+      "options": {
+        "A": "cria o efeito de realidade, já que a fala busca reproduzir o momento da enunciação",
+        "B": "atribui o sentido de verdade, tendo em vista que prevalece o teor de preservação do discurso citado",
+        "C": "delimita a fronteira entre o discurso do narrador e o discurso citado por meio de aspas, travessão e verbos de elocução",
+        "D": "demarca a soberania do narrador, pois ele interpreta a fala citada, absorvida no fio de seu discurso",
+        "E": "precisa transpor as palavras do discurso citado, tal qual foram enunciadas originalmente."
+      },
+      "question_index": 7,
+      "statement": "O uso excessivo de telas faz mal à saúde da mente e do corpo e os efeitos podem ser ainda mais danosos nas duas primeiras décadas de vida:\n\n- Como tudo, o problema está no excesso e na falta de controle adequado, afirma o psicólogo Thiago Viola, do Instituto do Cérebro do Rio Grande do Sul. bbc.com (adaptado) Sobre o uso do discurso direto, é <u>***incorreto***</u> afirmar que este procedimento",
+      "subject": "Geral"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "9",
+      "options": {
+        "A": "Consequência.",
+        "B": "Causa.",
+        "C": "Finalidade.",
+        "D": "Tempo.",
+        "E": "Proporcionalidade."
+      },
+      "question_index": 8,
+      "statement": "Assinale a opção que indica corretamente a noção semântica expressa pelo elemento destacado em: “A moça recostara-se em uma cadeira de balanço no claro de uma janela, de modo que seu gracioso vulto imergia-se na plena luz”.",
+      "subject": "Geral"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "10",
+      "options": {
+        "A": "Ele virou-lhe as costas e tornou lentamente por onde viera",
+        "B": "Piedade ficou à janela",
+        "C": "Os curiosos permaneciam defronte de sua porta",
+        "D": "Coitada! Devia viver bem aborrecida da sorte",
+        "E": "Fazes mal em andar por aí com este sol."
+      },
+      "question_index": 9,
+      "statement": "Assinale a opção em que o verbo destacado indica estado",
+      "subject": "Geral"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "11",
+      "options": {
+        "A": "A candidata parece meia confusa",
+        "B": "É proibido a entrada de visitantes nessa área",
+        "C": "A diretora achou um e outro funcionário cumpridor",
+        "D": "A entrada para o teatro, atualmente, está muito caro",
+        "E": "As certidões estão anexas ao processo."
+      },
+      "question_index": 10,
+      "statement": "Assinale a opção correta em relação à concordância nominal",
+      "subject": "Geral"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "12",
+      "options": {
+        "A": "de uma norma linguística regional, a fim de caracterizar a cultura e o modo de vida do interior",
+        "B": "do termo comparativo “qual”, que estabelece uma analogia entre terra e fogueira",
+        "C": "de modalidade oral, que apresenta poucos recursos comunicativos, se comparada à modalidade escrita",
+        "D": "do substantivo *judiação* , que reitera a tristeza do poeta nos trechos em destaque",
+        "E": "de uma norma linguística desprestigiada, que serve para apontar a desigualdade social."
+      },
+      "question_index": 11,
+      "statement": "> *Quando oiei a terra ardendo*\n> *Qual fogueira de São João*\n> *Eu preguntei a Deus do céu, uai*\n> *Por que tamanha judiação*?\n\nNos versos de Luiz Gonzaga, o eu poético narra, em primeira pessoa, suas impressões sobre um determinado assunto.\n\nPara isso, ele utiliza construções linguísticas próprias, constatadas pelo uso",
+      "subject": "Geral"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "13",
+      "options": {
+        "A": "only 2 and 4 are false",
+        "B": "only 1 and 4 are true",
+        "C": "only 1, 3 and 4 are true",
+        "D": "only 1, 2 and 4 are false",
+        "E": "only 3 and 4 are true."
+      },
+      "question_index": 12,
+      "statement": "📖 **Texto de Apoio (Questões 13 a 18):**\n\nTechnology Consultant Fast Track: How to Get Your Dream Job in IT Consulting (IT Consulting Career Guide).\n\n(English Edition) eBook Kindle only.\n\nJumpstart your IT job search and land your dream job while your peers are still \"freshening up\" their resumes!\n\nProven techniques to land your dream job as a high-paid IT consultant—you don’t want to miss these, if you are serious about a career in IT! Answers to IT consulting career questions most people fail to ask; actionable advice and real-life stories from seasoned IT consultants!\n\nAs a fresh graduate looking for your first job, if you just do what almost everybody else is doing…you will land a hellhole job with lousy pay, long hours, nasty coworkers, and exclusively clients from hell (because you thought it was your only option to go forward in your career). If you are serious and can apply simple instructions, this book can help you become a high-paid IT consultant in your dream job by the end of the month!\n\nIf you already have your first or second job in the field of IT, or even have 20 years of work experience, this book will tell you what a great option a career in IT consulting can be. With this book, you can find out why your current job is not satisfying your career aspirations and turn your career around for the better!\n\nContaining lessons from a PhD with 12 years of experience and 15,000 billable hours from Accenture and Coala, this is the book movers and shakers in the IT industry are talking about.\n\nRecommended by university professors, last-year students, as well as seasoned consultants. Even my mom says you have to read this book, or you have to answer to her!\n\nBy reading this book, you will learn:\n\nWhat your college professor didn't tell you about the consulting business. The Pro’s and Con’s of a career in technology consulting.\n\nWhat other options do you have besides working for one of the global consulting giants such as Accenture, Capgemini, Deloitte, Ernst & Young (EY), KPMG, or PricewaterhouseCoopers (PwC).\n\nThe must-have characteristics to succeed in IT consulting (if you don't have these, you are doomed to FAIL!).\n\nHow to find your money-making niche in IT consulting.\n\nHow to get the best results with the least possible effort in your job search. Best ways to prepare for the job interview in 30 minutes or less.\n\nWhat questions to ask in the interview to avoid nasty surprises when you are selected. Hear what others are saying: ★★★★★ “The book gives a strong and realistic description of IT consultancy. Thus, every IT student should read the book before they graduate as it will increase their probability of landing a dream job.” Samuli Pekkola, Professor, PhD, in Information Systems Sciences, Tampere University ★★★★★ “The book gives insight into technology consulting and provides great tips for job search. I believe it will be very valuable when I start looking for a position in IT. The section on how to stand out as a candidate for a job was an eyeopener.” Saku Sikiö, Information Systems Student, University of Jyväskylä ★★★★★ “This is the book I would have needed on the verge of graduation!” Teijo Kelander, MSc, Quality Consultant and Agile Coach ★★★★★ “If you are serious about IT consultancy as a profession, this book is a must-read! As a recruiter, I would prefer that applicants would better understand what this is all about.” Petteri Laamanen, MSc, CEO & Founder, Coala ★★★★★ “This book gave me valuable insights into the IT consultant’s working life, making it easier to consider the pros and cons in relation to my own values and goals.” Janita Kingelin, MSc, Marketing Manager, SoulCore ★ If you want great results in your technology consultant job search, get this book right now! <u>\n\n*(Fonte: https://www.amazon.com.br/Technology-Consultant-Fast-Track-Consulting)*\n\n</u>- <u>ebook/dp/B0918JB48D</u>\n\n---\n\nConsider the following affirmatives\n\n1. The TEXT can just be found online\n\n2. The tips on this text are only for fresh graduates\n\n3. It is a printed book\n\n4. Professors, last-year students and consultants who are skilled at guiding business recommend the book.\n\nAccording to the TEXT,",
+      "subject": "Língua Inglesa"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "14",
+      "options": {
+        "A": "Tips on an in-person appraisal to be a successful IT consultant",
+        "B": "A review on a guide to foster the possibility of being successful in finding your Dream Job in IT Consulting, despite your experience",
+        "C": "Challenge only beginners to read a guide well written and recommended by professors in the IT scenario",
+        "D": "The reasons one should buy the guide to be a successful IT consultant abroad",
+        "E": "It is a well explained guide to enhance people’s desire to find a dream internship despite their social status."
+      },
+      "question_index": 13,
+      "statement": "📖 **Texto de Apoio (Questões 13 a 18):**\n\nTechnology Consultant Fast Track: How to Get Your Dream Job in IT Consulting (IT Consulting Career Guide).\n\n(English Edition) eBook Kindle only.\n\nJumpstart your IT job search and land your dream job while your peers are still \"freshening up\" their resumes!\n\nProven techniques to land your dream job as a high-paid IT consultant—you don’t want to miss these, if you are serious about a career in IT! Answers to IT consulting career questions most people fail to ask; actionable advice and real-life stories from seasoned IT consultants!\n\nAs a fresh graduate looking for your first job, if you just do what almost everybody else is doing…you will land a hellhole job with lousy pay, long hours, nasty coworkers, and exclusively clients from hell (because you thought it was your only option to go forward in your career). If you are serious and can apply simple instructions, this book can help you become a high-paid IT consultant in your dream job by the end of the month!\n\nIf you already have your first or second job in the field of IT, or even have 20 years of work experience, this book will tell you what a great option a career in IT consulting can be. With this book, you can find out why your current job is not satisfying your career aspirations and turn your career around for the better!\n\nContaining lessons from a PhD with 12 years of experience and 15,000 billable hours from Accenture and Coala, this is the book movers and shakers in the IT industry are talking about.\n\nRecommended by university professors, last-year students, as well as seasoned consultants. Even my mom says you have to read this book, or you have to answer to her!\n\nBy reading this book, you will learn:\n\nWhat your college professor didn't tell you about the consulting business. The Pro’s and Con’s of a career in technology consulting.\n\nWhat other options do you have besides working for one of the global consulting giants such as Accenture, Capgemini, Deloitte, Ernst & Young (EY), KPMG, or PricewaterhouseCoopers (PwC).\n\nThe must-have characteristics to succeed in IT consulting (if you don't have these, you are doomed to FAIL!).\n\nHow to find your money-making niche in IT consulting.\n\nHow to get the best results with the least possible effort in your job search. Best ways to prepare for the job interview in 30 minutes or less.\n\nWhat questions to ask in the interview to avoid nasty surprises when you are selected. Hear what others are saying: ★★★★★ “The book gives a strong and realistic description of IT consultancy. Thus, every IT student should read the book before they graduate as it will increase their probability of landing a dream job.” Samuli Pekkola, Professor, PhD, in Information Systems Sciences, Tampere University ★★★★★ “The book gives insight into technology consulting and provides great tips for job search. I believe it will be very valuable when I start looking for a position in IT. The section on how to stand out as a candidate for a job was an eyeopener.” Saku Sikiö, Information Systems Student, University of Jyväskylä ★★★★★ “This is the book I would have needed on the verge of graduation!” Teijo Kelander, MSc, Quality Consultant and Agile Coach ★★★★★ “If you are serious about IT consultancy as a profession, this book is a must-read! As a recruiter, I would prefer that applicants would better understand what this is all about.” Petteri Laamanen, MSc, CEO & Founder, Coala ★★★★★ “This book gave me valuable insights into the IT consultant’s working life, making it easier to consider the pros and cons in relation to my own values and goals.” Janita Kingelin, MSc, Marketing Manager, SoulCore ★ If you want great results in your technology consultant job search, get this book right now! <u>\n\n*(Fonte: https://www.amazon.com.br/Technology-Consultant-Fast-Track-Consulting)*\n\n</u>- <u>ebook/dp/B0918JB48D</u>\n\n---\n\nWhat information is in TEXT?",
+      "subject": "Língua Inglesa"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "15",
+      "options": {
+        "A": "consultants",
+        "B": "book",
+        "C": "students",
+        "D": "professors",
+        "E": "mom."
+      },
+      "question_index": 14,
+      "statement": "📖 **Texto de Apoio (Questões 13 a 18):**\n\nTechnology Consultant Fast Track: How to Get Your Dream Job in IT Consulting (IT Consulting Career Guide).\n\n(English Edition) eBook Kindle only.\n\nJumpstart your IT job search and land your dream job while your peers are still \"freshening up\" their resumes!\n\nProven techniques to land your dream job as a high-paid IT consultant—you don’t want to miss these, if you are serious about a career in IT! Answers to IT consulting career questions most people fail to ask; actionable advice and real-life stories from seasoned IT consultants!\n\nAs a fresh graduate looking for your first job, if you just do what almost everybody else is doing…you will land a hellhole job with lousy pay, long hours, nasty coworkers, and exclusively clients from hell (because you thought it was your only option to go forward in your career). If you are serious and can apply simple instructions, this book can help you become a high-paid IT consultant in your dream job by the end of the month!\n\nIf you already have your first or second job in the field of IT, or even have 20 years of work experience, this book will tell you what a great option a career in IT consulting can be. With this book, you can find out why your current job is not satisfying your career aspirations and turn your career around for the better!\n\nContaining lessons from a PhD with 12 years of experience and 15,000 billable hours from Accenture and Coala, this is the book movers and shakers in the IT industry are talking about.\n\nRecommended by university professors, last-year students, as well as seasoned consultants. Even my mom says you have to read this book, or you have to answer to her!\n\nBy reading this book, you will learn:\n\nWhat your college professor didn't tell you about the consulting business. The Pro’s and Con’s of a career in technology consulting.\n\nWhat other options do you have besides working for one of the global consulting giants such as Accenture, Capgemini, Deloitte, Ernst & Young (EY), KPMG, or PricewaterhouseCoopers (PwC).\n\nThe must-have characteristics to succeed in IT consulting (if you don't have these, you are doomed to FAIL!).\n\nHow to find your money-making niche in IT consulting.\n\nHow to get the best results with the least possible effort in your job search. Best ways to prepare for the job interview in 30 minutes or less.\n\nWhat questions to ask in the interview to avoid nasty surprises when you are selected. Hear what others are saying: ★★★★★ “The book gives a strong and realistic description of IT consultancy. Thus, every IT student should read the book before they graduate as it will increase their probability of landing a dream job.” Samuli Pekkola, Professor, PhD, in Information Systems Sciences, Tampere University ★★★★★ “The book gives insight into technology consulting and provides great tips for job search. I believe it will be very valuable when I start looking for a position in IT. The section on how to stand out as a candidate for a job was an eyeopener.” Saku Sikiö, Information Systems Student, University of Jyväskylä ★★★★★ “This is the book I would have needed on the verge of graduation!” Teijo Kelander, MSc, Quality Consultant and Agile Coach ★★★★★ “If you are serious about IT consultancy as a profession, this book is a must-read! As a recruiter, I would prefer that applicants would better understand what this is all about.” Petteri Laamanen, MSc, CEO & Founder, Coala ★★★★★ “This book gave me valuable insights into the IT consultant’s working life, making it easier to consider the pros and cons in relation to my own values and goals.” Janita Kingelin, MSc, Marketing Manager, SoulCore ★ If you want great results in your technology consultant job search, get this book right now! <u>\n\n*(Fonte: https://www.amazon.com.br/Technology-Consultant-Fast-Track-Consulting)*\n\n</u>- <u>ebook/dp/B0918JB48D</u>\n\n---\n\nIn the excerpt in TEXT “Recommended by university professors, last-year students, as well as seasoned consultants. Even my mom says you have to read this book, or you have to answer to <u>**her**</u> !” The pronoun <u>**her**</u> refers to",
+      "subject": "Língua Inglesa"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "16",
+      "options": {
+        "A": "a condition",
+        "B": "an example",
+        "C": "an effect",
+        "D": "an order",
+        "E": "a reason."
+      },
+      "question_index": 15,
+      "statement": "📖 **Texto de Apoio (Questões 13 a 18):**\n\nTechnology Consultant Fast Track: How to Get Your Dream Job in IT Consulting (IT Consulting Career Guide).\n\n(English Edition) eBook Kindle only.\n\nJumpstart your IT job search and land your dream job while your peers are still \"freshening up\" their resumes!\n\nProven techniques to land your dream job as a high-paid IT consultant—you don’t want to miss these, if you are serious about a career in IT! Answers to IT consulting career questions most people fail to ask; actionable advice and real-life stories from seasoned IT consultants!\n\nAs a fresh graduate looking for your first job, if you just do what almost everybody else is doing…you will land a hellhole job with lousy pay, long hours, nasty coworkers, and exclusively clients from hell (because you thought it was your only option to go forward in your career). If you are serious and can apply simple instructions, this book can help you become a high-paid IT consultant in your dream job by the end of the month!\n\nIf you already have your first or second job in the field of IT, or even have 20 years of work experience, this book will tell you what a great option a career in IT consulting can be. With this book, you can find out why your current job is not satisfying your career aspirations and turn your career around for the better!\n\nContaining lessons from a PhD with 12 years of experience and 15,000 billable hours from Accenture and Coala, this is the book movers and shakers in the IT industry are talking about.\n\nRecommended by university professors, last-year students, as well as seasoned consultants. Even my mom says you have to read this book, or you have to answer to her!\n\nBy reading this book, you will learn:\n\nWhat your college professor didn't tell you about the consulting business. The Pro’s and Con’s of a career in technology consulting.\n\nWhat other options do you have besides working for one of the global consulting giants such as Accenture, Capgemini, Deloitte, Ernst & Young (EY), KPMG, or PricewaterhouseCoopers (PwC).\n\nThe must-have characteristics to succeed in IT consulting (if you don't have these, you are doomed to FAIL!).\n\nHow to find your money-making niche in IT consulting.\n\nHow to get the best results with the least possible effort in your job search. Best ways to prepare for the job interview in 30 minutes or less.\n\nWhat questions to ask in the interview to avoid nasty surprises when you are selected. Hear what others are saying: ★★★★★ “The book gives a strong and realistic description of IT consultancy. Thus, every IT student should read the book before they graduate as it will increase their probability of landing a dream job.” Samuli Pekkola, Professor, PhD, in Information Systems Sciences, Tampere University ★★★★★ “The book gives insight into technology consulting and provides great tips for job search. I believe it will be very valuable when I start looking for a position in IT. The section on how to stand out as a candidate for a job was an eyeopener.” Saku Sikiö, Information Systems Student, University of Jyväskylä ★★★★★ “This is the book I would have needed on the verge of graduation!” Teijo Kelander, MSc, Quality Consultant and Agile Coach ★★★★★ “If you are serious about IT consultancy as a profession, this book is a must-read! As a recruiter, I would prefer that applicants would better understand what this is all about.” Petteri Laamanen, MSc, CEO & Founder, Coala ★★★★★ “This book gave me valuable insights into the IT consultant’s working life, making it easier to consider the pros and cons in relation to my own values and goals.” Janita Kingelin, MSc, Marketing Manager, SoulCore ★ If you want great results in your technology consultant job search, get this book right now! <u>\n\n*(Fonte: https://www.amazon.com.br/Technology-Consultant-Fast-Track-Consulting)*\n\n</u>- <u>ebook/dp/B0918JB48D</u>\n\n---\n\nIn the sentence taken from TEXT “ The book gives a strong and realistic description of IT consultancy. <u>**Thus**</u> , every IT student should read the book before they graduate as it will increase their probability of landing a dream job. ” The underlined linker introduces",
+      "subject": "Língua Inglesa"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "17",
+      "options": {
+        "A": "hence",
+        "B": "whereas",
+        "C": "unless",
+        "D": "moreover",
+        "E": "meanwhile."
+      },
+      "question_index": 16,
+      "statement": "📖 **Texto de Apoio (Questões 13 a 18):**\n\nTechnology Consultant Fast Track: How to Get Your Dream Job in IT Consulting (IT Consulting Career Guide).\n\n(English Edition) eBook Kindle only.\n\nJumpstart your IT job search and land your dream job while your peers are still \"freshening up\" their resumes!\n\nProven techniques to land your dream job as a high-paid IT consultant—you don’t want to miss these, if you are serious about a career in IT! Answers to IT consulting career questions most people fail to ask; actionable advice and real-life stories from seasoned IT consultants!\n\nAs a fresh graduate looking for your first job, if you just do what almost everybody else is doing…you will land a hellhole job with lousy pay, long hours, nasty coworkers, and exclusively clients from hell (because you thought it was your only option to go forward in your career). If you are serious and can apply simple instructions, this book can help you become a high-paid IT consultant in your dream job by the end of the month!\n\nIf you already have your first or second job in the field of IT, or even have 20 years of work experience, this book will tell you what a great option a career in IT consulting can be. With this book, you can find out why your current job is not satisfying your career aspirations and turn your career around for the better!\n\nContaining lessons from a PhD with 12 years of experience and 15,000 billable hours from Accenture and Coala, this is the book movers and shakers in the IT industry are talking about.\n\nRecommended by university professors, last-year students, as well as seasoned consultants. Even my mom says you have to read this book, or you have to answer to her!\n\nBy reading this book, you will learn:\n\nWhat your college professor didn't tell you about the consulting business. The Pro’s and Con’s of a career in technology consulting.\n\nWhat other options do you have besides working for one of the global consulting giants such as Accenture, Capgemini, Deloitte, Ernst & Young (EY), KPMG, or PricewaterhouseCoopers (PwC).\n\nThe must-have characteristics to succeed in IT consulting (if you don't have these, you are doomed to FAIL!).\n\nHow to find your money-making niche in IT consulting.\n\nHow to get the best results with the least possible effort in your job search. Best ways to prepare for the job interview in 30 minutes or less.\n\nWhat questions to ask in the interview to avoid nasty surprises when you are selected. Hear what others are saying: ★★★★★ “The book gives a strong and realistic description of IT consultancy. Thus, every IT student should read the book before they graduate as it will increase their probability of landing a dream job.” Samuli Pekkola, Professor, PhD, in Information Systems Sciences, Tampere University ★★★★★ “The book gives insight into technology consulting and provides great tips for job search. I believe it will be very valuable when I start looking for a position in IT. The section on how to stand out as a candidate for a job was an eyeopener.” Saku Sikiö, Information Systems Student, University of Jyväskylä ★★★★★ “This is the book I would have needed on the verge of graduation!” Teijo Kelander, MSc, Quality Consultant and Agile Coach ★★★★★ “If you are serious about IT consultancy as a profession, this book is a must-read! As a recruiter, I would prefer that applicants would better understand what this is all about.” Petteri Laamanen, MSc, CEO & Founder, Coala ★★★★★ “This book gave me valuable insights into the IT consultant’s working life, making it easier to consider the pros and cons in relation to my own values and goals.” Janita Kingelin, MSc, Marketing Manager, SoulCore ★ If you want great results in your technology consultant job search, get this book right now! <u>\n\n*(Fonte: https://www.amazon.com.br/Technology-Consultant-Fast-Track-Consulting)*\n\n</u>- <u>ebook/dp/B0918JB48D</u>\n\n---\n\n“ With this book, you can find out why your current job is not satisfying your career aspirations <u>**and**</u> turn your career around for the better!” The discourse marker <u>**and**</u> used in TEXT is similar in meaning to",
+      "subject": "Língua Inglesa"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "18",
+      "options": {
+        "A": "Saku Sikiö",
+        "B": "Petteri Laamanen",
+        "C": "Samuli Pekkola",
+        "D": "Janita Kingelin",
+        "E": "Teijo Kelander"
+      },
+      "question_index": 17,
+      "statement": "📖 **Texto de Apoio (Questões 13 a 18):**\n\nTechnology Consultant Fast Track: How to Get Your Dream Job in IT Consulting (IT Consulting Career Guide).\n\n(English Edition) eBook Kindle only.\n\nJumpstart your IT job search and land your dream job while your peers are still \"freshening up\" their resumes!\n\nProven techniques to land your dream job as a high-paid IT consultant—you don’t want to miss these, if you are serious about a career in IT! Answers to IT consulting career questions most people fail to ask; actionable advice and real-life stories from seasoned IT consultants!\n\nAs a fresh graduate looking for your first job, if you just do what almost everybody else is doing…you will land a hellhole job with lousy pay, long hours, nasty coworkers, and exclusively clients from hell (because you thought it was your only option to go forward in your career). If you are serious and can apply simple instructions, this book can help you become a high-paid IT consultant in your dream job by the end of the month!\n\nIf you already have your first or second job in the field of IT, or even have 20 years of work experience, this book will tell you what a great option a career in IT consulting can be. With this book, you can find out why your current job is not satisfying your career aspirations and turn your career around for the better!\n\nContaining lessons from a PhD with 12 years of experience and 15,000 billable hours from Accenture and Coala, this is the book movers and shakers in the IT industry are talking about.\n\nRecommended by university professors, last-year students, as well as seasoned consultants. Even my mom says you have to read this book, or you have to answer to her!\n\nBy reading this book, you will learn:\n\nWhat your college professor didn't tell you about the consulting business. The Pro’s and Con’s of a career in technology consulting.\n\nWhat other options do you have besides working for one of the global consulting giants such as Accenture, Capgemini, Deloitte, Ernst & Young (EY), KPMG, or PricewaterhouseCoopers (PwC).\n\nThe must-have characteristics to succeed in IT consulting (if you don't have these, you are doomed to FAIL!).\n\nHow to find your money-making niche in IT consulting.\n\nHow to get the best results with the least possible effort in your job search. Best ways to prepare for the job interview in 30 minutes or less.\n\nWhat questions to ask in the interview to avoid nasty surprises when you are selected. Hear what others are saying: ★★★★★ “The book gives a strong and realistic description of IT consultancy. Thus, every IT student should read the book before they graduate as it will increase their probability of landing a dream job.” Samuli Pekkola, Professor, PhD, in Information Systems Sciences, Tampere University ★★★★★ “The book gives insight into technology consulting and provides great tips for job search. I believe it will be very valuable when I start looking for a position in IT. The section on how to stand out as a candidate for a job was an eyeopener.” Saku Sikiö, Information Systems Student, University of Jyväskylä ★★★★★ “This is the book I would have needed on the verge of graduation!” Teijo Kelander, MSc, Quality Consultant and Agile Coach ★★★★★ “If you are serious about IT consultancy as a profession, this book is a must-read! As a recruiter, I would prefer that applicants would better understand what this is all about.” Petteri Laamanen, MSc, CEO & Founder, Coala ★★★★★ “This book gave me valuable insights into the IT consultant’s working life, making it easier to consider the pros and cons in relation to my own values and goals.” Janita Kingelin, MSc, Marketing Manager, SoulCore ★ If you want great results in your technology consultant job search, get this book right now! <u>\n\n*(Fonte: https://www.amazon.com.br/Technology-Consultant-Fast-Track-Consulting)*\n\n</u>- <u>ebook/dp/B0918JB48D</u>\n\n---\n\nBy the end of TEXT six people assessed the guide. One of them said that he should have had the opportunity to study on the guide on the brick of graduating.\n\nChoose the person who said that",
+      "subject": "Língua Inglesa"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "19",
+      "options": {
+        "A": "Computer",
+        "B": "Pocket PC",
+        "C": "Window Mobile handheld",
+        "D": "MPrint MW-260",
+        "E": "Bluetooth."
+      },
+      "question_index": 18,
+      "statement": "📖 **Texto de Apoio (Questões 19 a 20):**\n\nIt's not often we write about printers here on the Giz, but Brother's new MPrint MW-260 gets honorable mention for being the world's thinnest printer. It can print up to 20 pages per minute from any PC, Pocket PC, or Windows Mobile handheld. Best of all, it also prints over Bluetooth (in addition to your standard USB). No word on pricing or availability, but this is a 1-pound printer we wouldn't mind adding to our travel bag. It’s worth buying!\n\nLouis Ramirez <u>*\n\n*(Fonte: http://www.gizmodo.com/)*\n\n*</u>\n\n---\n\nThe pronoun “<u>**it**</u>” in “<u>**It**</u> can print up to 20 pages per minute from any PC, Pocket PC, or Windows Mobile handheld”, taken from TEXT, refers to",
+      "subject": "Língua Inglesa"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "20",
+      "options": {
+        "A": "The weight of the printer",
+        "B": "The price of the printer",
+        "C": "The printer serial number",
+        "D": "The printer stock availability",
+        "E": "The printer sale."
+      },
+      "question_index": 19,
+      "statement": "📖 **Texto de Apoio (Questões 19 a 20):**\n\nIt's not often we write about printers here on the Giz, but Brother's new MPrint MW-260 gets honorable mention for being the world's thinnest printer. It can print up to 20 pages per minute from any PC, Pocket PC, or Windows Mobile handheld. Best of all, it also prints over Bluetooth (in addition to your standard USB). No word on pricing or availability, but this is a 1-pound printer we wouldn't mind adding to our travel bag. It’s worth buying!\n\nLouis Ramirez <u>*\n\n*(Fonte: http://www.gizmodo.com/)*\n\n*</u>\n\n---\n\nIn the sentence “No word on pricing or availability, but this is <u>**a 1**</u>- <u>**pound printer**</u> we wouldn't mind adding to our travel bag”.\n\nThe expression “...** a 1-pound printer**” taken from TEXT is referring to",
+      "subject": "Língua Inglesa"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "21",
+      "options": {
+        "A": "This essay is concerned not only about apps but also about successful web developers",
+        "B": "The Text is an academic piece of writing",
+        "C": "Artificial Intelligence has created app store",
+        "D": "App developers are addicted to AppEco",
+        "E": "AppEco is a website known around the world by foreigners."
+      },
+      "question_index": 20,
+      "statement": "📖 **Texto de Apoio (Questões 21 a 24):**\n\nResearch-Article How to be a successful app developer: lessons from the simulation of an app ecosystem Soo Ling Lim, Peter J. Bentley Abstract App developers are constantly competing against each other to win more downloads for their apps. With hundreds of thousands of apps in these online stores, what strategy should a developer use to be successful? Should they innovate, make many similar apps, optimize their own apps or just copy the apps of others?\n\nLooking more deeply, how does a complex app ecosystem perform when developers choose to use different strategies?\n\nThis paper investigates these questions using AppEco, the first Artificial Life model of mobile application ecosystems. In AppEco, developer agents build and upload apps to the app store; user agents browse the store and download the apps. A distinguishing feature of AppEco is the explicit modelling of apps as artefacts. In this work we use AppEco to simulate Apple's iOS app ecosystem and investigate common developer strategies, evaluating them in terms of downloads received, app diversity, and adoption rate. <u>\n\n*(Fonte: https://dl.acm.org/doi/10.1145/2384697.2384698)*\n\n</u>\n\n---\n\nAccording to TEXT it can be said that",
+      "subject": "Língua Inglesa"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "22",
+      "options": {
+        "A": "The word <u>***rate***</u> means a measure and it’s a discourse marker",
+        "B": "The word <u>***rate***</u> means to quantify and it’s an adjective",
+        "C": "The word <u>***rate***</u> means to quantify and it’s a subject",
+        "D": "The word <u>***rate***</u> means to charge and it’s a verb",
+        "E": "The word <u>***rate***</u> means a measure and it’s a noun."
+      },
+      "question_index": 21,
+      "statement": "📖 **Texto de Apoio (Questões 21 a 24):**\n\nResearch-Article How to be a successful app developer: lessons from the simulation of an app ecosystem Soo Ling Lim, Peter J. Bentley Abstract App developers are constantly competing against each other to win more downloads for their apps. With hundreds of thousands of apps in these online stores, what strategy should a developer use to be successful? Should they innovate, make many similar apps, optimize their own apps or just copy the apps of others?\n\nLooking more deeply, how does a complex app ecosystem perform when developers choose to use different strategies?\n\nThis paper investigates these questions using AppEco, the first Artificial Life model of mobile application ecosystems. In AppEco, developer agents build and upload apps to the app store; user agents browse the store and download the apps. A distinguishing feature of AppEco is the explicit modelling of apps as artefacts. In this work we use AppEco to simulate Apple's iOS app ecosystem and investigate common developer strategies, evaluating them in terms of downloads received, app diversity, and adoption rate. <u>\n\n*(Fonte: https://dl.acm.org/doi/10.1145/2384697.2384698)*\n\n</u>\n\n---\n\nIn the excerpt “In this work we use AppEco to simulate Apple's iOS app ecosystem and investigate common developer strategies, evaluating them in terms of downloads received, app diversity, and adoption <u>**rate**</u> .\n\nChoose the correct option according to TEXT",
+      "subject": "Língua Inglesa"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "23",
+      "options": {
+        "A": "Absence of obligation",
+        "B": "Suggestion",
+        "C": "Offer",
+        "D": "Possibility",
+        "E": "Obligation"
+      },
+      "question_index": 22,
+      "statement": "📖 **Texto de Apoio (Questões 21 a 24):**\n\nResearch-Article How to be a successful app developer: lessons from the simulation of an app ecosystem Soo Ling Lim, Peter J. Bentley Abstract App developers are constantly competing against each other to win more downloads for their apps. With hundreds of thousands of apps in these online stores, what strategy should a developer use to be successful? Should they innovate, make many similar apps, optimize their own apps or just copy the apps of others?\n\nLooking more deeply, how does a complex app ecosystem perform when developers choose to use different strategies?\n\nThis paper investigates these questions using AppEco, the first Artificial Life model of mobile application ecosystems. In AppEco, developer agents build and upload apps to the app store; user agents browse the store and download the apps. A distinguishing feature of AppEco is the explicit modelling of apps as artefacts. In this work we use AppEco to simulate Apple's iOS app ecosystem and investigate common developer strategies, evaluating them in terms of downloads received, app diversity, and adoption rate. <u>\n\n*(Fonte: https://dl.acm.org/doi/10.1145/2384697.2384698)*\n\n</u>\n\n---\n\nIn the sentences, “With hundreds of thousands of apps in these online stores, what strategy <u>**should**</u> a developer use to be successful? <u>**Should**</u> they innovate, make many similar apps, optimize their own apps or just copy the apps of others?”.\n\nThe modal “should”, used in TEXT, expresses the idea of",
+      "subject": "Língua Inglesa"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "24",
+      "options": {
+        "A": "I stopped in several bookstores to ___",
+        "B": "I usually ___ the internet for a couple of hours each evening",
+        "C": "The brochure is well worth a ___",
+        "D": "There are plenty of biographies for him to ___ over",
+        "E": "I always ___ in an up-market antique shop."
+      },
+      "question_index": 23,
+      "statement": "📖 **Texto de Apoio (Questões 21 a 24):**\n\nResearch-Article How to be a successful app developer: lessons from the simulation of an app ecosystem Soo Ling Lim, Peter J. Bentley Abstract App developers are constantly competing against each other to win more downloads for their apps. With hundreds of thousands of apps in these online stores, what strategy should a developer use to be successful? Should they innovate, make many similar apps, optimize their own apps or just copy the apps of others?\n\nLooking more deeply, how does a complex app ecosystem perform when developers choose to use different strategies?\n\nThis paper investigates these questions using AppEco, the first Artificial Life model of mobile application ecosystems. In AppEco, developer agents build and upload apps to the app store; user agents browse the store and download the apps. A distinguishing feature of AppEco is the explicit modelling of apps as artefacts. In this work we use AppEco to simulate Apple's iOS app ecosystem and investigate common developer strategies, evaluating them in terms of downloads received, app diversity, and adoption rate. <u>\n\n*(Fonte: https://dl.acm.org/doi/10.1145/2384697.2384698)*\n\n</u>\n\n---\n\nThe word “browse” in “user agents <u>**browse**</u> the store and download the apps.”, taken from TEXT, is a verb.\n\nThe same word *c* an also be used as a noun in sentence",
+      "subject": "Língua Inglesa"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "25",
+      "options": {
+        "A": "R$ 18.000,00",
+        "B": "R$ 20.000,00",
+        "C": "R$ 24.000,00",
+        "D": "R$ 26.000,00",
+        "E": "R$ 28.000,00"
+      },
+      "question_index": 24,
+      "statement": "Arnaldo e Bernaldo associaram-se em um determinado negócio.\n\nArnaldo entrou com R$ 12.000,00 e Bernaldo com R$ 13.000,00.\n\nSe perderem R$ 50.000, 00. caberá a Arnaldo o prejuízo de",
+      "subject": "Raciocínio Lógico-Matemático"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "26",
+      "options": {
+        "A": "1º bimestre, necessariamente",
+        "B": "1º ou 2º bimestres, necessariamente",
+        "C": "2º bimestre, necessariamente",
+        "D": "3º bimestre, necessariamente",
+        "E": "3º ou 4º bimestre, necessariamente."
+      },
+      "question_index": 25,
+      "statement": "Uma determinada escola adota o sistema de pesos por bimestre para o cálculo da média anual. O primeiro bimestre tem peso 1. o segundo, 2. o terceiro, 3. e o quarto, 4. Assim, para calcular a média anual, um estudante deve efetuar a soma de cada uma de suas notas bimestrais multiplicadas pelos seus respectivos pesos e dividir por 10. Para ser aprovado, um aluno precisa ter média anual, no mínimo, igual a 7,0.\n\nArnaldo tirou notas 4,0; 6,0; 8,0; 8,0 nos 4 bimestres, não necessariamente nessa ordem. Para que Arnaldo seja aprovado, a sua menor nota deve ter sido tirada no",
+      "subject": "Raciocínio Lógico-Matemático"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "27",
+      "options": {
+        "A": "20.",
+        "B": "25.",
+        "C": "30.",
+        "D": "35.",
+        "E": "40."
+      },
+      "question_index": 26,
+      "statement": "Dois sistemas monitoram a variação de temperatura dos servidores em um data center. Um sistema registra variações positivas (aquecimento) e o outro registra variações negativas\n\n(resfriamento). Certo dia, a soma dessas variações foi de 1 grau Celsius, indicando que o ambiente se manteve praticamente estável. No entanto, a soma dos quadrados dessas variações foi de\n\n313. o que revela uma diferença significativa entre o maior valor positivo e o menor valor negativo registrados.\n\nA diferença entre esses valores é",
+      "subject": "Raciocínio Lógico-Matemático"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "28",
+      "options": {
+        "A": "Cesar é fã de futebol e assiste a muitos jogos",
+        "B": "Cesar gosta de futebol porque assiste a muitos jogos",
+        "C": "Cesar gosta de assistir jogos por ser fã de futebol",
+        "D": "Se Cesar não assiste a muitos jogos então ele não é fã de futebol",
+        "E": "Se Cesar não é fã de futebol então ele não assiste a muitos jogos."
+      },
+      "question_index": 27,
+      "statement": "A proposição logicamente equivalente à proposição “Se Cesar é fã de futebol então ele assiste a muitos jogos” é",
+      "subject": "Raciocínio Lógico-Matemático"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "29",
+      "options": {
+        "A": "6.",
+        "B": "7.",
+        "C": "8.",
+        "D": "9.",
+        "E": "10."
+      },
+      "question_index": 28,
+      "statement": "Numa certa região há alguns vilarejos de maneira que cada dupla de vilarejos possui uma única estrada que os conecta. Observe o exemplo para cinco vilarejos em que cada casinha representa um vilarejo e cada segmento de reta representa uma estrada.\n\nConsidere que nessa região há inicialmente x vilarejos e que 2 novos vilarejos estejam se desenvolvendo. Por essa razão, 17 novas estradas estão sendo construídas.\n\nNessas condições, o número x vale",
+      "subject": "Raciocínio Lógico-Matemático"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "30",
+      "options": {
+        "A": "é maior que 19% e menor que 20%",
+        "B": "é igual a 20%",
+        "C": "é maior que 20% e menor que 21%",
+        "D": "é igual a 21,5%",
+        "E": "é igual a 43%."
+      },
+      "question_index": 29,
+      "statement": "O preço de venda de certo item de consumo sofreu dois aumentos mensais consecutivos, sendo o primeiro de 30% e o segundo de 10%. Sobre a taxa média de aumento mensal nesse período, é correto\nafirmar que",
+      "subject": "Raciocínio Lógico-Matemático"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "31",
+      "options": {
+        "A": "I, apenas",
+        "B": "II, apenas",
+        "C": "I e II, apenas",
+        "D": "I e III, apenas",
+        "E": "I, II e III."
+      },
+      "question_index": 30,
+      "statement": "Na reunião de cúpula do G2 que ocorre no Brasil, país que exerce a presidência rotativa até o fim de novembro, o tema principal dos debates é a construção de um Mundo Justo e um Planeta Sustentável. O governo brasileiro deseja colocar o combate às desigualdades no centro das discussões entre os países membros.\n\nSobre o Grupo apresentado no texto, julgue as afirmativas:\n\nI. Consiste num dos maiores blocos econômicos do planeta, sendo seu principal objetivo o livre comércio, sendo superado apenas pela União Europeia.\n\nII. Representa um fórum internacional de cooperação econômica, que possibilita entre outras coisas, debates sobre temas financeiros, fome, meio ambiente e desigualdades.\n\nIII. Congrega um bloco supranacional com objetivo de alinhar políticas macroeconômicas, éticas e militares, perante a comunidade internacional.\n\nEstá correto o que se afirma em",
+      "subject": "Atualidades"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "32",
+      "options": {
+        "A": "V – F – V",
+        "B": "F – V – V",
+        "C": "V – V – F",
+        "D": "F – F – V",
+        "E": "V – V – V."
+      },
+      "question_index": 31,
+      "statement": "A adoção de tecnologias digitais muitas vezes é vista como resposta para dilemas ambientais. O avanço da internet, por exemplo, permitiu a diminuição do uso de papel, que foi substituído por bytes. Entretanto, os *data centers* ao redor do mundo consomem aproximadamente 2%de toda eletricidade do planeta, emitindo por exemplo, quantidades similares de carbono, comparadas as da indústria aérea.\n\nSobre os aspectos apresentados no texto, julgue os itens a seguir:\n\n( ) As tecnologias digitais não são apenas fonte de soluções para problemas ligados ao meio ambiente, mas também consistem em fontes de impactos negativos.\n\n( ) O texto defende que todos os avanços tecnológicos representam invariavelmente benefícios para o meio ambiente.\n\n( ) Os data centers representam cerca de metade do consumo de energia dos ecossistemas digitais, termo cunhado para definir a relação entre infraestrutura digital, ferramentas e seres humanos. As afirmativas são, respectivamente,",
+      "subject": "Atualidades"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "33",
+      "options": {
+        "A": "I, apenas",
+        "B": "III, apenas",
+        "C": "II e III, apenas",
+        "D": "I e III, apenas",
+        "E": "I, II e III."
+      },
+      "question_index": 32,
+      "statement": "A Constituição Federal é o documento jurídico-político que limita o poder estatal e o regulamenta. O art. 225 - da Carta Magna\nconfere a todos o direito ao meio ambiente equilibrado, impondo\nao Poder Público e à coletividade preservá-lo, estabelecendo uma\nsérie de diretrizes aptas a assegurar a disposição.\nSobre o tema abordado no texto, julgue os itens a seguir:\n\nI. É flagrante violação da Constituição, com a distribuição injusta da poluição, submetendo de forma desigual, em razão da raça, determinadas populações a precárias condições de vida.\n\nII. Um projeto de desenvolvimento sustentável deve ser baseado em inovações tecnológicas, mantendo a lógica de consumo do atual modelo econômico, proporcionando justiça social para todos.\n\nIII. O conceito de racismo ambiental está ligado aos danos ambientais e sua imposição recorrente em comunidades habitadas principalmente por populações negras e pobres.\n\nEstá correto o que se afirma em",
+      "subject": "Atualidades"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "34",
+      "options": {
+        "A": "I, apenas",
+        "B": "III, apenas",
+        "C": "I e II, apenas",
+        "D": "I e III, apenas",
+        "E": "I, II e III."
+      },
+      "question_index": 33,
+      "statement": "A Secretaria Nacional do Consumidor notificou uma grande rede de Farmácias para prestar esclarecimentos a respeito de práticas de tratamento indevido de dados pessoais de seus consumidores.\n\nO fato ocorreu por denúncia publicada em um grande portal de comunicação, que expôs a coleta inadequada de informações e sua comercialização. Sobre a denúncia, os dados podem ter o seguinte destino:\n\nI. publicidade direcionada a determinados perfis de consumidores, considerando a faixa etária, o sexo e perfis de saúde.\n\nII. Execução de publicidade para empresas do grupo econômico e para terceiros, gerando lucro indevido sem autorização ou conhecimento dos clientes.\n\nIII. Pesquisas da indústria farmacêutica para produção de remédios mais baratos, democratizando o acesso a tratamentos de saúde através do programa Farmácia Popular.\n\nEstá correto o que se afirma em",
+      "subject": "Atualidades"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "35",
+      "options": {
+        "A": "V – F – V",
+        "B": "F – V – V",
+        "C": "V – V – V",
+        "D": "F – F – V",
+        "E": "V – V – F."
+      },
+      "question_index": 34,
+      "statement": "O município do Rio de Janeiro vai aplicar o conceito de cidadeesponja para diminuir os efeitos das enchentes. Esse modelo é usado em várias cidades do mundo para evitar tragédias ambientais, constituindo o ponto central de uma lei municipal, sancionada parcialmente em julho de 2024.\n\nA nova legislação adotará mecanismos sustentáveis com intuito de:\n\n( ) Reduzir a sobrecarga dos sistemas tradicionais de drenagem possibilitando a aproximação de autossuficiência hídrica.\n\n( ) Direcionar as águas pluviais que causam transtornos, para o reabastecimento de redes subterrâneas.\n\n( ) Diminuir a presença da infraestrutura cinza na canalização de rios, com a construção de jardins de chuva, melhorando a impermeabilização de grandes áreas.\n\nAs afirmativas são, respectivamente,",
+      "subject": "Atualidades"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "36",
+      "options": {
+        "A": "as informações podem ser classificadas como ultrassigilosas, sigilosas ou reservadas, sendo certo que a decisão respectiva é discricionária, porquanto a lei não prevê balizas",
+        "B": "a decisão de classificação de uma informação é pública e de acesso a qualquer interessado, independentemente de demonstração de interesse, embora classificada a informação",
+        "C": "findo o prazo de classificação ou ocorrido o evento constituidor do termo final, para que o acesso se torne público são necessários procedimento próprio e decisão específica",
+        "D": "a informação que verse sobre conduta que implique violação dos direitos humanos praticada por agentes públicos ou a mando de autoridades públicas não pode ser objeto de restrição de acesso",
+        "E": "a lei permite a desclassificação, mas não a redução de prazo de informação classificada, devendo a reavaliação ser feita pela autoridade classificadora ou outra superior, mediante provocação ou de ofício."
+      },
+      "question_index": 35,
+      "statement": "A Lei 12. 527. de 18 de novembro de 2011, dispõe sobre as restrições de acesso à informação. Nesses termos, a lei traz diversos temas que permeiam a classificação da informação.\n\nSobre esse assunto, é correto afirmar que",
+      "subject": "Legislação"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "37",
+      "options": {
+        "A": "a deflagração da ação penal está incorreta, porquanto deveria ter sido iniciada pelo Ministério Público",
+        "B": "na fixação da pena, deveria ter havido um aumento de metade da pena, já que da invasão resultou prejuízo político",
+        "C": "o crime de invasão de dispositivo informático possui como elementar a exigência de o tablet estar conectado à rede de computadores",
+        "D": "o aumento da pena deveria ter sido de dois terços da pena, por conta do ilícito penal ter sido praticado contra o vicePresidente da Câmara dos Deputados",
+        "E": "para configuração do delito trazido pelo art. 2º, da Lei 12. 737. de 30 de novembro de 2012 (art. 154-A, do Código Penal), é preciso a efetiva adulteração das informações."
+      },
+      "question_index": 36,
+      "statement": "Um *hacker* , por ter conseguido subtrair previamente a senha de acesso, invadiu o tablet do vice-Presidente da Câmara dos Deputados e, sem este saber, adulterou informações importantes relativas ao funcionamento da Casa Parlamentar, trazendo grande prejuízo político. Identificada a pessoa, o aludido congressista ajuizou queixa-crime. Ao final do processo penal, o *hacker* foi condenado com aumento de pena de um terço, por conta do sujeito passivo do delito. Quanto à situação descrita, é correto afirmar que",
+      "subject": "Legislação"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "38",
+      "options": {
+        "A": "as sanções só podem ser aplicadas isoladamente, exceto quando o caso reclamar a mais grave que, então, poderá ser cumulada com outras",
+        "B": "a previsão de advertência contempla duas faces: uma repressiva e outra corretiva, na medida em que se indica prazo para adoção de medidas de regularização",
+        "C": "a censura deve ser imposta à pessoa natural, proprietária do provedor, quando este burlar a proibição de coleta de dados pessoais anteriormente aplicada",
+        "D": "na previsão de multa, o quanto é fixado em 10% (dez por cento) do faturamento do grupo econômico no Brasil, extraído da média dos últimos três exercícios, excluídos os tributos",
+        "E": "a Lei 12. 965. de 23 de abril de 2014, possui um vácuo legislativo com relação a empresas estrangeiras, porque não traz regramento sancionatório para suas condutas infringentes."
+      },
+      "question_index": 37,
+      "statement": "A Lei 12. 965. de 23 de abril de 2014, estabelece princípios, garantias, direitos e deveres para o uso da Internet no Brasil. Ao tratar da proteção aos registros, aos dados pessoais e às comunicações privadas, tal diploma legal positiva sanções específicas para o descumprimento do que prescreve.\n\nA respeito disso, é correto afirmar que",
+      "subject": "Legislação"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "39",
+      "options": {
+        "A": "é possível a aplicação de sanções sem a formalização de processo administrativo correspondente, em caso no qual se constate que o agente de tratamento de dados é violador contumaz da citada lei",
+        "B": "a lei contempla expressamente diversos parâmetros e critérios a serem considerados na aplicação da sanção, como, por exemplo, a gravidade da infração, a boa fé e o fato de o infrator ter nacionalidade estrangeira",
+        "C": "eventual aplicação da sanção de multa simples a órgão público deverá considerar a arrecadação tributária do ente federativo a que pertença e o orçamento afetado para o desenvolvimento de suas atividades",
+        "D": "o produto da arrecadação das multas aplicadas pela Autoridade Nacional de Proteção de Dados, inscritas ou não em dívida ativa, será destinado diretamente às pessoas naturais cujo direito à proteção de dados foi violado",
+        "E": "em caso de vazamento individual, a lei contempla a possibilidade de conciliação direta entre controlador e titular, estando aquele, na hipótese de inexistência de acordo, sujeito à aplicação das penalidades previstas no capítulo mencionado."
+      },
+      "question_index": 38,
+      "statement": "As sanções administrativas estão positivadas na Lei 13. 709. de 14 de agosto de 2018 (Lei Geral de Proteção de Dados Pessoais - LGPD), em capítulo intitulado de fiscalização.\n\nCom relação ao quadro legal sancionatório mencionado, é correto\nafirmar que",
+      "subject": "Legislação"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "40",
+      "options": {
+        "A": "atualmente, Conselho Nacional de Proteção de Dados Pessoais e da Privacidade possui natureza de empresa pública federal e a Autoridade Nacional de Proteção de Dados é órgão da administração pública federal",
+        "B": "o Conselho Diretor é composto de representantes, titulares e suplentes, da Câmara dos Deputados, do Comitê Gestor da Internet do Brasil, do Senado Federal, do Conselho Nacional de Justiça e do Conselho Nacional do Ministério Público",
+        "C": "o Conselho Nacional de Proteção de Dados Pessoais e da Privacidade possui atribuição de sugerir ações a serem realizadas pela Autoridade Nacional de Proteção de Dados e disseminar o conhecimento sobre a proteção de dados pessoais e da privacidade à população",
+        "D": "os membros do Conselho Nacional de Proteção de Dados Pessoais e da Privacidade somente perderão seus cargos em virtude de renúncia, condenação judicial transitada em julgado ou pena de demissão decorrente de processo administrativo disciplinar",
+        "E": "a Autoridade Nacional de Proteção de Dados é uma das integrantes do Conselho Nacional de Proteção de Dados Pessoais e da Privacidade, figurando como conselheira presidente, na hipótese de nomeação pelo Presidente da República."
+      },
+      "question_index": 39,
+      "statement": "A Lei 13. 709. de 14 de agosto de 2018, trouxe ao ordenamento jurídico duas figuras jurídicas importantes no sistema de proteção de dados pessoais. Sobre o desenho legal da Autoridade Nacional de Proteção de Dados e o Conselho Nacional de Proteção de Dados Pessoais e da Privacidade, é correto afirmar que",
+      "subject": "Legislação"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "41",
+      "options": {
+        "A": "Provisão para reestruturação de R$80.000",
+        "B": "Provisão para reestruturação de R$70.000",
+        "C": "Ativo contingente de R$50.000 e provisão para reestruturação de R$80.000",
+        "D": "Ativo contingente de R$10.000 e provisão para reestruturação de R$80.000",
+        "E": "Ativo contingente de R$10.000 e provisão para reestruturação de R$70.000."
+      },
+      "question_index": 40,
+      "statement": "Um hotel oferecia serviços de hospedagem e de alimentação, em um restaurante, que era utilizado pelos hóspedes e por clientes externos. Em janeiro de 2024, a direção do hotel resolveu fechar o restaurante, de modo a oferecer somente serviços de hospedagem. A reorganização tinha efeito material no foco das operações do hotel. Além disso, a provisão para custos de reestruturação era estimada em R$80.000 e eram cumpridos os critérios para reconhecimento definidos pelo Pronunciamento\n\n25 - Provisões, Passivos Contingentes e Ativos Contingentes. Ainda, os ativos que eram utilizados pelo restaurante apresentavam valor contábil de R$40.000 e era estimado que seriam vendidos por R$50.000.\n\nAssinale a opção que indica o reconhecimento do fato no Balanço Patrimonial do hotel, em janeiro de 2024",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "42",
+      "options": {
+        "A": "V – V – F",
+        "B": "F – V – V",
+        "C": "V – F – F",
+        "D": "V – F – V",
+        "E": "F – V – F."
+      },
+      "question_index": 41,
+      "statement": "Com relação ao resultado básico por ação, de acordo com o Pronunciamento 41 - Resultado por Ação, assinale V para a afirmativa verdadeira e F para a falsa.\n\n( ) A companhia deve calcular o valor do resultado básico por ação para o lucro ou prejuízo atribuível aos titulares de ações ordinárias da companhia e, se apresentado, o lucro ou prejuízo resultante das operações continuadas atribuível a esses titulares de ações ordinárias.\n\n( ) O resultado básico por ação deve ser calculado dividindo-se o lucro ou prejuízo atribuível aos titulares de ações ordinárias da companhia pelo número médio ponderado de ações ordinárias em poder dos acionistas, incluídas as mantidas em tesouraria durante o período.\n\n( ) O objetivo da informação relativa ao resultado básico por ação é proporcionar a mensuração da participação de cada ação da companhia no desempenho da entidade durante o período.\n\nAs afirmativas são, respectivamente,",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "43",
+      "options": {
+        "A": "I, apenas",
+        "B": "II, apenas",
+        "C": "I e II, apenas",
+        "D": "I e III, apenas",
+        "E": "I, II e III."
+      },
+      "question_index": 42,
+      "statement": "A Cia X controla a Cia Y. Em 2023, a Cia X prestou serviços para a Cia Y com recebimento previsto para janeiro de 2024, que representou transação entre partes relacionadas.\n\nEm 31/12/2023, foram elaboradas e divulgadas as seguintes demonstrações contábeis:\n\nI. Demonstrações individuais da Cia X\n\nII. Demonstrações consolidadas\n\nIII. Demonstrações individuais da Cia Y As transações e os saldos existentes com partes relacionadas são incluídas no que se apresenta em",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "44",
+      "options": {
+        "A": "Ativo: R$120.000; Receita: R$120.000",
+        "B": "Ativo: R$100.000; Receita: R$100.000",
+        "C": "Ativo: R$120.000; Passivo: R$120.000",
+        "D": "Ativo: R$100.000; Passivo: R$100.000",
+        "E": "Ativo: R$100.000; Ajustes de Avaliação Patrimonial: R$100.000"
+      },
+      "question_index": 43,
+      "statement": "Uma sociedade empresária que trabalha com a produção de carros recebeu do Governo a propriedade definitiva de um terreno, com a condição de construir uma nova fábrica. O terreno tinha valor nominal de R$100.000 e valor justo de R$120.000.\n\nAssinale a opção que indica o impacto do recebimento da subvenção governamental nas demonstrações contábeis da sociedade empresária no momento da transferência da propriedade do terreno",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "45",
+      "options": {
+        "A": "não representa um evento subsequente",
+        "B": "representa um evento subsequente que resulta em divulgação, apenas",
+        "C": "representa um evento subsequente que origina ajuste, apenas, com contrapartida no resultado",
+        "D": "representa um evento subsequente que origina ajuste, com contrapartida no resultado, e resulta em divulgação",
+        "E": "representa um evento subsequente que origina ajuste, com contrapartida no passivo, e resulta em divulgação."
+      },
+      "question_index": 44,
+      "statement": "Em 31/12/2023, uma sociedade empresária tinha 80%de seu ativo comprometido com obrigações com terceiros em dólar. Na data, a cotação do dólar era de R$5,00. Em 10/02/2024, a cotação do dólar era de R$6, 00. o que foi considerado pela sociedade empresária uma alteração extraordinariamente grande na taxa de câmbio. A emissão das demonstrações contábeis foi autorizada em 01/03/2024. O aumento na cotação do dólar",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "46",
+      "options": {
+        "A": "R$40.800",
+        "B": "R$41.200",
+        "C": "R$47.600",
+        "D": "R$51.000",
+        "E": "R$57.800"
+      },
+      "question_index": 45,
+      "statement": "Em 31/12/2022, uma loja de relógios apresentava os seguintes saldos em seu balanço patrimonial: Disponibilidades: R$100.000; Estoque: R$80.000; Fornecedores: R$30.000; Patrimônio Líquido: R$150.000. Em 2023 a loja vendeu todo o estoque de relógios por R$400.000.\n\nAlém disso, incorreu em despesas gerais de R$150.000. Todas as receitas e despesas eram, respectivamente, tributáveis e dedutíveis. Ainda, a loja incorreu em despesa para a constituição de provisão para garantia de R$20.000 e pagou o saldo que era devido aos fornecedores. Considerando que a alíquota de imposto de renda e contribuição social era de 34%, assinale a opção que indica a provisão para o imposto de renda e contribuição social da loja em 31/12/2023",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "47",
+      "options": {
+        "A": "retificação de erro",
+        "B": "provisão para devolução",
+        "C": "revisão de estimativa contábil",
+        "D": "mudança de política contábil",
+        "E": "ajuste de avaliação patrimonial."
+      },
+      "question_index": 46,
+      "statement": "Em 2022, uma sociedade empresária recebeu uma subvenção governamental por meio de R$50.000 em dinheiro.\n\nEm 2023, a sociedade empresária precisou devolver o valor recebido, por um problema operacional, uma vez que não houve cumprimento de uma cláusula estabelecida.\n\nA subvenção governamental devolvida deve ser contabilizada como",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "48",
+      "options": {
+        "A": "Atividade Operacional: -R$15.000",
+        "B": "Atividade de Investimento: -R$15.000",
+        "C": "Atividade Operacional: -R$4.000; Atividade de Financiamento: -R$11.000",
+        "D": "Atividade Operacional: -R$4.000; Atividade de Investimento: - R$11.000",
+        "E": "Atividade Operacional: -R$10.000; Atividade de Investimento: -R$5.000"
+      },
+      "question_index": 47,
+      "statement": "Uma gráfica imprime catálogos e encartes para terceiros. Ela possui cinco impressoras que são avaliadas em R$10.000.\n\nEm janeiro de 2024, a gráfica fez as seguintes compras à vista:\n\n• Papel para impressão: R$4.000\n\n• Peças de reposição para a impressora: R$5.000\n\n• Tinta para impressão: R$6.000 A fábrica espera utilizar o papel, a tinta e as peças de reposição para a impressora durante os 18 meses seguintes.\n\nAssinale a opção que indica o impacto das compras na Demonstração dos Fluxos de Caixa da gráfica",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "49",
+      "options": {
+        "A": "Ativo intangível, no Balanço Patrimonial",
+        "B": "Investimentos, no Balanço Patrimonial",
+        "C": "Ajustes de Avaliação Patrimonial, no Balanço Patrimonial",
+        "D": "Outras Receitas, na Demonstração do Resultado do Exercício",
+        "E": "Receita operacional, na Demonstração do Resultado do Exercício."
+      },
+      "question_index": 48,
+      "statement": "A Cia X adquiriu o controle da Cia Y, que era propriedade de terceiros. Na definição da contraprestação a ser transferida, a Cia X identificou, na Cia Y, a existência de um ativo intangível gerado internamente avaliado em R$10. 000. que irá gerar benefícios futuros para a Cia\n\nX. Em relação à alocação do preço pago nas demonstrações consolidadas, o valor de R$10.000 deverá ser reconhecido como",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "50",
+      "options": {
+        "A": "34,38%",
+        "B": "40,63%",
+        "C": "68,42%",
+        "D": "87,50%",
+        "E": "95,65%"
+      },
+      "question_index": 49,
+      "statement": "Em 31/12/2023, uma sociedade empresária apresentava os seguintes saldos em seus ativos e passivos, no Balanço Patrimonial: Adiantamento a empregados: R$10.000; Provisão para contingências: R$20.000; Estoques: R$30.000; Despesas antecipadas: R$40.000; Salários a pagar: R$50.000; Fornecedores:\n\nR$60.000; Disponibilidades: R$70.000; Empréstimos concedidos:\n\nR$80.000; Terrenos: R$90.000.\n\nAssinale a opção que indica o endividamento geral da sociedade empresária na data",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "51",
+      "options": {
+        "A": "Na escola A todos os professores recebem o mesmo salário, enquanto na escola B, há bônus por desempenho.",
+        "B": "Na escola A não houve variação do salário durante o ano, enquanto na escola B houve aumento na remuneração.",
+        "C": "Na escola A os professores recebem um salário independentemente do número de horas trabalhadas, enquanto na escola B recebem por hora trabalhada.",
+        "D": "Na escola A todos os professores recebem o mesmo salário, enquanto na escola B, os salários variam de acordo com a formação.",
+        "E": "Na escola A todos os professores têm o mesmo grau de instrução, enquanto na escola B há professores com especialização e mestrado."
+      },
+      "question_index": 50,
+      "statement": "Um analista comparou os gastos da escola A e da escola B em 2023.\n\nEle constatou que na escola A, a remuneração dos professores é considerada custo fixo, enquanto na escola B, é considerada custo variável.\n\nAssinale a opção que indica um possível motivo para a diferenciação.",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "52",
+      "options": {
+        "A": "custo indireto",
+        "B": "custo direto",
+        "C": "custo semifixo",
+        "D": "despesa indireta",
+        "E": "despesa direta."
+      },
+      "question_index": 51,
+      "statement": "Uma indústria fabrica diferentes tipos de massas, que são distribuídas e vendidas em supermercados. As máquinas utilizadas na produção são comuns a todos os tipos de produtos.\n\nA depreciação mensal das máquinas é considerada",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "53",
+      "options": {
+        "A": "igual ao financeiro e o econômico",
+        "B": "menor do que o financeiro e o econômico",
+        "C": "igual ao financeiro e menor do que o econômico",
+        "D": "maior do que o financeiro e igual ao econômico",
+        "E": "maior do que o financeiro e menor do que o econômico."
+      },
+      "question_index": 52,
+      "statement": "Em 31/12/2023, uma empresa de consultoria apresentava os seguintes saldos em seu balanço patrimonial: Disponibilidades:\n\nR$400.000; Patrimônio Líquido: R$400.000.\n\nA empresa recebe à vista pelos serviços prestados e paga todas as suas despesas à vista. Além disso, os sócios da empresa esperam um retorno de 20%de seu investimento ao ano.\n\nEm relação ao ponto de equilíbrio contábil da empresa, é correto\nafirmar que é",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "54",
+      "options": {
+        "A": "R$4,00",
+        "B": "R$4,50",
+        "C": "R$5,00",
+        "D": "R$6,00",
+        "E": "R$6,50."
+      },
+      "question_index": 53,
+      "statement": "A Cia A e a Cia B produziam e vendiam, respectivamente, canetas e lapiseiras. Em 2023 as duas empresas apresentaram o mesmo ponto de equilíbrio contábil, em número de unidades.\n\nNo ano, a Cia A vendeu 8.000 canetas por R$20 cada. Seu custo unitário era de R$12. Além disso, os custos e as despesas fixas da empresa foram, respectivamente, de R$50.000 e de R$10.000.\n\nJá a Cia B vendeu, no mesmo ano, 6.000 lapiseiras, tendo reconhecido R$60.000 de receita. Os custos e as despesas fixas da empresa foram, respectivamente, de R$25.000 e de R$5.000.\n\nO custo variável de cada lapiseira em 2023 foi de",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "55",
+      "options": {
+        "A": "está incorreta, uma vez que o critério é integrado com o custo padrão",
+        "B": "está correta, uma vez que os custos fixos não são incluídos na valoração do estoque",
+        "C": "está incorreta, uma vez que a mudança de critério não impacta o lucro bruto",
+        "D": "está correta, uma vez que o método leva em consideração, apenas, os custos fixos de curto prazo",
+        "E": "está incorreta, uma vez que os custos fixos serão distribuídos de acordo com critérios subjetivos."
+      },
+      "question_index": 54,
+      "statement": "Os gestores de uma sociedade industrial decidiram utilizar, internamente, o custeio variável, em substituição ao custeio por absorção. Eles afirmavam que através desse método de custeio a diferença entre a receita e o custo dos produtos vendidos pareceria maior. Em relação à afirmação dos gestores, pode-se afirmar que",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "56",
+      "options": {
+        "A": "Blusa – saia – vestido",
+        "B": "Blusa – vestido – saia",
+        "C": "Saia – blusa – vestido",
+        "D": "Saia – vestido – blusa",
+        "E": "Vestido – saia – blusa"
+      },
+      "question_index": 55,
+      "statement": "Uma loja de roupas vendia vestidos, blusas e saias. Os preços e os custos de cada peça eram os seguintes:\n\n<u>Preço</u> <u>Custo</u> Vestido 400 210 Blusa 250 90 <u>Saia</u> 300 100 Além disso, a loja paga uma comissão de 10% sobre o preço de venda a seus vendedores. Em agosto de 2024, a loja vendeu 50 blusas, 40 vestidos e 30 saias.\n\nEm setembro, o gerente procurou aumentar a publicidade, de modo a incentivar a venda das peças, dando prioridade àquelas com maior margem de contribuição unitária.\n\nA ordem definida de prioridade é",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "57",
+      "options": {
+        "A": "existe escassez de recursos financeiros",
+        "B": "não há expectativa de retorno contábil",
+        "C": "não há expectativa de retorno econômico",
+        "D": "não há perda de recuperabilidade do investimento",
+        "E": "não havia uma segunda opção de investimento em projetos."
+      },
+      "question_index": 56,
+      "statement": "Em 2024, uma sociedade empresária investiu R$100.000 em um projeto para desenvolvimento de um novo medicamento já testado. A sociedade empresária considerou, dentro da sua estratégia, que o seu custo de oportunidade era de zero.\n\nÉ correto afirmar que",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "58",
+      "options": {
+        "A": "Imposto Seletivo",
+        "B": "Lucro Real",
+        "C": "Lucro da Exploração",
+        "D": "Lucro Presumido",
+        "E": "Imposto sobre a Circulação de Mercadorias e Serviços."
+      },
+      "question_index": 57,
+      "statement": "O Código Tributário Nacional em seu art. 43 estabelece o fato gerador do imposto de renda. No caso de pessoas jurídicas, há a possibilidade de que a tributação seja efetuada mediante a aplicação de um percentual predefinido de lucratividade sobre a receita bruta. Este percentual é denominado",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "59",
+      "options": {
+        "A": "a propriedade de veículos automotores",
+        "B": "a obtenção de título de propriedade de imóvel urbano ou rural",
+        "C": "a obtenção de renda por parte das pessoas físicas, o que contempla salários e aluguéis, dentre outros tipos de renda",
+        "D": "a operações específicas, como empréstimos, financiamentos e operações de câmbio",
+        "E": "as grandes fortunas."
+      },
+      "question_index": 58,
+      "statement": "A hipótese de incidência tributária descreve os elementos essenciais que devem estar presentes para que um imposto seja devido. No que se refere ao fato gerador do IOF, este compreende",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "60",
+      "options": {
+        "A": "renda e proventos de qualquer natureza",
+        "B": "propriedade de veículos automotores",
+        "C": "importação de produtos estrangeiros",
+        "D": "grandes fortunas, nos termos de lei complementar",
+        "E": "propriedade territorial rural."
+      },
+      "question_index": 59,
+      "statement": "<u>***Não***</u> compete à União instituir impostos sobre",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "61",
+      "options": {
+        "A": "Imposto",
+        "B": "Taxa",
+        "C": "Contribuição de Melhoria",
+        "D": "Contribuição Social",
+        "E": "Moratória."
+      },
+      "question_index": 60,
+      "statement": "O art. 16 - do Código Tributário Nacional define “o tributo cuja\nobrigação tem por fato gerador uma situação independente de\nqualquer atividade estatal específica, relativa ao contribuinte”.\nEssa modalidade de tributo é chamada de",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "62",
+      "options": {
+        "A": "Extrafiscalidade",
+        "B": "Não incidência sobre exportações",
+        "C": "Progressividade",
+        "D": "Princípio da Irretroatividade",
+        "E": "Non-olet."
+      },
+      "question_index": 61,
+      "statement": "A cobrança de adicional de imposto de renda da pessoa jurídica para o montante de lucro tributável que exceder determinado valor é consequência direta de uma regra de regência deste tributo. Essa regra denomina-se",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "63",
+      "options": {
+        "A": "custeio das polícias federais",
+        "B": "financiamento da Seguridade Social",
+        "C": "fiscalização das concessões federais",
+        "D": "pagamento de salários de ocupantes do sistema financeiro nacional",
+        "E": "reforço de caixa do Poder Judiciário."
+      },
+      "question_index": 62,
+      "statement": "O artigo 195. I, c da Constituição Federal constitui a base para a cobrança da Contribuição Social sobre o Lucro Líquido (CSLL).\n\nA destinação da arrecadação da CSLL é dirigida com o objetivo de",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "64",
+      "options": {
+        "A": "forma de extinção do crédito tributário",
+        "B": "obrigação principal",
+        "C": "capacidade tributária ativa",
+        "D": "depósito judicial",
+        "E": "obrigação acessória."
+      },
+      "question_index": 63,
+      "statement": "A ECF (Escrituração Contábil Fiscal) surgiu para substituir a DIPJ\n\n(Declaração de Informações Econômico-Fiscais da Pessoa Jurídica) e constitui",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "65",
+      "options": {
+        "A": "R$ 750",
+        "B": "R$ 725",
+        "C": "R$ 700",
+        "D": "R$ 685",
+        "E": "R$ 670"
+      },
+      "question_index": 64,
+      "statement": "Uma pessoa comprou uma geladeira no valor de R$ 5000,00 que será paga em 10 prestações mensais seguidas, sendo a primeira 30 dias após a compra. A pessoa optou pelo financiamento oferecido pela loja, em que as prestações são calculadas pelo SAC (Sistemas de Amortizações Constantes) segundo uma taxa de juros de 5% ao mês. Nessas condições, o valor a ser pago pela segunda prestação é",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "66",
+      "options": {
+        "A": "14,1%",
+        "B": "15%",
+        "C": "15,2%",
+        "D": "15,8%",
+        "E": "16,3%"
+      },
+      "question_index": 65,
+      "statement": "Um banco oferece empréstimos cobrando uma taxa de juros de 15% ao trimestre com capitalização mensal. A taxa efetiva de juros trimestral cobrada pelo banco é aproximadamente",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "67",
+      "options": {
+        "A": "4 anos e 2 meses",
+        "B": "3 anos e 6 meses",
+        "C": "3 anos e 2 meses",
+        "D": "2 anos e 11 meses",
+        "E": "1 ano e 10 meses."
+      },
+      "question_index": 66,
+      "statement": "Uma dúvida frequente entre investidores é saber quanto tempo levará para que um capital investido dobre de valor. Se um investidor aplicar um capital à taxa de juros compostos de 2% ao mês, sem realizar depósitos futuros, esse capital dobrará ao final de (se necessário, utilize ln2 0,7 e ln1,02 0, 02. sendo ln o logaritmo natural",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "68",
+      "options": {
+        "A": "4 meses",
+        "B": "5 meses",
+        "C": "6 meses",
+        "D": "7 meses",
+        "E": "8 meses."
+      },
+      "question_index": 67,
+      "statement": "Arnaldo aplicou R$ 350.000, 00. a uma taxa de juros simples de 2% ao mês, que, ao final de um determinado período, rendeu juros de R$ 56.000,00. O período em que ficou aplicado o capital de Arnaldo que rendeu esse juro é igual a",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "69",
+      "options": {
+        "A": "R$ 18.520,00",
+        "B": "R$ 19.080,00",
+        "C": "R$ 17.640,00",
+        "D": "R$ 22.560,00",
+        "E": "R$ 27.480,00"
+      },
+      "question_index": 68,
+      "statement": "Bernardo tomou um empréstimo de R$ 120.000,00 à taxa de juros compostos de 3,5% ao mês. Após 4 meses Bernardo irá pagar de juros a quantia de Observação: Se julgar necessário, use os dados da tabela a seguir:\n\n(<u>1,035</u>) 2 <u>= 1,071</u>\n\n(<u>1,035</u>) 3 <u>= 1,109</u>\n\n(<u>1,035</u>) 4 <u>= 1,147</u>\n\n(<u>1,035</u>) 5 <u>= 1,188</u>\n\n(<u>1,035</u>) 6 <u>= 1,229</u>",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "70",
+      "options": {
+        "A": "R$ 22.525,00",
+        "B": "R$ 21.500,00",
+        "C": "R$ 20.625,00",
+        "D": "R$ 20.525,00",
+        "E": "R$ 21.625,00 EMPRESA DE TECNOLOGIA EINFORMACOES DAPREVIDENCIA-DATAPREV ATl-Contabilidade TIPOBRANCA-PAGINA15 AIIA01"
+      },
+      "question_index": 69,
+      "statement": "A taxa de desconto definida por um banco para um título, que é descontado 3 meses antes de seu vencimento, é de 3,3% ao mês.\n\nSendo R$ 25.000,00 o valor nominal deste título e, sabendo-se que este banco trabalha com o sistema de desconto bancário (“por fora”), o valor descontado do título liberado ao cliente será de",
+      "subject": "Conhecimentos Específicos"
+    }
+  ],
+  "schema_version": 1,
+  "source": "pdfs/80_prova.pdf"
+}

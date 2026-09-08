@@ -1,0 +1,1057 @@
+{
+  "adapter": "hybrid_extractor",
+  "pipeline": "legacy",
+  "questions": [
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "1",
+      "options": {
+        "A": "Existe uma oração subordinada que exerce função de sujeito em relação à oração principal",
+        "B": "Nota-se uma oração subordinada substantiva, em que a segunda oração exerce função própria de um substantivo em relação à oração principal",
+        "C": "Observa-se uma oração subordinada reduzida de infinitivo",
+        "D": "Verifica-se a possibilidade de desenvolver a segunda oração em “que se esteja atento e forte”",
+        "E": "Há uma oração subordinada que delimita a informação presente na oração principal."
+      },
+      "question_index": 0,
+      "statement": "*É preciso estar atento e forte*.\n\nSobre a estrutura sintática da frase em destaque, assinale a opção <u>*incorreta*</u>",
+      "subject": "Geral"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "2",
+      "options": {
+        "A": "Não admira que, fora de si, e andando rápido, desse um encontrão em certo homem que ia devagar",
+        "B": "Catete adiante, lembrou-se que a casa de Sofia era na Praia do Flamengo",
+        "C": "Após <u>alguns</u> instantes rápidos, abanou a cabeça voluntariamente",
+        "D": "Este apertou-lhe a mão satisfeitíssimo; ia ver-se livre de um <u>sócio</u>",
+        "E": "Mas diga-me uma coisa, essa proposta traz algum motivo oculto?"
+      },
+      "question_index": 1,
+      "statement": "Assinale a opção em que o elemento destacado <u>***não***</u> funciona como adjunto adnominal",
+      "subject": "Geral"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "3",
+      "options": {
+        "A": "Existe uma visão negativa do fazer poético, já que o poeta é descrito como “fingidor”",
+        "B": "O jogo de palavras em fingidor - *fingir dor* - contribui para caracterizar o poeta como sujeito insubmisso ao sentimento",
+        "C": "O fingimento é matéria de poesia, é a ferramenta da criação literária",
+        "D": "O exercício de fazer poesia torna o poeta imune à dor",
+        "E": "Há uma perspectiva irônica que se sustenta, sobretudo, em fingir a dor que, de fato, sente-se."
+      },
+      "question_index": 2,
+      "statement": "Leia o fragmento a seguir, de Fernando Pessoa:\n\n> *O poeta é um fingidor*\n> *Finge tão completamente*\n> *Que chega a fingir que é dor*\n> *A dor que deveras sente*.\n\nAssinale a opção correta sobre a interpretação dos versos em destaque",
+      "subject": "Geral"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "4",
+      "options": {
+        "A": "É impossível ser feliz e viver.",
+        "B": "Viver pressupõe felicidade.",
+        "C": "Há uma relação paradoxal entre felicidade e vida.",
+        "D": "É preciso esquecer da felicidade para obtê-la.",
+        "E": "Descreve-se o caráter efêmero da felicidade."
+      },
+      "question_index": 3,
+      "statement": "*A felicidade é tão oposta à vida, que estando nela, a gente esquece* *que vive* .\n\nAssinale a opção correta sobre o sentido da frase em destaque.",
+      "subject": "Geral"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "5",
+      "options": {
+        "A": "Não faz sentido obedecer a leis absurdas",
+        "B": "Admito que me simpatizei muito com a nova professora de Literatura",
+        "C": "Nossos vizinhos se mudaram e residem agora à rua das Laranjeiras",
+        "D": "Possuía uma dívida com o açougueiro, paguei-o assim que pude",
+        "E": "Vovó sempre lembra do aniversário de todos os seus netos."
+      },
+      "question_index": 4,
+      "statement": "Assinale a opção que apresenta corretamente a regência dos verbos",
+      "subject": "Geral"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "6",
+      "options": {
+        "A": "Pessoas que não se contentavam com o que tinham - descontentes",
+        "B": "Uma ferida que não se apagava - indelével",
+        "C": "Havia algo em sua imagem que não se podia distinguir - indistinguível",
+        "D": "Tinha a característica de alguém que não se irrita com facilidade – irascível",
+        "E": "Água e álcool são elementos que não se misturam - imiscíveis."
+      },
+      "question_index": 5,
+      "statement": "Assinale a opção que relaciona de modo <u>***incorreto***</u> o adjetivo à locução adjetiva destacada",
+      "subject": "Geral"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "7",
+      "options": {
+        "A": "Acrescia que, em verdade, o doente parecia estar melhorando",
+        "B": "Verdade é, disse ainda Rubião para defender o enfermo, verdade é que o cachorro merece a estima do dono",
+        "C": "Quando este acudiu, já ele mudara outra vez de ideia",
+        "D": "Espreitara uma deixa, e sai-lhe do testamento a massa toda dos bens",
+        "E": "No dia seguinte, Maria Benedita declarou à prima que estava pronta a aprender piano e francês."
+      },
+      "question_index": 6,
+      "statement": "Assinale a opção em que a vírgula se justifica pelo mesmo motivo do que em “se as duas tribos dividirem em paz as batatas do campo, não chegam a nutrir-se suficientemente e morrem de inanição”",
+      "subject": "Geral"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "8",
+      "options": {
+        "A": "cria o efeito de realidade, já que a fala busca reproduzir o momento da enunciação",
+        "B": "atribui o sentido de verdade, tendo em vista que prevalece o teor de preservação do discurso citado",
+        "C": "delimita a fronteira entre o discurso do narrador e o discurso citado por meio de aspas, travessão e verbos de elocução",
+        "D": "demarca a soberania do narrador, pois ele interpreta a fala citada, absorvida no fio de seu discurso",
+        "E": "precisa transpor as palavras do discurso citado, tal qual foram enunciadas originalmente."
+      },
+      "question_index": 7,
+      "statement": "O uso excessivo de telas faz mal à saúde da mente e do corpo e os efeitos podem ser ainda mais danosos nas duas primeiras décadas de vida:\n\n- Como tudo, o problema está no excesso e na falta de controle adequado, afirma o psicólogo Thiago Viola, do Instituto do Cérebro do Rio Grande do Sul. bbc.com (adaptado) Sobre o uso do discurso direto, é <u>***incorreto***</u> afirmar que este procedimento",
+      "subject": "Geral"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "9",
+      "options": {
+        "A": "Consequência.",
+        "B": "Causa.",
+        "C": "Finalidade.",
+        "D": "Tempo.",
+        "E": "Proporcionalidade."
+      },
+      "question_index": 8,
+      "statement": "Assinale a opção que indica corretamente a noção semântica expressa pelo elemento destacado em: “A moça recostara-se em uma cadeira de balanço no claro de uma janela, de modo que seu gracioso vulto imergia-se na plena luz”.",
+      "subject": "Geral"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "10",
+      "options": {
+        "A": "Ele virou-lhe as costas e tornou lentamente por onde viera",
+        "B": "Piedade ficou à janela",
+        "C": "Os curiosos permaneciam defronte de sua porta",
+        "D": "Coitada! Devia viver bem aborrecida da sorte",
+        "E": "Fazes mal em andar por aí com este sol."
+      },
+      "question_index": 9,
+      "statement": "Assinale a opção em que o verbo destacado indica estado",
+      "subject": "Geral"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "11",
+      "options": {
+        "A": "A candidata parece meia confusa",
+        "B": "É proibido a entrada de visitantes nessa área",
+        "C": "A diretora achou um e outro funcionário cumpridor",
+        "D": "A entrada para o teatro, atualmente, está muito caro",
+        "E": "As certidões estão anexas ao processo."
+      },
+      "question_index": 10,
+      "statement": "Assinale a opção correta em relação à concordância nominal",
+      "subject": "Geral"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "12",
+      "options": {
+        "A": "de uma norma linguística regional, a fim de caracterizar a cultura e o modo de vida do interior",
+        "B": "do termo comparativo “qual”, que estabelece uma analogia entre terra e fogueira",
+        "C": "de modalidade oral, que apresenta poucos recursos comunicativos, se comparada à modalidade escrita",
+        "D": "do substantivo *judiação* , que reitera a tristeza do poeta nos trechos em destaque",
+        "E": "de uma norma linguística desprestigiada, que serve para apontar a desigualdade social."
+      },
+      "question_index": 11,
+      "statement": "> *Quando oiei a terra ardendo*\n> *Qual fogueira de São João*\n> *Eu preguntei a Deus do céu, uai*\n> *Por que tamanha judiação*?\n\nNos versos de Luiz Gonzaga, o eu poético narra, em primeira pessoa, suas impressões sobre um determinado assunto.\n\nPara isso, ele utiliza construções linguísticas próprias, constatadas pelo uso",
+      "subject": "Geral"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "13",
+      "options": {
+        "A": "only 2 and 4 are false",
+        "B": "only 1 and 4 are true",
+        "C": "only 1, 3 and 4 are true",
+        "D": "only 1, 2 and 4 are false",
+        "E": "only 3 and 4 are true."
+      },
+      "question_index": 12,
+      "statement": "📖 **Texto de Apoio (Questões 13 a 18):**\n\nTechnology Consultant Fast Track: How to Get Your Dream Job in IT Consulting (IT Consulting Career Guide).\n\n(English Edition) eBook Kindle only.\n\nJumpstart your IT job search and land your dream job while your peers are still \"freshening up\" their resumes!\n\nProven techniques to land your dream job as a high-paid IT consultant—you don’t want to miss these, if you are serious about a career in IT!\n\nAnswers to IT consulting career questions most people fail to ask; actionable advice and real-life stories from seasoned IT consultants! As a fresh graduate looking for your first job, if you just do what almost everybody else is doing…you will land a hellhole job with lousy pay, long hours, nasty coworkers, and exclusively clients from hell (because you thought it was your only option to go forward in your career). If you are serious and can apply simple instructions, this book can help you become a high-paid IT consultant in your dream job by the end of the month!\n\nIf you already have your first or second job in the field of IT, or even have 20 years of work experience, this book will tell you what a great option a career in IT consulting can be. With this book, you can find out why your current job is not satisfying your career aspirations and turn your career around for the better!\n\nContaining lessons from a PhD with 12 years of experience and 15,000 billable hours from Accenture and Coala, this is the book movers and shakers in the IT industry are talking about.\n\nRecommended by university professors, last-year students, as well as seasoned consultants. Even my mom says you have to read this book, or you have to answer to her!\n\nBy reading this book, you will learn:\n\nWhat your college professor didn't tell you about the consulting business. The Pro’s and Con’s of a career in technology consulting.\n\nWhat other options do you have besides working for one of the global consulting giants such as Accenture, Capgemini, Deloitte, Ernst & Young (EY), KPMG, or PricewaterhouseCoopers (PwC).\n\nThe must-have characteristics to succeed in IT consulting (if you don't have these, you are doomed to FAIL!).\n\nHow to find your money-making niche in IT consulting.\n\nHow to get the best results with the least possible effort in your job search. Best ways to prepare for the job interview in 30 minutes or less.\n\nWhat questions to ask in the interview to avoid nasty surprises when you are selected. Hear what others are saying: ★★★★★ “The book gives a strong and realistic description of IT consultancy. Thus, every IT student should read the book before they graduate as it will increase their probability of landing a dream job.” Samuli Pekkola, Professor, PhD, in Information Systems Sciences, Tampere University ★★★★★ “The book gives insight into technology consulting and provides great tips for job search. I believe it will be very valuable when I start looking for a position in IT. The section on how to stand out as a candidate for a job was an eyeopener.” Saku Sikiö, Information Systems Student, University of Jyväskylä ★★★★★ “This is the book I would have needed on the verge of graduation!” Teijo Kelander, MSc, Quality Consultant and Agile Coach ★★★★★ “If you are serious about IT consultancy as a profession, this book is a must-read! As a recruiter, I would prefer that applicants would better understand what this is all about.” Petteri Laamanen, MSc, CEO & Founder, Coala ★★★★★ “This book gave me valuable insights into the IT consultant’s working life, making it easier to consider the pros and cons in relation to my own values and goals.” Janita Kingelin, MSc, Marketing Manager, SoulCore ★ If you want great results in your technology consultant job search, get this book right now! <u>\n\n*(Fonte: https://www.amazon.com.br/Technology-Consultant-Fast-Track-Consulting)*\n\n</u>- <u>ebook/dp/B0918JB48D</u>\n\n---\n\nConsider the following affirmatives\n\n1. The TEXT can just be found online\n\n2. The tips on this text are only for fresh graduates\n\n3. It is a printed book\n\n4. Professors, last-year students and consultants who are skilled at guiding business recommend the book.\n\nAccording to the TEXT,",
+      "subject": "Língua Inglesa"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "14",
+      "options": {
+        "A": "Tips on an in-person appraisal to be a successful IT consultant",
+        "B": "A review on a guide to foster the possibility of being successful in finding your Dream Job in IT Consulting, despite your experience",
+        "C": "Challenge only beginners to read a guide well written and recommended by professors in the IT scenario",
+        "D": "The reasons one should buy the guide to be a successful IT consultant abroad",
+        "E": "It is a well explained guide to enhance people’s desire to find a dream internship despite their social status."
+      },
+      "question_index": 13,
+      "statement": "📖 **Texto de Apoio (Questões 13 a 18):**\n\nTechnology Consultant Fast Track: How to Get Your Dream Job in IT Consulting (IT Consulting Career Guide).\n\n(English Edition) eBook Kindle only.\n\nJumpstart your IT job search and land your dream job while your peers are still \"freshening up\" their resumes!\n\nProven techniques to land your dream job as a high-paid IT consultant—you don’t want to miss these, if you are serious about a career in IT!\n\nAnswers to IT consulting career questions most people fail to ask; actionable advice and real-life stories from seasoned IT consultants! As a fresh graduate looking for your first job, if you just do what almost everybody else is doing…you will land a hellhole job with lousy pay, long hours, nasty coworkers, and exclusively clients from hell (because you thought it was your only option to go forward in your career). If you are serious and can apply simple instructions, this book can help you become a high-paid IT consultant in your dream job by the end of the month!\n\nIf you already have your first or second job in the field of IT, or even have 20 years of work experience, this book will tell you what a great option a career in IT consulting can be. With this book, you can find out why your current job is not satisfying your career aspirations and turn your career around for the better!\n\nContaining lessons from a PhD with 12 years of experience and 15,000 billable hours from Accenture and Coala, this is the book movers and shakers in the IT industry are talking about.\n\nRecommended by university professors, last-year students, as well as seasoned consultants. Even my mom says you have to read this book, or you have to answer to her!\n\nBy reading this book, you will learn:\n\nWhat your college professor didn't tell you about the consulting business. The Pro’s and Con’s of a career in technology consulting.\n\nWhat other options do you have besides working for one of the global consulting giants such as Accenture, Capgemini, Deloitte, Ernst & Young (EY), KPMG, or PricewaterhouseCoopers (PwC).\n\nThe must-have characteristics to succeed in IT consulting (if you don't have these, you are doomed to FAIL!).\n\nHow to find your money-making niche in IT consulting.\n\nHow to get the best results with the least possible effort in your job search. Best ways to prepare for the job interview in 30 minutes or less.\n\nWhat questions to ask in the interview to avoid nasty surprises when you are selected. Hear what others are saying: ★★★★★ “The book gives a strong and realistic description of IT consultancy. Thus, every IT student should read the book before they graduate as it will increase their probability of landing a dream job.” Samuli Pekkola, Professor, PhD, in Information Systems Sciences, Tampere University ★★★★★ “The book gives insight into technology consulting and provides great tips for job search. I believe it will be very valuable when I start looking for a position in IT. The section on how to stand out as a candidate for a job was an eyeopener.” Saku Sikiö, Information Systems Student, University of Jyväskylä ★★★★★ “This is the book I would have needed on the verge of graduation!” Teijo Kelander, MSc, Quality Consultant and Agile Coach ★★★★★ “If you are serious about IT consultancy as a profession, this book is a must-read! As a recruiter, I would prefer that applicants would better understand what this is all about.” Petteri Laamanen, MSc, CEO & Founder, Coala ★★★★★ “This book gave me valuable insights into the IT consultant’s working life, making it easier to consider the pros and cons in relation to my own values and goals.” Janita Kingelin, MSc, Marketing Manager, SoulCore ★ If you want great results in your technology consultant job search, get this book right now! <u>\n\n*(Fonte: https://www.amazon.com.br/Technology-Consultant-Fast-Track-Consulting)*\n\n</u>- <u>ebook/dp/B0918JB48D</u>\n\n---\n\nWhat information is in TEXT?",
+      "subject": "Língua Inglesa"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "15",
+      "options": {
+        "A": "consultants",
+        "B": "book",
+        "C": "students",
+        "D": "professors",
+        "E": "mom."
+      },
+      "question_index": 14,
+      "statement": "📖 **Texto de Apoio (Questões 13 a 18):**\n\nTechnology Consultant Fast Track: How to Get Your Dream Job in IT Consulting (IT Consulting Career Guide).\n\n(English Edition) eBook Kindle only.\n\nJumpstart your IT job search and land your dream job while your peers are still \"freshening up\" their resumes!\n\nProven techniques to land your dream job as a high-paid IT consultant—you don’t want to miss these, if you are serious about a career in IT!\n\nAnswers to IT consulting career questions most people fail to ask; actionable advice and real-life stories from seasoned IT consultants! As a fresh graduate looking for your first job, if you just do what almost everybody else is doing…you will land a hellhole job with lousy pay, long hours, nasty coworkers, and exclusively clients from hell (because you thought it was your only option to go forward in your career). If you are serious and can apply simple instructions, this book can help you become a high-paid IT consultant in your dream job by the end of the month!\n\nIf you already have your first or second job in the field of IT, or even have 20 years of work experience, this book will tell you what a great option a career in IT consulting can be. With this book, you can find out why your current job is not satisfying your career aspirations and turn your career around for the better!\n\nContaining lessons from a PhD with 12 years of experience and 15,000 billable hours from Accenture and Coala, this is the book movers and shakers in the IT industry are talking about.\n\nRecommended by university professors, last-year students, as well as seasoned consultants. Even my mom says you have to read this book, or you have to answer to her!\n\nBy reading this book, you will learn:\n\nWhat your college professor didn't tell you about the consulting business. The Pro’s and Con’s of a career in technology consulting.\n\nWhat other options do you have besides working for one of the global consulting giants such as Accenture, Capgemini, Deloitte, Ernst & Young (EY), KPMG, or PricewaterhouseCoopers (PwC).\n\nThe must-have characteristics to succeed in IT consulting (if you don't have these, you are doomed to FAIL!).\n\nHow to find your money-making niche in IT consulting.\n\nHow to get the best results with the least possible effort in your job search. Best ways to prepare for the job interview in 30 minutes or less.\n\nWhat questions to ask in the interview to avoid nasty surprises when you are selected. Hear what others are saying: ★★★★★ “The book gives a strong and realistic description of IT consultancy. Thus, every IT student should read the book before they graduate as it will increase their probability of landing a dream job.” Samuli Pekkola, Professor, PhD, in Information Systems Sciences, Tampere University ★★★★★ “The book gives insight into technology consulting and provides great tips for job search. I believe it will be very valuable when I start looking for a position in IT. The section on how to stand out as a candidate for a job was an eyeopener.” Saku Sikiö, Information Systems Student, University of Jyväskylä ★★★★★ “This is the book I would have needed on the verge of graduation!” Teijo Kelander, MSc, Quality Consultant and Agile Coach ★★★★★ “If you are serious about IT consultancy as a profession, this book is a must-read! As a recruiter, I would prefer that applicants would better understand what this is all about.” Petteri Laamanen, MSc, CEO & Founder, Coala ★★★★★ “This book gave me valuable insights into the IT consultant’s working life, making it easier to consider the pros and cons in relation to my own values and goals.” Janita Kingelin, MSc, Marketing Manager, SoulCore ★ If you want great results in your technology consultant job search, get this book right now! <u>\n\n*(Fonte: https://www.amazon.com.br/Technology-Consultant-Fast-Track-Consulting)*\n\n</u>- <u>ebook/dp/B0918JB48D</u>\n\n---\n\nIn the excerpt in TEXT “Recommended by university professors, last-year students, as well as seasoned consultants. Even my mom says you have to read this book, or you have to answer to <u>**her**</u> !” The pronoun <u>**her**</u> refers to",
+      "subject": "Língua Inglesa"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "16",
+      "options": {
+        "A": "a condition",
+        "B": "an example",
+        "C": "an effect",
+        "D": "an order",
+        "E": "a reason."
+      },
+      "question_index": 15,
+      "statement": "📖 **Texto de Apoio (Questões 13 a 18):**\n\nTechnology Consultant Fast Track: How to Get Your Dream Job in IT Consulting (IT Consulting Career Guide).\n\n(English Edition) eBook Kindle only.\n\nJumpstart your IT job search and land your dream job while your peers are still \"freshening up\" their resumes!\n\nProven techniques to land your dream job as a high-paid IT consultant—you don’t want to miss these, if you are serious about a career in IT!\n\nAnswers to IT consulting career questions most people fail to ask; actionable advice and real-life stories from seasoned IT consultants! As a fresh graduate looking for your first job, if you just do what almost everybody else is doing…you will land a hellhole job with lousy pay, long hours, nasty coworkers, and exclusively clients from hell (because you thought it was your only option to go forward in your career). If you are serious and can apply simple instructions, this book can help you become a high-paid IT consultant in your dream job by the end of the month!\n\nIf you already have your first or second job in the field of IT, or even have 20 years of work experience, this book will tell you what a great option a career in IT consulting can be. With this book, you can find out why your current job is not satisfying your career aspirations and turn your career around for the better!\n\nContaining lessons from a PhD with 12 years of experience and 15,000 billable hours from Accenture and Coala, this is the book movers and shakers in the IT industry are talking about.\n\nRecommended by university professors, last-year students, as well as seasoned consultants. Even my mom says you have to read this book, or you have to answer to her!\n\nBy reading this book, you will learn:\n\nWhat your college professor didn't tell you about the consulting business. The Pro’s and Con’s of a career in technology consulting.\n\nWhat other options do you have besides working for one of the global consulting giants such as Accenture, Capgemini, Deloitte, Ernst & Young (EY), KPMG, or PricewaterhouseCoopers (PwC).\n\nThe must-have characteristics to succeed in IT consulting (if you don't have these, you are doomed to FAIL!).\n\nHow to find your money-making niche in IT consulting.\n\nHow to get the best results with the least possible effort in your job search. Best ways to prepare for the job interview in 30 minutes or less.\n\nWhat questions to ask in the interview to avoid nasty surprises when you are selected. Hear what others are saying: ★★★★★ “The book gives a strong and realistic description of IT consultancy. Thus, every IT student should read the book before they graduate as it will increase their probability of landing a dream job.” Samuli Pekkola, Professor, PhD, in Information Systems Sciences, Tampere University ★★★★★ “The book gives insight into technology consulting and provides great tips for job search. I believe it will be very valuable when I start looking for a position in IT. The section on how to stand out as a candidate for a job was an eyeopener.” Saku Sikiö, Information Systems Student, University of Jyväskylä ★★★★★ “This is the book I would have needed on the verge of graduation!” Teijo Kelander, MSc, Quality Consultant and Agile Coach ★★★★★ “If you are serious about IT consultancy as a profession, this book is a must-read! As a recruiter, I would prefer that applicants would better understand what this is all about.” Petteri Laamanen, MSc, CEO & Founder, Coala ★★★★★ “This book gave me valuable insights into the IT consultant’s working life, making it easier to consider the pros and cons in relation to my own values and goals.” Janita Kingelin, MSc, Marketing Manager, SoulCore ★ If you want great results in your technology consultant job search, get this book right now! <u>\n\n*(Fonte: https://www.amazon.com.br/Technology-Consultant-Fast-Track-Consulting)*\n\n</u>- <u>ebook/dp/B0918JB48D</u>\n\n---\n\nIn the sentence taken from TEXT “ The book gives a strong and realistic description of IT consultancy. <u>**Thus**</u> , every IT student should read the book before they graduate as it will increase their probability of landing a dream job. ” The underlined linker introduces",
+      "subject": "Língua Inglesa"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "17",
+      "options": {
+        "A": "hence",
+        "B": "whereas",
+        "C": "unless",
+        "D": "moreover",
+        "E": "meanwhile."
+      },
+      "question_index": 16,
+      "statement": "📖 **Texto de Apoio (Questões 13 a 18):**\n\nTechnology Consultant Fast Track: How to Get Your Dream Job in IT Consulting (IT Consulting Career Guide).\n\n(English Edition) eBook Kindle only.\n\nJumpstart your IT job search and land your dream job while your peers are still \"freshening up\" their resumes!\n\nProven techniques to land your dream job as a high-paid IT consultant—you don’t want to miss these, if you are serious about a career in IT!\n\nAnswers to IT consulting career questions most people fail to ask; actionable advice and real-life stories from seasoned IT consultants! As a fresh graduate looking for your first job, if you just do what almost everybody else is doing…you will land a hellhole job with lousy pay, long hours, nasty coworkers, and exclusively clients from hell (because you thought it was your only option to go forward in your career). If you are serious and can apply simple instructions, this book can help you become a high-paid IT consultant in your dream job by the end of the month!\n\nIf you already have your first or second job in the field of IT, or even have 20 years of work experience, this book will tell you what a great option a career in IT consulting can be. With this book, you can find out why your current job is not satisfying your career aspirations and turn your career around for the better!\n\nContaining lessons from a PhD with 12 years of experience and 15,000 billable hours from Accenture and Coala, this is the book movers and shakers in the IT industry are talking about.\n\nRecommended by university professors, last-year students, as well as seasoned consultants. Even my mom says you have to read this book, or you have to answer to her!\n\nBy reading this book, you will learn:\n\nWhat your college professor didn't tell you about the consulting business. The Pro’s and Con’s of a career in technology consulting.\n\nWhat other options do you have besides working for one of the global consulting giants such as Accenture, Capgemini, Deloitte, Ernst & Young (EY), KPMG, or PricewaterhouseCoopers (PwC).\n\nThe must-have characteristics to succeed in IT consulting (if you don't have these, you are doomed to FAIL!).\n\nHow to find your money-making niche in IT consulting.\n\nHow to get the best results with the least possible effort in your job search. Best ways to prepare for the job interview in 30 minutes or less.\n\nWhat questions to ask in the interview to avoid nasty surprises when you are selected. Hear what others are saying: ★★★★★ “The book gives a strong and realistic description of IT consultancy. Thus, every IT student should read the book before they graduate as it will increase their probability of landing a dream job.” Samuli Pekkola, Professor, PhD, in Information Systems Sciences, Tampere University ★★★★★ “The book gives insight into technology consulting and provides great tips for job search. I believe it will be very valuable when I start looking for a position in IT. The section on how to stand out as a candidate for a job was an eyeopener.” Saku Sikiö, Information Systems Student, University of Jyväskylä ★★★★★ “This is the book I would have needed on the verge of graduation!” Teijo Kelander, MSc, Quality Consultant and Agile Coach ★★★★★ “If you are serious about IT consultancy as a profession, this book is a must-read! As a recruiter, I would prefer that applicants would better understand what this is all about.” Petteri Laamanen, MSc, CEO & Founder, Coala ★★★★★ “This book gave me valuable insights into the IT consultant’s working life, making it easier to consider the pros and cons in relation to my own values and goals.” Janita Kingelin, MSc, Marketing Manager, SoulCore ★ If you want great results in your technology consultant job search, get this book right now! <u>\n\n*(Fonte: https://www.amazon.com.br/Technology-Consultant-Fast-Track-Consulting)*\n\n</u>- <u>ebook/dp/B0918JB48D</u>\n\n---\n\n“ With this book, you can find out why your current job is not satisfying your career aspirations <u>**and**</u> turn your career around for the better!” The discourse marker <u>**and**</u> used in TEXT is similar in meaning to",
+      "subject": "Língua Inglesa"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "18",
+      "options": {
+        "A": "Saku Sikiö",
+        "B": "Petteri Laamanen",
+        "C": "Samuli Pekkola",
+        "D": "Janita Kingelin",
+        "E": "Teijo Kelander"
+      },
+      "question_index": 17,
+      "statement": "📖 **Texto de Apoio (Questões 13 a 18):**\n\nTechnology Consultant Fast Track: How to Get Your Dream Job in IT Consulting (IT Consulting Career Guide).\n\n(English Edition) eBook Kindle only.\n\nJumpstart your IT job search and land your dream job while your peers are still \"freshening up\" their resumes!\n\nProven techniques to land your dream job as a high-paid IT consultant—you don’t want to miss these, if you are serious about a career in IT!\n\nAnswers to IT consulting career questions most people fail to ask; actionable advice and real-life stories from seasoned IT consultants! As a fresh graduate looking for your first job, if you just do what almost everybody else is doing…you will land a hellhole job with lousy pay, long hours, nasty coworkers, and exclusively clients from hell (because you thought it was your only option to go forward in your career). If you are serious and can apply simple instructions, this book can help you become a high-paid IT consultant in your dream job by the end of the month!\n\nIf you already have your first or second job in the field of IT, or even have 20 years of work experience, this book will tell you what a great option a career in IT consulting can be. With this book, you can find out why your current job is not satisfying your career aspirations and turn your career around for the better!\n\nContaining lessons from a PhD with 12 years of experience and 15,000 billable hours from Accenture and Coala, this is the book movers and shakers in the IT industry are talking about.\n\nRecommended by university professors, last-year students, as well as seasoned consultants. Even my mom says you have to read this book, or you have to answer to her!\n\nBy reading this book, you will learn:\n\nWhat your college professor didn't tell you about the consulting business. The Pro’s and Con’s of a career in technology consulting.\n\nWhat other options do you have besides working for one of the global consulting giants such as Accenture, Capgemini, Deloitte, Ernst & Young (EY), KPMG, or PricewaterhouseCoopers (PwC).\n\nThe must-have characteristics to succeed in IT consulting (if you don't have these, you are doomed to FAIL!).\n\nHow to find your money-making niche in IT consulting.\n\nHow to get the best results with the least possible effort in your job search. Best ways to prepare for the job interview in 30 minutes or less.\n\nWhat questions to ask in the interview to avoid nasty surprises when you are selected. Hear what others are saying: ★★★★★ “The book gives a strong and realistic description of IT consultancy. Thus, every IT student should read the book before they graduate as it will increase their probability of landing a dream job.” Samuli Pekkola, Professor, PhD, in Information Systems Sciences, Tampere University ★★★★★ “The book gives insight into technology consulting and provides great tips for job search. I believe it will be very valuable when I start looking for a position in IT. The section on how to stand out as a candidate for a job was an eyeopener.” Saku Sikiö, Information Systems Student, University of Jyväskylä ★★★★★ “This is the book I would have needed on the verge of graduation!” Teijo Kelander, MSc, Quality Consultant and Agile Coach ★★★★★ “If you are serious about IT consultancy as a profession, this book is a must-read! As a recruiter, I would prefer that applicants would better understand what this is all about.” Petteri Laamanen, MSc, CEO & Founder, Coala ★★★★★ “This book gave me valuable insights into the IT consultant’s working life, making it easier to consider the pros and cons in relation to my own values and goals.” Janita Kingelin, MSc, Marketing Manager, SoulCore ★ If you want great results in your technology consultant job search, get this book right now! <u>\n\n*(Fonte: https://www.amazon.com.br/Technology-Consultant-Fast-Track-Consulting)*\n\n</u>- <u>ebook/dp/B0918JB48D</u>\n\n---\n\nBy the end of TEXT six people assessed the guide. One of them said that he should have had the opportunity to study on the guide on the brick of graduating.\n\nChoose the person who said that",
+      "subject": "Língua Inglesa"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "19",
+      "options": {
+        "A": "Computer",
+        "B": "Pocket PC",
+        "C": "Window Mobile handheld",
+        "D": "MPrint MW-260",
+        "E": "Bluetooth."
+      },
+      "question_index": 18,
+      "statement": "📖 **Texto de Apoio (Questões 19 a 20):**\n\nIt's not often we write about printers here on the Giz, but Brother's new MPrint MW-260 gets honorable mention for being the world's thinnest printer. It can print up to 20 pages per minute from any PC, Pocket PC, or Windows Mobile handheld. Best of all, it also prints over Bluetooth (in addition to your standard USB). No word on pricing or availability, but this is a 1-pound printer we wouldn't mind adding to our travel bag. It’s worth buying!\n\nLouis Ramirez <u>*\n\n*(Fonte: http://www.gizmodo.com/)*\n\n*</u>\n\n---\n\nThe pronoun “<u>**it**</u>” in “<u>**It**</u> can print up to 20 pages per minute from any PC, Pocket PC, or Windows Mobile handheld”, taken from TEXT, refers to",
+      "subject": "Língua Inglesa"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "20",
+      "options": {
+        "A": "The weight of the printer",
+        "B": "The price of the printer",
+        "C": "The printer serial number",
+        "D": "The printer stock availability",
+        "E": "The printer sale."
+      },
+      "question_index": 19,
+      "statement": "📖 **Texto de Apoio (Questões 19 a 20):**\n\nIt's not often we write about printers here on the Giz, but Brother's new MPrint MW-260 gets honorable mention for being the world's thinnest printer. It can print up to 20 pages per minute from any PC, Pocket PC, or Windows Mobile handheld. Best of all, it also prints over Bluetooth (in addition to your standard USB). No word on pricing or availability, but this is a 1-pound printer we wouldn't mind adding to our travel bag. It’s worth buying!\n\nLouis Ramirez <u>*\n\n*(Fonte: http://www.gizmodo.com/)*\n\n*</u>\n\n---\n\nIn the sentence “No word on pricing or availability, but this is <u>**a 1**</u>- <u>**pound printer**</u> we wouldn't mind adding to our travel bag”.\n\nThe expression “...** a 1-pound printer**” taken from TEXT is referring to",
+      "subject": "Língua Inglesa"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "21",
+      "options": {
+        "A": "This essay is concerned not only about apps but also about successful web developers",
+        "B": "The Text is an academic piece of writing",
+        "C": "Artificial Intelligence has created app store",
+        "D": "App developers are addicted to AppEco",
+        "E": "AppEco is a website known around the world by foreigners."
+      },
+      "question_index": 20,
+      "statement": "📖 **Texto de Apoio (Questões 21 a 24):**\n\nResearch-Article How to be a successful app developer: lessons from the simulation of an app ecosystem Soo Ling Lim, Peter J. Bentley Abstract App developers are constantly competing against each other to win more downloads for their apps. With hundreds of thousands of apps in these online stores, what strategy should a developer use to be successful? Should they innovate, make many similar apps, optimize their own apps or just copy the apps of others?\n\nLooking more deeply, how does a complex app ecosystem perform when developers choose to use different strategies?\n\nThis paper investigates these questions using AppEco, the first Artificial Life model of mobile application ecosystems. In AppEco, developer agents build and upload apps to the app store; user agents browse the store and download the apps. A distinguishing feature of AppEco is the explicit modelling of apps as artefacts. In this work we use AppEco to simulate Apple's iOS app ecosystem and investigate common developer strategies, evaluating them in terms of downloads received, app diversity, and adoption rate. <u>\n\n*(Fonte: https://dl.acm.org/doi/10.1145/2384697.2384698)*\n\n</u>\n\n---\n\nAccording to TEXT it can be said that",
+      "subject": "Língua Inglesa"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "22",
+      "options": {
+        "A": "The word <u>***rate***</u> means a measure and it’s a discourse marker",
+        "B": "The word <u>***rate***</u> means to quantify and it’s an adjective",
+        "C": "The word <u>***rate***</u> means to quantify and it’s a subject",
+        "D": "The word <u>***rate***</u> means to charge and it’s a verb",
+        "E": "The word <u>***rate***</u> means a measure and it’s a noun."
+      },
+      "question_index": 21,
+      "statement": "📖 **Texto de Apoio (Questões 21 a 24):**\n\nResearch-Article How to be a successful app developer: lessons from the simulation of an app ecosystem Soo Ling Lim, Peter J. Bentley Abstract App developers are constantly competing against each other to win more downloads for their apps. With hundreds of thousands of apps in these online stores, what strategy should a developer use to be successful? Should they innovate, make many similar apps, optimize their own apps or just copy the apps of others?\n\nLooking more deeply, how does a complex app ecosystem perform when developers choose to use different strategies?\n\nThis paper investigates these questions using AppEco, the first Artificial Life model of mobile application ecosystems. In AppEco, developer agents build and upload apps to the app store; user agents browse the store and download the apps. A distinguishing feature of AppEco is the explicit modelling of apps as artefacts. In this work we use AppEco to simulate Apple's iOS app ecosystem and investigate common developer strategies, evaluating them in terms of downloads received, app diversity, and adoption rate. <u>\n\n*(Fonte: https://dl.acm.org/doi/10.1145/2384697.2384698)*\n\n</u>\n\n---\n\nIn the excerpt “In this work we use AppEco to simulate Apple's iOS app ecosystem and investigate common developer strategies, evaluating them in terms of downloads received, app diversity, and adoption <u>**rate**</u> .\n\nChoose the correct option according to TEXT",
+      "subject": "Língua Inglesa"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "23",
+      "options": {
+        "A": "Absence of obligation",
+        "B": "Suggestion",
+        "C": "Offer",
+        "D": "Possibility",
+        "E": "Obligation"
+      },
+      "question_index": 22,
+      "statement": "📖 **Texto de Apoio (Questões 21 a 24):**\n\nResearch-Article How to be a successful app developer: lessons from the simulation of an app ecosystem Soo Ling Lim, Peter J. Bentley Abstract App developers are constantly competing against each other to win more downloads for their apps. With hundreds of thousands of apps in these online stores, what strategy should a developer use to be successful? Should they innovate, make many similar apps, optimize their own apps or just copy the apps of others?\n\nLooking more deeply, how does a complex app ecosystem perform when developers choose to use different strategies?\n\nThis paper investigates these questions using AppEco, the first Artificial Life model of mobile application ecosystems. In AppEco, developer agents build and upload apps to the app store; user agents browse the store and download the apps. A distinguishing feature of AppEco is the explicit modelling of apps as artefacts. In this work we use AppEco to simulate Apple's iOS app ecosystem and investigate common developer strategies, evaluating them in terms of downloads received, app diversity, and adoption rate. <u>\n\n*(Fonte: https://dl.acm.org/doi/10.1145/2384697.2384698)*\n\n</u>\n\n---\n\nIn the sentences, “With hundreds of thousands of apps in these online stores, what strategy <u>**should**</u> a developer use to be successful? <u>**Should**</u> they innovate, make many similar apps, optimize their own apps or just copy the apps of others?”.\n\nThe modal “should”, used in TEXT, expresses the idea of",
+      "subject": "Língua Inglesa"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "24",
+      "options": {
+        "A": "I stopped in several bookstores to ___",
+        "B": "I usually ___ the internet for a couple of hours each evening",
+        "C": "The brochure is well worth a ___",
+        "D": "There are plenty of biographies for him to ___ over",
+        "E": "I always ___ in an up-market antique shop."
+      },
+      "question_index": 23,
+      "statement": "📖 **Texto de Apoio (Questões 21 a 24):**\n\nResearch-Article How to be a successful app developer: lessons from the simulation of an app ecosystem Soo Ling Lim, Peter J. Bentley Abstract App developers are constantly competing against each other to win more downloads for their apps. With hundreds of thousands of apps in these online stores, what strategy should a developer use to be successful? Should they innovate, make many similar apps, optimize their own apps or just copy the apps of others?\n\nLooking more deeply, how does a complex app ecosystem perform when developers choose to use different strategies?\n\nThis paper investigates these questions using AppEco, the first Artificial Life model of mobile application ecosystems. In AppEco, developer agents build and upload apps to the app store; user agents browse the store and download the apps. A distinguishing feature of AppEco is the explicit modelling of apps as artefacts. In this work we use AppEco to simulate Apple's iOS app ecosystem and investigate common developer strategies, evaluating them in terms of downloads received, app diversity, and adoption rate. <u>\n\n*(Fonte: https://dl.acm.org/doi/10.1145/2384697.2384698)*\n\n</u>\n\n---\n\nThe word “browse” in “user agents <u>**browse**</u> the store and download the apps.”, taken from TEXT, is a verb.\n\nThe same word *c* an also be used as a noun in sentence",
+      "subject": "Língua Inglesa"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "25",
+      "options": {
+        "A": "R$ 18.000,00",
+        "B": "R$ 20.000,00",
+        "C": "R$ 24.000,00",
+        "D": "R$ 26.000,00",
+        "E": "R$ 28.000,00"
+      },
+      "question_index": 24,
+      "statement": "Arnaldo e Bernaldo associaram-se em um determinado negócio.\n\nArnaldo entrou com R$ 12.000,00 e Bernaldo com R$ 13.000,00.\n\nSe perderem R$ 50.000, 00. caberá a Arnaldo o prejuízo de",
+      "subject": "Raciocínio Lógico-Matemático"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "26",
+      "options": {
+        "A": "1º bimestre, necessariamente",
+        "B": "1º ou 2º bimestres, necessariamente",
+        "C": "2º bimestre, necessariamente",
+        "D": "3º bimestre, necessariamente",
+        "E": "3º ou 4º bimestre, necessariamente."
+      },
+      "question_index": 25,
+      "statement": "Uma determinada escola adota o sistema de pesos por bimestre para o cálculo da média anual. O primeiro bimestre tem peso 1. o segundo, 2. o terceiro, 3. e o quarto, 4. Assim, para calcular a média anual, um estudante deve efetuar a soma de cada uma de suas notas bimestrais multiplicadas pelos seus respectivos pesos e dividir por 10. Para ser aprovado, um aluno precisa ter média anual, no mínimo, igual a 7,0.\n\nArnaldo tirou notas 4,0; 6,0; 8,0; 8,0 nos 4 bimestres, não necessariamente nessa ordem. Para que Arnaldo seja aprovado, a sua menor nota deve ter sido tirada no",
+      "subject": "Raciocínio Lógico-Matemático"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "27",
+      "options": {
+        "A": "20.",
+        "B": "25.",
+        "C": "30.",
+        "D": "35.",
+        "E": "40."
+      },
+      "question_index": 26,
+      "statement": "Dois sistemas monitoram a variação de temperatura dos servidores em um data center. Um sistema registra variações positivas (aquecimento) e o outro registra variações negativas\n\n(resfriamento). Certo dia, a soma dessas variações foi de 1 grau Celsius, indicando que o ambiente se manteve praticamente estável. No entanto, a soma dos quadrados dessas variações foi de\n\n313. o que revela uma diferença significativa entre o maior valor positivo e o menor valor negativo registrados.\n\nA diferença entre esses valores é",
+      "subject": "Raciocínio Lógico-Matemático"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "28",
+      "options": {
+        "A": "Cesar é fã de futebol e assiste a muitos jogos",
+        "B": "Cesar gosta de futebol porque assiste a muitos jogos",
+        "C": "Cesar gosta de assistir jogos por ser fã de futebol",
+        "D": "Se Cesar não assiste a muitos jogos então ele não é fã de futebol",
+        "E": "Se Cesar não é fã de futebol então ele não assiste a muitos jogos."
+      },
+      "question_index": 27,
+      "statement": "A proposição logicamente equivalente à proposição “Se Cesar é fã de futebol então ele assiste a muitos jogos” é",
+      "subject": "Raciocínio Lógico-Matemático"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "29",
+      "options": {
+        "A": "6.",
+        "B": "7.",
+        "C": "8.",
+        "D": "9.",
+        "E": "10."
+      },
+      "question_index": 28,
+      "statement": "Numa certa região há alguns vilarejos de maneira que cada dupla de vilarejos possui uma única estrada que os conecta. Observe o exemplo para cinco vilarejos em que cada casinha representa um vilarejo e cada segmento de reta representa uma estrada.\n\nConsidere que nessa região há inicialmente x vilarejos e que 2 novos vilarejos estejam se desenvolvendo. Por essa razão, 17 novas estradas estão sendo construídas.\n\nNessas condições, o número x vale",
+      "subject": "Raciocínio Lógico-Matemático"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "30",
+      "options": {
+        "A": "é maior que 19% e menor que 20%",
+        "B": "é igual a 20%",
+        "C": "é maior que 20% e menor que 21%",
+        "D": "é igual a 21,5%",
+        "E": "é igual a 43%."
+      },
+      "question_index": 29,
+      "statement": "O preço de venda de certo item de consumo sofreu dois aumentos mensais consecutivos, sendo o primeiro de 30% e o segundo de 10%. Sobre a taxa média de aumento mensal nesse período, é correto\nafirmar que",
+      "subject": "Raciocínio Lógico-Matemático"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "31",
+      "options": {
+        "A": "I, apenas",
+        "B": "II, apenas",
+        "C": "I e II, apenas",
+        "D": "I e III, apenas",
+        "E": "I, II e III."
+      },
+      "question_index": 30,
+      "statement": "Na reunião de cúpula do G2 que ocorre no Brasil, país que exerce a presidência rotativa até o fim de novembro, o tema principal dos debates é a construção de um Mundo Justo e um Planeta Sustentável. O governo brasileiro deseja colocar o combate às desigualdades no centro das discussões entre os países membros.\n\nSobre o Grupo apresentado no texto, julgue as afirmativas:\n\nI. Consiste num dos maiores blocos econômicos do planeta, sendo seu principal objetivo o livre comércio, sendo superado apenas pela União Europeia.\n\nII. Representa um fórum internacional de cooperação econômica, que possibilita entre outras coisas, debates sobre temas financeiros, fome, meio ambiente e desigualdades.\n\nIII. Congrega um bloco supranacional com objetivo de alinhar políticas macroeconômicas, éticas e militares, perante a comunidade internacional.\n\nEstá correto o que se afirma em",
+      "subject": "Atualidades"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "32",
+      "options": {
+        "A": "V – F – V",
+        "B": "F – V – V",
+        "C": "V – V – F",
+        "D": "F – F – V",
+        "E": "V – V – V."
+      },
+      "question_index": 31,
+      "statement": "A adoção de tecnologias digitais muitas vezes é vista como resposta para dilemas ambientais. O avanço da internet, por exemplo, permitiu a diminuição do uso de papel, que foi substituído por bytes. Entretanto, os *data centers* ao redor do mundo consomem aproximadamente 2%de toda eletricidade do planeta, emitindo por exemplo, quantidades similares de carbono, comparadas as da indústria aérea.\n\nSobre os aspectos apresentados no texto, julgue os itens a seguir:\n\n( ) As tecnologias digitais não são apenas fonte de soluções para problemas ligados ao meio ambiente, mas também consistem em fontes de impactos negativos.\n\n( ) O texto defende que todos os avanços tecnológicos representam invariavelmente benefícios para o meio ambiente.\n\n( ) Os data centers representam cerca de metade do consumo de energia dos ecossistemas digitais, termo cunhado para definir a relação entre infraestrutura digital, ferramentas e seres humanos. As afirmativas são, respectivamente,",
+      "subject": "Atualidades"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "33",
+      "options": {
+        "A": "I, apenas",
+        "B": "III, apenas",
+        "C": "II e III, apenas",
+        "D": "I e III, apenas",
+        "E": "I, II e III."
+      },
+      "question_index": 32,
+      "statement": "A Constituição Federal é o documento jurídico-político que limita o poder estatal e o regulamenta. O art. 225 - da Carta Magna\nconfere a todos o direito ao meio ambiente equilibrado, impondo\nao Poder Público e à coletividade preservá-lo, estabelecendo uma\nsérie de diretrizes aptas a assegurar a disposição.\nSobre o tema abordado no texto, julgue os itens a seguir:\n\nI. É flagrante violação da Constituição, com a distribuição injusta da poluição, submetendo de forma desigual, em razão da raça, determinadas populações a precárias condições de vida.\n\nII. Um projeto de desenvolvimento sustentável deve ser baseado em inovações tecnológicas, mantendo a lógica de consumo do atual modelo econômico, proporcionando justiça social para todos.\n\nIII. O conceito de racismo ambiental está ligado aos danos ambientais e sua imposição recorrente em comunidades habitadas principalmente por populações negras e pobres.\n\nEstá correto o que se afirma em",
+      "subject": "Atualidades"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "34",
+      "options": {
+        "A": "I, apenas",
+        "B": "III, apenas",
+        "C": "I e II, apenas",
+        "D": "I e III, apenas",
+        "E": "I, II e III."
+      },
+      "question_index": 33,
+      "statement": "A Secretaria Nacional do Consumidor notificou uma grande rede de Farmácias para prestar esclarecimentos a respeito de práticas de tratamento indevido de dados pessoais de seus consumidores.\n\nO fato ocorreu por denúncia publicada em um grande portal de comunicação, que expôs a coleta inadequada de informações e sua comercialização. Sobre a denúncia, os dados podem ter o seguinte destino:\n\nI. publicidade direcionada a determinados perfis de consumidores, considerando a faixa etária, o sexo e perfis de saúde.\n\nII. Execução de publicidade para empresas do grupo econômico e para terceiros, gerando lucro indevido sem autorização ou conhecimento dos clientes.\n\nIII. Pesquisas da indústria farmacêutica para produção de remédios mais baratos, democratizando o acesso a tratamentos de saúde através do programa Farmácia Popular.\n\nEstá correto o que se afirma em",
+      "subject": "Atualidades"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "35",
+      "options": {
+        "A": "V – F – V",
+        "B": "F – V – V",
+        "C": "V – V – V",
+        "D": "F – F – V",
+        "E": "V – V – F."
+      },
+      "question_index": 34,
+      "statement": "O município do Rio de Janeiro vai aplicar o conceito de cidadeesponja para diminuir os efeitos das enchentes. Esse modelo é usado em várias cidades do mundo para evitar tragédias ambientais, constituindo o ponto central de uma lei municipal, sancionada parcialmente em julho de 2024.\n\nA nova legislação adotará mecanismos sustentáveis com intuito de:\n\n( ) Reduzir a sobrecarga dos sistemas tradicionais de drenagem possibilitando a aproximação de autossuficiência hídrica.\n\n( ) Direcionar as águas pluviais que causam transtornos, para o reabastecimento de redes subterrâneas.\n\n( ) Diminuir a presença da infraestrutura cinza na canalização de rios, com a construção de jardins de chuva, melhorando a impermeabilização de grandes áreas.\n\nAs afirmativas são, respectivamente,",
+      "subject": "Atualidades"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "36",
+      "options": {
+        "A": "as informações podem ser classificadas como ultrassigilosas, sigilosas ou reservadas, sendo certo que a decisão respectiva é discricionária, porquanto a lei não prevê balizas",
+        "B": "a decisão de classificação de uma informação é pública e de acesso a qualquer interessado, independentemente de demonstração de interesse, embora classificada a informação",
+        "C": "findo o prazo de classificação ou ocorrido o evento constituidor do termo final, para que o acesso se torne público são necessários procedimento próprio e decisão específica",
+        "D": "a informação que verse sobre conduta que implique violação dos direitos humanos praticada por agentes públicos ou a mando de autoridades públicas não pode ser objeto de restrição de acesso",
+        "E": "a lei permite a desclassificação, mas não a redução de prazo de informação classificada, devendo a reavaliação ser feita pela autoridade classificadora ou outra superior, mediante provocação ou de ofício."
+      },
+      "question_index": 35,
+      "statement": "A Lei 12. 527. de 18 de novembro de 2011, dispõe sobre as restrições de acesso à informação. Nesses termos, a lei traz diversos temas que permeiam a classificação da informação.\n\nSobre esse assunto, é correto afirmar que",
+      "subject": "Legislação"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "37",
+      "options": {
+        "A": "a deflagração da ação penal está incorreta, porquanto deveria ter sido iniciada pelo Ministério Público",
+        "B": "na fixação da pena, deveria ter havido um aumento de metade da pena, já que da invasão resultou prejuízo político",
+        "C": "o crime de invasão de dispositivo informático possui como elementar a exigência de o tablet estar conectado à rede de computadores",
+        "D": "o aumento da pena deveria ter sido de dois terços da pena, por conta do ilícito penal ter sido praticado contra o vicePresidente da Câmara dos Deputados",
+        "E": "para configuração do delito trazido pelo art. 2º, da Lei 12. 737. de 30 de novembro de 2012 (art. 154-A, do Código Penal), é preciso a efetiva adulteração das informações."
+      },
+      "question_index": 36,
+      "statement": "Um *hacker* , por ter conseguido subtrair previamente a senha de acesso, invadiu o tablet do vice-Presidente da Câmara dos Deputados e, sem este saber, adulterou informações importantes relativas ao funcionamento da Casa Parlamentar, trazendo grande prejuízo político. Identificada a pessoa, o aludido congressista ajuizou queixa-crime. Ao final do processo penal, o *hacker* foi condenado com aumento de pena de um terço, por conta do sujeito passivo do delito. Quanto à situação descrita, é correto afirmar que",
+      "subject": "Legislação"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "38",
+      "options": {
+        "A": "as sanções só podem ser aplicadas isoladamente, exceto quando o caso reclamar a mais grave que, então, poderá ser cumulada com outras",
+        "B": "a previsão de advertência contempla duas faces: uma repressiva e outra corretiva, na medida em que se indica prazo para adoção de medidas de regularização",
+        "C": "a censura deve ser imposta à pessoa natural, proprietária do provedor, quando este burlar a proibição de coleta de dados pessoais anteriormente aplicada",
+        "D": "na previsão de multa, o quanto é fixado em 10% (dez por cento) do faturamento do grupo econômico no Brasil, extraído da média dos últimos três exercícios, excluídos os tributos",
+        "E": "a Lei 12. 965. de 23 de abril de 2014, possui um vácuo legislativo com relação a empresas estrangeiras, porque não traz regramento sancionatório para suas condutas infringentes."
+      },
+      "question_index": 37,
+      "statement": "A Lei 12. 965. de 23 de abril de 2014, estabelece princípios, garantias, direitos e deveres para o uso da Internet no Brasil. Ao tratar da proteção aos registros, aos dados pessoais e às comunicações privadas, tal diploma legal positiva sanções específicas para o descumprimento do que prescreve.\n\nA respeito disso, é correto afirmar que",
+      "subject": "Legislação"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "39",
+      "options": {
+        "A": "é possível a aplicação de sanções sem a formalização de processo administrativo correspondente, em caso no qual se constate que o agente de tratamento de dados é violador contumaz da citada lei",
+        "B": "a lei contempla expressamente diversos parâmetros e critérios a serem considerados na aplicação da sanção, como, por exemplo, a gravidade da infração, a boa fé e o fato de o infrator ter nacionalidade estrangeira",
+        "C": "eventual aplicação da sanção de multa simples a órgão público deverá considerar a arrecadação tributária do ente federativo a que pertença e o orçamento afetado para o desenvolvimento de suas atividades",
+        "D": "o produto da arrecadação das multas aplicadas pela Autoridade Nacional de Proteção de Dados, inscritas ou não em dívida ativa, será destinado diretamente às pessoas naturais cujo direito à proteção de dados foi violado",
+        "E": "em caso de vazamento individual, a lei contempla a possibilidade de conciliação direta entre controlador e titular, estando aquele, na hipótese de inexistência de acordo, sujeito à aplicação das penalidades previstas no capítulo mencionado."
+      },
+      "question_index": 38,
+      "statement": "As sanções administrativas estão positivadas na Lei 13. 709. de 14 de agosto de 2018 (Lei Geral de Proteção de Dados Pessoais - LGPD), em capítulo intitulado de fiscalização.\n\nCom relação ao quadro legal sancionatório mencionado, é correto\nafirmar que",
+      "subject": "Legislação"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "40",
+      "options": {
+        "A": "atualmente, Conselho Nacional de Proteção de Dados Pessoais e da Privacidade possui natureza de empresa pública federal e a Autoridade Nacional de Proteção de Dados é órgão da administração pública federal",
+        "B": "o Conselho Diretor é composto de representantes, titulares e suplentes, da Câmara dos Deputados, do Comitê Gestor da Internet do Brasil, do Senado Federal, do Conselho Nacional de Justiça e do Conselho Nacional do Ministério Público",
+        "C": "o Conselho Nacional de Proteção de Dados Pessoais e da Privacidade possui atribuição de sugerir ações a serem realizadas pela Autoridade Nacional de Proteção de Dados e disseminar o conhecimento sobre a proteção de dados pessoais e da privacidade à população",
+        "D": "os membros do Conselho Nacional de Proteção de Dados Pessoais e da Privacidade somente perderão seus cargos em virtude de renúncia, condenação judicial transitada em julgado ou pena de demissão decorrente de processo administrativo disciplinar",
+        "E": "a Autoridade Nacional de Proteção de Dados é uma das integrantes do Conselho Nacional de Proteção de Dados Pessoais e da Privacidade, figurando como conselheira presidente, na hipótese de nomeação pelo Presidente da República."
+      },
+      "question_index": 39,
+      "statement": "A Lei 13. 709. de 14 de agosto de 2018, trouxe ao ordenamento jurídico duas figuras jurídicas importantes no sistema de proteção de dados pessoais. Sobre o desenho legal da Autoridade Nacional de Proteção de Dados e o Conselho Nacional de Proteção de Dados Pessoais e da Privacidade, é correto afirmar que",
+      "subject": "Legislação"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "41",
+      "options": {
+        "A": "5 (cinco) anos ou pelo período estabelecido em normatização específica",
+        "B": "10 (dez) anos ou pelo período estabelecido em normatização específica",
+        "C": "15 (quinze) anos ou pelo período estabelecido em normatização específica",
+        "D": "25 (vinte e cinco) anos ou pelo período estabelecido em normatização específica",
+        "E": "20 (vinte) anos ou pelo período estabelecido em normatização específica."
+      },
+      "question_index": 40,
+      "statement": "O Gerenciamento de Riscos Ocupacionais (GRO) é a identificação, avaliação e controle de perigos no ambiente de trabalho para prevenir acidentes e proteger a saúde dos trabalhadores. Segundo a NR 1– Disposições Gerais e Gerenciamento de Riscos Ocupacionais, vigente até 25 de maio de 2025, os dados da identificação dos perigos e das avaliações dos riscos ocupacionais devem ser consolidados em um inventário de riscos ocupacionais, que deve ser mantido atualizado.\n\nO histórico das atualizações do inventário de riscos, deve ser mantido por um período mínimo de",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "42",
+      "options": {
+        "A": "apenas as horas trabalhadas, inclusive as extraordinárias",
+        "B": "as horas pagas, inclusive as não realmente trabalhadas",
+        "C": "apenas as horas trabalhadas, sem contar com as extraordinárias",
+        "D": "todas as horas contratadas, independentemente de terem sido trabalhadas",
+        "E": "somente as horas previstas em contrato, sem considerar horas adicionais ou de folga."
+      },
+      "question_index": 41,
+      "statement": "As taxas de frequência e gravidade de acidentes de trabalho são indicadores que medem a incidência e a severidade dos acidentes ocorridos em um determinado período. O tempo, em horas, de exposição ao risco é um dos parâmetros necessários para calcular as taxas mencionadas e devem ser extraídas das folhas de pagamento ou de quaisquer outros registros de ponto, sendo consideradas",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "43",
+      "options": {
+        "A": "preliminar de riscos",
+        "B": "dos modos de falhas e efeitos",
+        "C": "por árvore de falhas",
+        "D": "por árvore de eventos",
+        "E": "de incidente crítico."
+      },
+      "question_index": 42,
+      "statement": "Técnicas de análise de riscos são métodos estruturados para identificar, avaliar e mitigar riscos, prevenindo falhas e otimizando a segurança e eficiência de sistemas. A técnica de análise de riscos que parte de um Evento Topo escolhido para estudo e estabelece combinações de falhas e condições que poderiam causar a ocorrência desse evento, é denominada análise",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "44",
+      "options": {
+        "A": "no portal gov.br",
+        "B": "na plataforma do e-Social",
+        "C": "no âmbito da Infraestrutura de Chaves Públicas Brasileira (ICPBrasil)",
+        "D": "no site do Ministério do Trabalho e Emprego (MTE)",
+        "E": "na plataforma do Instituto Nacional de Seguro Social (INSS)."
+      },
+      "question_index": 43,
+      "statement": "Conforme a NR 4. que regulamenta os Serviços Especializados em Engenharia de Segurança e em Medicina do Trabalho (SESMT), as organizações devem efetuar o registro desses serviços por meio de sistema eletrônico disponível",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "45",
+      "options": {
+        "A": "à Secretaria de Inspeção do Trabalho (SIT)",
+        "B": "ao sindicato da categoria",
+        "C": "à Superintendência Regional do Trabalho e Emprego (SRTE)",
+        "D": "aos membros titulares e suplentes da CIPA",
+        "E": "ao setor de Recursos Humanos da empresa."
+      },
+      "question_index": 44,
+      "statement": "De acordo com a NR 5. que trata da Comissão Interna de Prevenção de Acidentes e Assédio (CIPA), a organização, ao realizar eleições para essa comissão, deve fornecer cópias das atas de eleição e posse",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "46",
+      "options": {
+        "A": "importador consignatário",
+        "B": "encomendante predeterminado",
+        "C": "operador logístico",
+        "D": "contratante aduaneiro",
+        "E": "revendedor de mercadorias importadas."
+      },
+      "question_index": 45,
+      "statement": "Os Equipamentos de proteção individual são essenciais para proteger os trabalhadores dos riscos à saúde e segurança em ambientes laborais. Conforme o glossário da NR 6- Equipamentos de Proteção Individual (EPI), a pessoa jurídica que contrata o importador por encomenda para realizar a transação de compra e venda de mercadoria estrangeira a ser importada, o despacho aduaneiro de importação e a revenda a ela mesma, é denominada",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "47",
+      "options": {
+        "A": "enfermeiro do trabalho ou técnico de enfermagem do trabalho, conforme orientações do Ministério da Saúde.",
+        "B": "médico ou fonoaudiólogo, conforme resoluções dos respectivos conselhos federais profissionais.",
+        "C": "técnico de enfermagem do trabalho ou fonoaudiólogo, conforme orientações do Ministério da Saúde.",
+        "D": "médico do trabalho ou enfermeiro do trabalho, conforme orientações do Ministério da Saúde.",
+        "E": "qualquer profissional de saúde com curso de audiometria reconhecido pelo Ministério da Saúde."
+      },
+      "question_index": 46,
+      "statement": "De acordo com a NR 7– Programa de Controle Médico de Saúde Ocupacional (PCMSO), especificamente em seu Anexo II – Controle Médico Ocupacional da Exposição a Níveis de Pressão Sonora Elevados, o exame audiométrico deve ser executado por",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "48",
+      "options": {
+        "A": "1,5 m/s2",
+        "B": "2,5 m/s2",
+        "C": "5 m/s2",
+        "D": "7,5 m/s2. (<u>E) 8 m/s2</u>."
+      },
+      "question_index": 47,
+      "statement": "Com relação a NR 9– Avaliação e Controle das Exposições Ocupacionais a Agentes Físicos, Químicos e Biológicos, especificamente em seu anexo II - Vibração, o limite de exposição ocupacional diária à vibração em mãos e braços corresponde a um valor de aceleração resultante de exposição normalizada (aren) de",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "49",
+      "options": {
+        "A": "a desenergização elétrica, na sua impossibilidade, o emprego de tensão de segurança",
+        "B": "o emprego de tensão de segurança, na sua impossibilidade, promover a desenergização elétrica",
+        "C": "a desenergização elétrica, na sua impossibilidade, o emprego de um sistema de seccionamento automático",
+        "D": "o emprego do sistema de seccionamento automático, na sua impossibilidade, promover a desenergização elétrica",
+        "E": "a desenergização elétrica, na sua impossibilidade, o emprego de bloqueio do religamento automático."
+      },
+      "question_index": 48,
+      "statement": "Prevenir riscos elétricos é fundamental para evitar acidentes graves, como choques, incêndios e explosões, garantindo a segurança dos trabalhadores e a integridade das instalações.\n\nConforme a NR 10– Segurança em Instalações e Serviços em Eletricidade, as medidas de proteção coletiva compreendem, prioritariamente,",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "50",
+      "options": {
+        "A": "mínimo",
+        "B": "mínimo e em situações especiais em grau médio",
+        "C": "médio",
+        "D": "médio e em situações especiais em grau máximo",
+        "E": "máximo."
+      },
+      "question_index": 49,
+      "statement": "O adicional de insalubridade é uma compensação financeira concedida a trabalhadores expostos a condições nocivas à saúde, conforme o grau de exposição.\n\nSegundo a NR 15– Atividades e operações Insalubres, especificamente em seu anexo 3 – Limites de Tolerância para Exposição ao Calor, as situações de exposição ocupacional ao calor, caracterizadas como insalubres, serão classificadas em grau",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "51",
+      "options": {
+        "A": "Auditor-Fiscal do Trabalho",
+        "B": "Empregador",
+        "C": "Sindicato dos Trabalhadores",
+        "D": "Ministério Público do Trabalho",
+        "E": "Instituto Nacional do Seguro Social (INSS)."
+      },
+      "question_index": 50,
+      "statement": "Conforme a NR 16– Atividades e Operações Perigosas, a caracterização ou a descaracterização da periculosidade, mediante laudo\n\nEngenheiro de Segurança do Trabalho, nos termos do artigo 195 da CLT, é de responsabilidade do",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "52",
+      "options": {
+        "A": "1 e 2",
+        "B": "1, 2 e 3",
+        "C": "2 e 3",
+        "D": "2, 3 e 4",
+        "E": "3 e 4."
+      },
+      "question_index": 51,
+      "statement": "A Análise Ergonômica do Trabalho (AET) avalia condições laborais para identificar e corrigir inadequações, visando melhorar saúde, conforto e produtividade dos trabalhadores. De acordo com a NR 17– Ergonomia, além do Microempreendedor Individual (MEI), as Microempresas (ME) e Empresas de Pequeno Porte (EPP), em regra, não são obrigadas a elaborar a AET, desde que estejam enquadradas como graus de risco",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "53",
+      "options": {
+        "A": "6m (seis metros) no plano vertical",
+        "B": "9m (nove metros) no plano vertical",
+        "C": "12m (doze metros) no plano vertical",
+        "D": "15m (quinze metros) no plano vertical",
+        "E": "18m (dezoito metros) no plano vertical."
+      },
+      "question_index": 52,
+      "statement": "De acordo com a NR 18– Segurança e Saúde no Trabalho na Indústria da Construção, é obrigatório o fornecimento de água potável, filtrada e fresca para os trabalhadores, no canteiro de obras, nas frentes de trabalho e nos alojamentos, por meio de bebedouro ou outro dispositivo equivalente, na proporção de 1\n\n(uma) unidade para cada grupo de 25 (vinte e cinco) trabalhadores ou fração, sendo vedado o uso de copos coletivos.\n\nO fornecimento de água potável deve ser garantido de forma que, do posto de trabalho ao bebedouro ou ao dispositivo equivalente, não haja deslocamento superior a 100m (cem metros) no plano horizontal e",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "54",
+      "options": {
+        "A": "adicional noturno.",
+        "B": "insalubridade.",
+        "C": "periculosidade.",
+        "D": "tempo de serviço.",
+        "E": "produtividade."
+      },
+      "question_index": 53,
+      "statement": "De acordo com a NR 19– Explosivos, em todas as atividades produtivas de fabricação de fogos de artifício ou outros artifícios pirotécnicos é proibida a remuneração por",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "55",
+      "options": {
+        "A": "às unidades de transporte de produtos inflamáveis de pequeno porte e às edificações residenciais unifamiliares",
+        "B": "aos estabelecimentos de armazenamento de produtos químicos de uso não industrial",
+        "C": "às plataformas e instalações de apoio empregadas com a finalidade de exploração e produção de petróleo e gás do subsolo marinho e às edificações residenciais unifamiliares",
+        "D": "aos locais de comércio de produtos alimentícios não inflamáveis e às edificações residenciais unifamiliares",
+        "E": "aos edifícios administrativos sem manipulação direta de substâncias perigosas e às edificações residenciais unifamiliares."
+      },
+      "question_index": 54,
+      "statement": "A NR 20– Segurança e Saúde no Trabalho com Inflamáveis e Combustíveis não se aplica",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "56",
+      "options": {
+        "A": "a legislação municipal e, quando aplicável, de forma complementar, com as normas técnicas oficiais.",
+        "B": "a legislação estadual e, quando aplicável, de forma complementar, com as normas técnicas oficiais.",
+        "C": "a legislação federal e, quando aplicável, de forma complementar, com as normas técnicas oficiais.",
+        "D": "as legislações municipal, estadual e, quando aplicável de forma complementar, com as normas técnicas oficiais.",
+        "E": "as legislações estadual, federal e, quando aplicável de forma complementar, com as normas técnicas oficiais."
+      },
+      "question_index": 55,
+      "statement": "O combate e a prevenção a incêndios salvam vidas, protegem o patrimônio e evitam danos ambientais, garantindo segurança e continuidade das operações. Segundo a NR 23– Proteção contra incêndios, toda organização deve adotar medidas de prevenção contra incêndios em conformidade com",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "57",
+      "options": {
+        "A": "5 (cinco) trabalhadores",
+        "B": "10 (dez) trabalhadores",
+        "C": "12 (doze) trabalhadores",
+        "D": "15 (quinze) trabalhadores",
+        "E": "20 (vinte) trabalhadores."
+      },
+      "question_index": 56,
+      "statement": "Observar as condições sanitárias e de conforto no trabalho garante saúde, segurança, bem-estar dos trabalhadores e previne doenças ocupacionais, melhorando a produtividade.\n\nSegundo a NR 24– Condições Sanitárias e de conforto nos Locais de Trabalho, as instalações sanitárias nas atividades com exposição e manuseio de material infectante, substâncias tóxicas, irritantes, aerodispersoides ou que provoquem a deposição de poeiras, que impregnem a pele e roupas do trabalhador, será exigido um lavatório para cada",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "58",
+      "options": {
+        "A": "Sistema Nacional de Classificação Química – SNCQ",
+        "B": "Sistema Globalmente Harmonizado de Classificação e Rotulagem de Produtos Químicos – GHS, da Organização das Nações Unidas",
+        "C": "Método de Classificação Internacional de Produtos Químicos e Perigosos – MCIPQP",
+        "D": "Programa de Identificação de Produtos Químicos Perigosos – PIPQP",
+        "E": "Sistema Nacional de Controle de Substâncias Químicas – SNCQ."
+      },
+      "question_index": 57,
+      "statement": "A sinalização de segurança previne acidentes, orienta comportamentos adequados, identifica riscos e promove a proteção dos trabalhadores em ambientes perigosos, garantindo segurança coletiva. De acordo com a NR 26. o produto químico utilizado no local de trabalho deve ser classificado quanto aos perigos para a segurança e a saúde dos trabalhadores, de acordo com os critérios estabelecidos pelo",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "59",
+      "options": {
+        "A": "plano de ação",
+        "B": "manual de procedimentos emergenciais",
+        "C": "protocolo de evacuação de emergência",
+        "D": "programa de avaliação de riscos ambientais",
+        "E": "regulamento interno de segurança."
+      },
+      "question_index": 58,
+      "statement": "A prevenção de acidentes em espaços confinados é crucial para evitar riscos fatais, garantir a segurança dos trabalhadores e cumprir as normas de proteção.\n\nDe acordo com a NR 33– Segurança e Saúde em Trabalhos em espaços confinados, as medidas de prevenção para espaços confinados devem estar contempladas no",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "60",
+      "options": {
+        "A": "proteção contra objetos suspensos",
+        "B": "deslocamento seguro em áreas confinadas",
+        "C": "isolamento térmico em locais de risco",
+        "D": "controle de vibrações durante o trabalho",
+        "E": "acesso por corda."
+      },
+      "question_index": 59,
+      "statement": "Os sistemas de ancoragem são essenciais para a proteção dos trabalhadores, garantem segurança em trabalho em altura, prevenindo quedas e minimizando riscos.\n\nOs sistemas de ancoragem tratados na NR 35– Trabalho em Altura em seu anexo II – Sistemas de ancoragem, atendem às seguintes finalidades: retenção de queda; restrição de movimentação; posicionamento no trabalho; ou",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "61",
+      "options": {
+        "A": "Monitoramento da Saúde do Trabalhador",
+        "B": "Afastamento Temporário",
+        "C": "Condições Ambientais do Trabalho - Fatores de Risco",
+        "D": "Comunicação de Acidente do Trabalho",
+        "E": "Reintegração."
+      },
+      "question_index": 60,
+      "statement": "O e-Social é um sistema do governo brasileiro que unifica o envio de informações trabalhistas, previdenciárias e fiscais por parte das empresas, facilitando o cumprimento das obrigações legais e a fiscalização dos dados referentes aos trabalhadores.\n\nNesse sistema, o evento S-2210 refere-se ao registro do tipo",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "62",
+      "options": {
+        "A": "governo, pois é responsável pelo custeio de todos os benefícios previdenciários",
+        "B": "governo, responsável pela fiscalização das condições de trabalho",
+        "C": "empregador, sem excluir a responsabilidade por indenização em caso de dolo ou culpa",
+        "D": "sindicato, por meio de contribuições obrigatórias",
+        "E": "empregador, mas apenas nos casos de acidente fatal."
+      },
+      "question_index": 61,
+      "statement": "A Constituição Federal de 1988, conhecida como Constituição Cidadã, trata de forma detalhada dos direitos sociais e trabalhistas, incluindo disposições específicas sobre a segurança e saúde do trabalhador. De acordo com a Constituição, o responsável pelo seguro contra acidentes de trabalho é o",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "63",
+      "options": {
+        "A": "fixa aplicada e cobrada pela Previdência Social",
+        "B": "variável entre o limite mínimo e o limite máximo do salário de contribuição",
+        "C": "fixa, sucessivamente aumentada em caso de reincidência",
+        "D": "variável, não sujeita a aumentos em caso de reincidência",
+        "E": "variável entre o limite mínimo e o limite máximo do salário benefício."
+      },
+      "question_index": 62,
+      "statement": "De acordo com o\n\nArt. 21 - A da Lei 8213/ 91. a penalidade aplicada à empresa que não comunicar o acidente de trabalho à Previdência Social no prazo legal é de multa",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "64",
+      "options": {
+        "A": "apresentação justa",
+        "B": "devido cuidado profissional",
+        "C": "confidencialidade",
+        "D": "integridade",
+        "E": "independência."
+      },
+      "question_index": 63,
+      "statement": "Segundo a ISO 19011:2018 que estabelece diretrizes para a auditoria de sistemas de gestão, o princípio da auditoria relacionado ao fundamento do profissionalismo denomina-se",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "65",
+      "options": {
+        "A": "confiável",
+        "B": "integrada",
+        "C": "agrupada",
+        "D": "conjunta",
+        "E": "combinada."
+      },
+      "question_index": 64,
+      "statement": "De acordo com a NBR ISO 19011:2018, que estabelece diretrizes para a auditoria de sistemas de gestão, o tipo de auditoria que é realizada em um único auditado, em dois ou mais sistemas de gestão, denomina-se",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "66",
+      "options": {
+        "A": "fornecer informações sobre o desempenho do auditor",
+        "B": "avaliar o comportamento profissional e a habilidade de comunicação",
+        "C": "avaliar o comportamento, conhecimento e habilidades desejados e sua aplicação",
+        "D": "fornecer informações sobre o desempenho do auditor durante as atividades",
+        "E": "verificar a formação profissional do auditor."
+      },
+      "question_index": 65,
+      "statement": "Conforme a ISO 19011:2018, que fornece diretrizes para auditoria de sistemas de gestão, um dos métodos recomendados para avaliar auditores é a Análise Crítica dos Registros.\n\nO objetivo desse método é",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "67",
+      "options": {
+        "A": "Análise SWOT",
+        "B": "Matriz GUT",
+        "C": "Ciclo Plan-Do-Check-Act",
+        "D": "Gestão por Diretrizes",
+        "E": "Kaizen."
+      },
+      "question_index": 66,
+      "statement": "O conceito que utilizado como base para o sistema de gestão ambiental, fornecendo um processo iterativo que visa alcançar a melhoria contínua nas organizações, conforme a NBR ISO 14001:2015, denomina-se",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "68",
+      "options": {
+        "A": "o impacto ambiental",
+        "B": "o aspecto ambiental",
+        "C": "a condição ambiental",
+        "D": "o requisito legal",
+        "E": "a ação corretiva."
+      },
+      "question_index": 67,
+      "statement": "De acordo com a NBR ISO 14001:2015, o termo que descreve um elemento das atividades, produtos ou serviços de uma organização que interage ou pode interagir com o meio ambiente é",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "69",
+      "options": {
+        "A": "Na prestação espontânea de qualquer serviço à empresa para lhe evitar prejuízo ou proporcionar proveito.",
+        "B": "Ato de agressão, sabotagem ou terrorismo praticado por terceiro ou companheiro de trabalho.",
+        "C": "Ato de imprudência, de negligência ou de imperícia de terceiro ou de companheiro de trabalho.",
+        "D": "Ato de pessoa privada do uso da razão.",
+        "E": "Doença proveniente de contaminação acidental do empregado no exercício de sua atividade."
+      },
+      "question_index": 68,
+      "statement": "Conforme a Lei nº $\\frac{8213}{1991}$, assinale a situação em que um acidente ocorrido fora do local e horário de trabalho é equiparado a acidente do trabalho para efeitos legais.",
+      "subject": "Conhecimentos Específicos"
+    },
+    {
+      "correct_answer": "A",
+      "images": null,
+      "numero_questao": "70",
+      "options": {
+        "A": "temporário",
+        "B": "alternativo",
+        "C": "indenizatório",
+        "D": "substitutivo",
+        "E": "inclusivo. ."
+      },
+      "question_index": 69,
+      "statement": "Após retornar ao trabalho, um operário que sofreu um acidente de trabalho e ficou com sequelas permanentes terá direito a um benefício previdenciário. O caráter desse benefício é",
+      "subject": "Conhecimentos Específicos"
+    }
+  ],
+  "schema_version": 1,
+  "source": "pdfs/79_prova.pdf"
+}

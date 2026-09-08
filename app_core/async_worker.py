@@ -17,6 +17,10 @@ from models.database import (
     Question,
     ExamCatalog,
 )
+from app_core.structural_rollout import (
+    merge_structural_questions,
+    run_structural_rollout,
+)
 from services.pdf_pipeline import parse_exam_document
 from services.diagnostics import inspect_pdf_document
 from services.gabarito import (
@@ -286,7 +290,12 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
         exam_profile = build_exam_answer_key_profile(
             pdf_path if not is_html_source and os.path.exists(pdf_path) else None,
             extracted_questions,
-            title=clean_title,
+            # The title supplied by the user is presentation metadata, not a
+            # trusted cargo identity.  Feeding it into matching can create a
+            # synthetic token (for example ``Teste local``) and reject a
+            # compatible paired answer key.  The PDF header, code ranges and
+            # question sequence remain the identity evidence.
+            title="",
             code_ranges=exam_code_ranges,
         )
 
@@ -417,6 +426,31 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
                     ))
                     session.commit()
             return
+
+        # Phase-5 structural execution is explicitly opt-in.  Shadow mode
+        # records diagnostics and keeps the legacy result untouched; preferred
+        # mode can adopt only an arbiter-promoted structural result.
+        structural_rollout = run_structural_rollout(
+            pdf_path,
+            legacy_questions=updated_questions,
+            answer_key=gabarito_dict,
+            exam_id=exam_id,
+            source=source_url or str(pdf_path),
+            extract_images=False,
+        )
+        if structural_rollout.quarantined:
+            set_exam_progress(
+                exam_id,
+                "Resultado estrutural divergente enviado para quarentena.",
+                -1,
+                "STRUCTURAL_QUARANTINE",
+            )
+            return
+        if structural_rollout.promoted and structural_rollout.selected_result:
+            updated_questions = merge_structural_questions(
+                updated_questions,
+                structural_rollout.selected_result,
+            )
 
         db_save_success = False
         max_save_retries = 5

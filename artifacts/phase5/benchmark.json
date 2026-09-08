@@ -1,0 +1,249 @@
+{
+  "benchmark_version": "phase5-benchmark-v1",
+  "by_banca": {
+    "DATAPREV": {
+      "full_exam_success_rate": 0.0,
+      "image_ownership_accuracy": 0.0,
+      "option_extraction_accuracy": 0.5285714285714286,
+      "question_detection_precision": 1.0,
+      "question_detection_recall": 1.0,
+      "question_ordering_accuracy": 1.0,
+      "zero_modification_success_rate": 0.0
+    },
+    "UNKNOWN": {
+      "full_exam_success_rate": 0.6,
+      "image_ownership_accuracy": 0.0,
+      "option_extraction_accuracy": 0.0,
+      "question_detection_precision": 1.0,
+      "question_detection_recall": 1.0,
+      "question_ordering_accuracy": 0.7560975609756098,
+      "zero_modification_success_rate": 0.6
+    }
+  },
+  "by_layout_family": {
+    "layout-family-1": {
+      "full_exam_success_rate": 1.0,
+      "image_ownership_accuracy": 0.0,
+      "option_extraction_accuracy": 0.0,
+      "question_detection_precision": 1.0,
+      "question_detection_recall": 1.0,
+      "question_ordering_accuracy": 1.0,
+      "zero_modification_success_rate": 1.0
+    },
+    "layout-family-2": {
+      "full_exam_success_rate": 0.0,
+      "image_ownership_accuracy": 0.0,
+      "option_extraction_accuracy": 0.0,
+      "question_detection_precision": 1.0,
+      "question_detection_recall": 1.0,
+      "question_ordering_accuracy": 0.3902439024390244,
+      "zero_modification_success_rate": 0.0
+    },
+    "layout-family-3": {
+      "full_exam_success_rate": 0.0,
+      "image_ownership_accuracy": 0.0,
+      "option_extraction_accuracy": 0.5285714285714286,
+      "question_detection_precision": 1.0,
+      "question_detection_recall": 1.0,
+      "question_ordering_accuracy": 1.0,
+      "zero_modification_success_rate": 0.0
+    },
+    "noise/unknown": {
+      "full_exam_success_rate": 1.0,
+      "image_ownership_accuracy": 0.0,
+      "option_extraction_accuracy": 0.0,
+      "question_detection_precision": 1.0,
+      "question_detection_recall": 1.0,
+      "question_ordering_accuracy": 1.0,
+      "zero_modification_success_rate": 1.0
+    }
+  },
+  "cases": [
+    {
+      "banca": null,
+      "changed_fields_vs_legacy": [
+        "question_count",
+        "question_order",
+        "option_keys",
+        "image_count"
+      ],
+      "exam_id": "phase5-55-a",
+      "expected_count": 41,
+      "full_exam_success": false,
+      "image_ownership_accuracy": null,
+      "layout_family": "layout-family-2",
+      "option_extraction_accuracy": null,
+      "predicted_count": 40,
+      "question_detection_precision": 1.0,
+      "question_detection_recall": 1.0,
+      "question_ordering_accuracy": 0.3902439024390244,
+      "split": "TRAIN",
+      "zero_modification_success": false
+    },
+    {
+      "banca": null,
+      "changed_fields_vs_legacy": [
+        "question_count",
+        "question_order",
+        "option_keys",
+        "image_count"
+      ],
+      "exam_id": "phase5-55-b",
+      "expected_count": 41,
+      "full_exam_success": false,
+      "image_ownership_accuracy": null,
+      "layout_family": "layout-family-2",
+      "option_extraction_accuracy": null,
+      "predicted_count": 40,
+      "question_detection_precision": 1.0,
+      "question_detection_recall": 1.0,
+      "question_ordering_accuracy": 0.3902439024390244,
+      "split": "VALIDATION",
+      "zero_modification_success": false
+    },
+    {
+      "banca": null,
+      "changed_fields_vs_legacy": [
+        "option_keys",
+        "image_count"
+      ],
+      "exam_id": "phase5-56-a",
+      "expected_count": 30,
+      "full_exam_success": true,
+      "image_ownership_accuracy": null,
+      "layout_family": "layout-family-1",
+      "option_extraction_accuracy": null,
+      "predicted_count": 30,
+      "question_detection_precision": 1.0,
+      "question_detection_recall": 1.0,
+      "question_ordering_accuracy": 1.0,
+      "split": "TRAIN",
+      "zero_modification_success": true
+    },
+    {
+      "banca": null,
+      "changed_fields_vs_legacy": [
+        "option_keys",
+        "image_count"
+      ],
+      "exam_id": "phase5-56-b",
+      "expected_count": 30,
+      "full_exam_success": true,
+      "image_ownership_accuracy": null,
+      "layout_family": "layout-family-1",
+      "option_extraction_accuracy": null,
+      "predicted_count": 30,
+      "question_detection_precision": 1.0,
+      "question_detection_recall": 1.0,
+      "question_ordering_accuracy": 1.0,
+      "split": "VALIDATION",
+      "zero_modification_success": true
+    },
+    {
+      "banca": null,
+      "changed_fields_vs_legacy": [
+        "option_keys",
+        "image_count"
+      ],
+      "exam_id": "phase5-72-holdout",
+      "expected_count": 30,
+      "full_exam_success": true,
+      "image_ownership_accuracy": null,
+      "layout_family": null,
+      "option_extraction_accuracy": null,
+      "predicted_count": 30,
+      "question_detection_precision": 1.0,
+      "question_detection_recall": 1.0,
+      "question_ordering_accuracy": 1.0,
+      "split": "HOLDOUT",
+      "zero_modification_success": true
+    },
+    {
+      "banca": "DATAPREV",
+      "changed_fields_vs_legacy": [
+        "option_keys",
+        "image_count"
+      ],
+      "exam_id": "phase5-79-dataprev",
+      "expected_count": 70,
+      "full_exam_success": false,
+      "image_ownership_accuracy": null,
+      "layout_family": "layout-family-3",
+      "option_extraction_accuracy": 0.5714285714285714,
+      "predicted_count": 70,
+      "question_detection_precision": 1.0,
+      "question_detection_recall": 1.0,
+      "question_ordering_accuracy": 1.0,
+      "split": "TRAIN",
+      "zero_modification_success": false
+    },
+    {
+      "banca": "DATAPREV",
+      "changed_fields_vs_legacy": [
+        "option_keys",
+        "image_count"
+      ],
+      "exam_id": "phase5-80-dataprev",
+      "expected_count": 70,
+      "full_exam_success": false,
+      "image_ownership_accuracy": null,
+      "layout_family": "layout-family-3",
+      "option_extraction_accuracy": 0.5285714285714286,
+      "predicted_count": 70,
+      "question_detection_precision": 1.0,
+      "question_detection_recall": 1.0,
+      "question_ordering_accuracy": 1.0,
+      "split": "VALIDATION",
+      "zero_modification_success": false
+    },
+    {
+      "banca": "DATAPREV",
+      "changed_fields_vs_legacy": [
+        "option_keys",
+        "image_count"
+      ],
+      "exam_id": "phase5-81-dataprev",
+      "expected_count": 70,
+      "full_exam_success": false,
+      "image_ownership_accuracy": null,
+      "layout_family": "layout-family-3",
+      "option_extraction_accuracy": 0.4857142857142857,
+      "predicted_count": 70,
+      "question_detection_precision": 1.0,
+      "question_detection_recall": 1.0,
+      "question_ordering_accuracy": 1.0,
+      "split": "HOLDOUT",
+      "zero_modification_success": false
+    }
+  ],
+  "holdout": {
+    "full_exam_success_rate": 0.5,
+    "image_ownership_accuracy": 0.0,
+    "option_extraction_accuracy": 0.4857142857142857,
+    "question_detection_precision": 1.0,
+    "question_detection_recall": 1.0,
+    "question_ordering_accuracy": 1.0,
+    "zero_modification_success_rate": 0.5
+  },
+  "legacy_vs_structural": {
+    "cases": 8,
+    "cases_with_changes": 8,
+    "changed_fields": [
+      "image_count",
+      "option_keys",
+      "question_count",
+      "question_order"
+    ],
+    "structural_full_exam_success_rate": 0.375
+  },
+  "metrics": {
+    "full_exam_success_rate": 0.375,
+    "generalization_rate": 0.5,
+    "image_ownership_accuracy": 0.0,
+    "option_extraction_accuracy": 0.5285714285714286,
+    "question_detection_precision": 1.0,
+    "question_detection_recall": 1.0,
+    "question_ordering_accuracy": 0.8475609756097561,
+    "zero_modification_success_rate": 0.375
+  }
+}

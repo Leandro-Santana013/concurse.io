@@ -1,0 +1,15 @@
+{
+  "candidate_classifier": {
+    "feature_schema": "1",
+    "model_version": "candidate-classifier-v1",
+    "path": "candidate_classifier.joblib",
+    "training_dataset_version": "weak-label-v1",
+    "version": "1"
+  },
+  "layout_clusterer": {
+    "feature_schema": "1",
+    "path": "layout_families.json",
+    "version": "1"
+  },
+  "registry_version": 1
+}
