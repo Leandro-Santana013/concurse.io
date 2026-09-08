@@ -22,7 +22,7 @@ from services.crawlers.html_exam_parser import clean_text_artifacts
 from .native.rust_bridge import rust_scan_question_headers, rust_process_exam_text, is_rust_available
 from .fallbacks.typography_restorer import restore_exam_typography, format_markdown_tables_in_text
 
-def _legacy_extract_options_from_chunk(chunk: str) -> Tuple[Dict[str, str], Optional[str]]:
+def extract_options_from_chunk(chunk: str) -> Tuple[Dict[str, str], Optional[str]]:
     """
     Extrai alternativas formatadas (A..E) diretamente do chunk de texto de uma questão.
     Retorna (opcoes_dict, novo_enunciado_limpo).
@@ -90,7 +90,7 @@ def _legacy_extract_options_from_chunk(chunk: str) -> Tuple[Dict[str, str], Opti
         opt_content = re.sub(r'^[A-Ea-e]\s*[\(\[]\s*[\)\]]\s*', '', opt_content)
         opt_content = re.sub(r'^\(?[A-Ea-e]\s*[\)\.\-–—:]\s*', '', opt_content)
         opt_content = re.sub(r'^\(\s*\)\s*', '', opt_content)
-        opt_content = _clean_option_content(opt_content)
+        opt_content = clean_text_artifacts(opt_content)
         if o_idx == len(seq) - 1:
             opt_lines = opt_content.splitlines()
             while opt_lines and SUBJECT_REGEX.match(opt_lines[-1].strip()):
@@ -102,148 +102,6 @@ def _legacy_extract_options_from_chunk(chunk: str) -> Tuple[Dict[str, str], Opti
         options[letter] = formatted_opt
 
     return options, new_enunciado
-
-_OPTION_MARKER_RE = re.compile(
-    r"(?<![A-Za-z0-9])(?:"
-    r"\(\s*(?:(?:<[^>]+>|\*{1,3}|_{1,3})\s*)*(?P<paren>[A-Ea-e])"
-    r"\s*(?:(?:</[^>]+>|\*{1,3}|_{1,3})\s*)*\)"
-    r"|\[\s*(?P<bracket>[A-Ea-e])\s*\]"
-    r"|(?P<letter>[A-Ea-e])\s*(?:\(\s*\)|[\.\-:\u2013\u2014\)])"
-    r")"
-)
-
-_OPTION_CONTEXT_TAIL_RE = re.compile(
-    r"\s*(?:<[^>]+>\s*)*(?:"
-    r"L(?:í|Ã­|\u00ed)ngua\s+Inglesa|"
-    r"Legisla\w*\s+Acerca\s+de\s+Seguran\w*\s+da\b|"
-    r"Legisla\w*\s+Acerca\s+de\s+Seguran\w*\s+da\s+"
-    r"Inform\w*\s+e\s+Prote\w*\s+de\s+Dados|"
-    r"Use\s+the\s+following\s+TEXT\s+to\s+answer\s+the\s+next\b"
-    r")",
-    flags=re.IGNORECASE,
-)
-
-
-def _option_marker_letter(match: re.Match[str]) -> str:
-    for group_name in ("paren", "bracket", "letter"):
-        value = match.group(group_name)
-        if value:
-            return value.upper()
-    return ""
-
-
-def _clean_option_content(value: str) -> str:
-    """Clean one option without treating numeric answers as page numbers."""
-
-    raw = str(value or "").strip()
-    if not raw:
-        return ""
-
-    # The generic cleaner removes standalone 1-2 digit lines as page numbers.
-    # Inside an option, values such as 18, 55 and 70 are legitimate answers.
-    numeric_only = re.fullmatch(
-        r"[-+]?\d+(?:[.,]\d+)?(?:\s*(?:%|[A-Za-z\u00C0-\u00FFºª°]+))?",
-        raw,
-    )
-    opt_clean = raw if numeric_only else clean_text_artifacts(raw)
-    opt_clean = re.sub(r"^[A-Ea-e]\s*[\(\[]\s*[\)\]]\s*", "", opt_clean)
-    opt_clean = re.sub(r"^\(?[A-Ea-e]\s*[\)\.\-:\u2013\u2014]\s*", "", opt_clean)
-    opt_clean = re.sub(r"^\(\s*\)\s*", "", opt_clean)
-
-    opt_lines = opt_clean.splitlines()
-    while opt_lines and SUBJECT_REGEX.match(opt_lines[-1].strip()):
-        opt_lines.pop()
-    opt_clean = "\n".join(opt_lines).strip()
-    opt_clean = re.sub(
-        r"\s*(?:<[^\s>]+>|\*{1,3}|_{1,3})+\s*(?:"
-        r"Conhecimentos\s+Espec[íi?]ficos|Conhecimentos\s+Gerais|"
-        r"Conhecimentos\s+B[aá?]sicos|L[íi?]ngua\s+Portuguesa|"
-        r"Portugu[eê]s|Matem[aá]tica|No[çc?][õo?]es\s+de\s+[^\n<]+|"
-        r"Racioc[íi?]nio\s+L[óo?]gico[^\n<]*|Legisla[çc][aã?]o\s+Espec[íi?]fica|"
-        r"Inform[aá]tica|Direito\s+[^\n<]+|TEXTO:\s*[^\n<]+)"
-        r"(?:<[^\s>]+>|\*{1,3}|_{1,3})+\s*$",
-        "",
-        opt_clean,
-        flags=re.IGNORECASE,
-    ).strip()
-
-    # A shared reading text or a new subject can be placed immediately after
-    # the last option. It belongs to the following questions, not to this
-    # option.
-    context_tail = _OPTION_CONTEXT_TAIL_RE.search(opt_clean)
-    if context_tail:
-        opt_clean = opt_clean[: context_tail.start()].rstrip()
-
-    # A styled PDF span can wrap an option marker and close only after the
-    # option text, leaving an orphan closing tag after marker-based slicing.
-    # Preserve balanced markup but remove wrappers that no longer have their
-    # opening tag in this option.
-    for style_tag in ("u", "strong", "em", "b", "i", "s", "mark"):
-        if not re.search(rf"<{style_tag}\b", opt_clean, flags=re.IGNORECASE):
-            opt_clean = re.sub(
-                rf"</{style_tag}\s*>",
-                "",
-                opt_clean,
-                flags=re.IGNORECASE,
-            )
-
-    opt_clean = restore_exam_typography(opt_clean, is_option=True)
-    formatted_opt, _ = format_latex_formulas(opt_clean)
-    return formatted_opt.strip()
-
-
-def _find_option_sequences(chunk: str) -> List[List[Tuple[str, int, int]]]:
-    matches = [
-        (_option_marker_letter(match), match.start(), match.end())
-        for match in _OPTION_MARKER_RE.finditer(chunk)
-    ]
-    matches = [match for match in matches if match[0]]
-    if len(matches) < 2:
-        return []
-
-    sequences: List[Tuple[float, List[Tuple[str, int, int]]]] = []
-    for start_index, first in enumerate(matches):
-        if first[0] != "A":
-            continue
-        sequence = [first]
-        expected = "B"
-        for candidate in matches[start_index + 1 :]:
-            if candidate[0] == expected:
-                sequence.append(candidate)
-                expected = chr(ord(expected) + 1)
-                if expected > "E":
-                    break
-            elif candidate[0] < expected:
-                continue
-        if len(sequence) >= 2:
-            score = len(sequence) * 1000 + (sequence[0][1] / max(1, len(chunk))) * 100
-            sequences.append((score, sequence))
-
-    sequences.sort(key=lambda item: item[0], reverse=True)
-    return [sequence for _, sequence in sequences]
-
-
-# This definition intentionally sits after the legacy implementation above so
-# callers in older modules keep the same import seam while using the corrected
-# marker/option logic.
-def extract_options_from_chunk(chunk: str) -> Tuple[Dict[str, str], Optional[str]]:
-    """Extract a contiguous A..E option sequence from a question body."""
-
-    if not chunk or len(chunk.strip()) < 2:
-        return {}, None
-
-    for sequence in _find_option_sequences(chunk):
-        options: Dict[str, str] = {}
-        for option_index, marker in enumerate(sequence):
-            letter, _, marker_end = marker
-            end = sequence[option_index + 1][1] if option_index + 1 < len(sequence) else len(chunk)
-            options[letter] = _clean_option_content(chunk[marker_end:end])
-
-        if len(options) >= 2 and all(value.strip() for value in options.values()):
-            return options, chunk[: sequence[0][1]].strip()
-
-    return {}, None
-
 
 def extract_heuristic_options(chunk: str) -> Tuple[Optional[Dict[str, str]], str]:
     """
@@ -513,20 +371,10 @@ def parse_exam_document(
             try:
                 qn = int(rq['numero_questao'])
                 m_h = re.search(rf'(?:^|\n)\s*(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+|ITEM\s+)0*{qn}\b', full_text, re.IGNORECASE)
-                if not m_h:
-                    # Algumas provas FGV usam apenas o número no início do
-                    # bloco (ex.: ``48 Com relação...``), sem ``Questão``.
-                    # Sem essa posição, o fallback nativo pode transformar a
-                    # última alternativa em parte da anterior.
-                    m_h = re.search(
-                        rf'(?m)^[ \t]*0*{qn}\b\s+(?=[A-Z\u00C0-\u00DC"\u201C\u2018*])',
-                        full_text,
-                    )
                 if m_h:
                     rust_found_positions.append((qn, m_h.start(), m_h.end()))
             except Exception:
                 pass
-        document_positions = sorted(rust_found_positions, key=lambda item: item[1])
         rust_context_blocks = extract_context_blocks(full_text, rust_found_positions)
 
         questions = []
@@ -552,40 +400,6 @@ def parse_exam_document(
             formatted_enunciado = format_markdown_tables_in_text(formatted_enunciado)
             
             raw_options = rq.get('opcoes', {})
-
-            # Reparse the exact question region with the geometry-aware
-            # Python marker parser. This handles inline labels such as
-            # ``A ( ) ... B ( ) ...`` before the native line fallback can
-            # promote wrapped statement lines to alternatives.
-            current_positions = [item for item in document_positions if item[0] == q_num]
-            if current_positions:
-                current_position = current_positions[0]
-                next_position = next(
-                    (item for item in document_positions if item[1] > current_position[1]),
-                    None,
-                )
-                body_end = next_position[1] if next_position else len(full_text)
-                body_chunk = full_text[current_position[2]:body_end]
-                recovered_options, recovered_statement = extract_options_from_chunk(body_chunk)
-                recovered_is_complete = (
-                    len(recovered_options) >= 4
-                    and all(str(value).strip() for value in recovered_options.values())
-                )
-                if recovered_is_complete:
-                    raw_options = recovered_options
-                    if recovered_statement:
-                        formatted_enunciado = recovered_statement
-                        if matching_context:
-                            q_min, q_max, ctx_text = matching_context
-                            cleaned_ctx = restore_exam_typography(ctx_text)
-                            if cleaned_ctx[:30] not in formatted_enunciado:
-                                formatted_enunciado = (
-                                    f"📖 **Texto de Apoio (Questões {q_min} a {q_max}):**\n\n"
-                                    f"{cleaned_ctx}\n\n---\n\n{formatted_enunciado}"
-                                )
-                        formatted_enunciado, has_latex_enunciado = format_latex_formulas(formatted_enunciado)
-                        formatted_enunciado = restore_exam_typography(formatted_enunciado)
-                        formatted_enunciado = format_markdown_tables_in_text(formatted_enunciado)
             # Detecta se alguma alternativa foi truncada pelo motor nativo ou se faltam opções
             needs_recovery = False
             if re.search(r'(?:^|\n|\s+)[a-eA-E]\)\s*[A-ZÁ-Ú]', formatted_enunciado):
@@ -635,13 +449,6 @@ def parse_exam_document(
                 opt_clean = restore_exam_typography(opt_clean, is_option=True)
                 opt_formatted, _ = format_latex_formulas(opt_clean)
                 options[let] = opt_formatted
-
-            # The legacy normalization loop above may have passed pure numeric
-            # options through the generic page-number cleaner. Restore those
-            # values from the raw native result with the option-safe cleaner.
-            for let, opt_text in raw_options.items():
-                if re.fullmatch(r"[-+]?\d+(?:[.,]\d+)?(?:\s*(?:%|[A-Za-z\u00C0-\u00FFºª°]+))?", str(opt_text).strip()):
-                    options[let] = _clean_option_content(opt_text)
 
             final_answer = master_gabarito.get(q_num) or rq.get('resposta', 'A')
             approx_page, q_x, q_y = q_spatial_map.get(q_num, (start_page, 0.0, 0.0))
@@ -907,7 +714,7 @@ def parse_exam_document(
                 opt_content = re.sub(r'^[A-Ea-e]\s*[\(\[]\s*[\)\]]\s*', '', opt_content)
                 opt_content = re.sub(r'^\(?[A-Ea-e]\s*[\)\.\-–—:]\s*', '', opt_content)
                 opt_content = re.sub(r'^\(\s*\)\s*', '', opt_content)
-                opt_content = _clean_option_content(opt_content)
+                opt_content = clean_text_artifacts(opt_content)
                 if o_idx == len(valid_seq) - 1:
                     # Remove cabeçalho de disciplina colado no final da última alternativa (ex: '4-C <u>Conhecimentos Específicos</u>')
                     opt_lines = opt_content.splitlines()

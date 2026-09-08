@@ -12,7 +12,7 @@ pub static HEADER_REGEX: Lazy<Regex> = Lazy::new(|| {
 /// Regex primário para identificação de alternativas de resposta (A, B, C, D, E)
 pub static OPTION_PRIMARY_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
-        r##"(?:^|\n|[.;:\)]\s*|\s+)(?:([A-E])\s*\(\s*\)|\(?\s*([A-E])\s*\)?\s*[\.\-–—:\)]|\(([A-E])\)|\[([A-E])\])\s*"##
+        r##"(?:^|\n|[.;:\)]\s*|\s{2,})(?:([A-E])\s*\(\s*\)|\(?\s*([A-E])\s*\)?\s*[\.\-–—:\)]|\(([A-E])\)|\[([A-E])\])\s*"##
     ).unwrap()
 });
 
