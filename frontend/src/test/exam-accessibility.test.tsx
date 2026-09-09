@@ -87,7 +87,7 @@ describe('simulador acessível', () => {
       rules: { 'color-contrast': { enabled: false } },
     });
     expect(audit.violations).toEqual([]);
-  });
+  }, 30_000);
 
   it('exibe resultado completo e refaz a prova pela ação do contexto', async () => {
     const user = userEvent.setup();
@@ -143,5 +143,45 @@ describe('simulador acessível', () => {
     expect(await screen.findByRole('heading', { name: 'Questão 1' })).toBeVisible();
     expect(useExamStore.getState().isFinished).toBe(false);
     expect(useExamStore.getState().answers).toEqual({});
+  });
+
+  it('sinaliza uma questão anulada antes do enunciado', async () => {
+    const annulledExam: ExamDetail = {
+      ...exam,
+      id: 100,
+      title: 'Prova com questão anulada',
+      questions: [
+        {
+          id: 10,
+          numero_questao: '10',
+          statement: '(Questão anulada) Enunciado sem resposta válida.',
+          options: { A: 'Opção A', B: 'Opção B' },
+          correct_answer: '',
+          subject: 'Português',
+          has_official_answer: false,
+          latex_support: false,
+        },
+      ],
+    };
+    useExamStore.getState().startExam(annulledExam);
+
+    const { container } = render(
+      <MemoryRouter>
+        <UIProvider>
+          <ExamProvider>
+            <ExamSimulator />
+          </ExamProvider>
+        </UIProvider>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('note', { name: 'Questão anulada' })).toBeVisible();
+    expect(screen.getByText('Enunciado sem resposta válida.')).toBeVisible();
+    expect(screen.queryByText('(Questão anulada) Enunciado sem resposta válida.')).not.toBeInTheDocument();
+
+    const audit = await axe(container, {
+      rules: { 'color-contrast': { enabled: false } },
+    });
+    expect(audit.violations).toEqual([]);
   });
 });

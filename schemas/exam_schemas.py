@@ -12,6 +12,7 @@ class QuestionSchema(BaseModel):
     statement: str
     options: Dict[str, str] = Field(default_factory=dict)
     correct_answer: str
+    is_annulled: bool = False
     subject: str = "Geral"
     images: Optional[List[str]] = None
     has_official_answer: bool = True
@@ -60,6 +61,15 @@ class SearchResultItem(BaseModel):
     source: Optional[str] = "web"
     status: Optional[str] = "Pendente"
     reuse_available: bool = False
+
+class SearchResultsResponse(BaseModel):
+    items: List[SearchResultItem] = Field(default_factory=list)
+    page: int = Field(default=1, ge=1)
+    page_size: int = Field(default=25, ge=1, le=25)
+    total: int = Field(default=0, ge=0)
+    total_pages: int = Field(default=0, ge=0)
+    has_previous: bool = False
+    has_next: bool = False
 
 class ExamIngestResponse(BaseModel):
     exam_id: int

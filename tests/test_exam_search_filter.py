@@ -118,7 +118,8 @@ def test_search_api_integration():
         else:
             app.dependency_overrides[get_current_user] = previous_override
     assert response.status_code == 200
-    data = response.json()
+    payload = response.json()
+    data = payload["items"]
     assert isinstance(data, list)
     print(f" -> API Search retornou {len(data)} resultados formatados.")
     if data:

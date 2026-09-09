@@ -145,7 +145,10 @@ def test_synthetic_pdf_extraction_and_2phase_linking():
 
 def test_real_pdf_pipeline_with_images():
     print("Testing real PDF pipeline with image extraction...")
-    pdf_files = [f for f in glob.glob("pdfs/*.pdf") if "_gab_" not in f]
+    pdf_files = [
+        f for f in glob.glob("pdfs/*.pdf")
+        if "_gab" not in os.path.basename(f).lower()
+    ]
     if not pdf_files:
         print("  -> No PDF files found in pdfs/, skipping.")
         return

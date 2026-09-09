@@ -47,8 +47,9 @@ def test_search_queries():
         for q in queries:
             res = client.get(f'/api/v1/search?q={q}')
             assert res.status_code == 200, f"Query '{q}' failed with status {res.status_code}: {res.text}"
-            data = res.json()
-            assert isinstance(data, list), f"Expected list for '{q}', got {type(data)}"
+            payload = res.json()
+            data = payload["items"]
+            assert isinstance(data, list), f"Expected items list for '{q}', got {type(data)}"
             print(f"      [OK] '{q:16}' -> HTTP 200 | {len(data)} resultados | Top: {data[0]['title'] if data else 'Nenhum'}")
     finally:
         if previous_override is None:

@@ -26,7 +26,7 @@ def test_search_api():
         else:
             app.dependency_overrides[get_current_user] = previous_override
     assert r.status_code == 200, f"Search failed: {r.status_code}"
-    results = r.json()
+    results = r.json()["items"]
     print(f"   -> Search returned {len(results)} items.")
     if results:
         print("   -> Sample result:", results[0]["title"], "->", results[0]["url"][:60])
@@ -35,7 +35,10 @@ def test_local_exam_ingestion():
     print("2. Testing Async Exam Ingestion on local PDF...")
     # Find a sample PDF in pdfs/
     import glob
-    pdf_files = [f for f in glob.glob("pdfs/*.pdf") if "_gab_" not in f]
+    pdf_files = [
+        f for f in glob.glob("pdfs/*.pdf")
+        if "_gab" not in os.path.basename(f).lower()
+    ]
     if not pdf_files:
         print("   -> No local test PDF found, skipping local ingestion test.")
         return

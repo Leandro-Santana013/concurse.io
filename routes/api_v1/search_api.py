@@ -1,10 +1,10 @@
 import re
-from typing import List, Optional
+from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from models.database import get_db, Exam, ExamCatalog
-from schemas.exam_schemas import SearchResultItem
+from schemas.exam_schemas import SearchResultItem, SearchResultsResponse
 from routes.api_v1.user_context import get_current_user
 from services.exam_library import get_user_exam_ids, prepare_search_results_for_user
 from services.search import (
@@ -91,6 +91,22 @@ def _merge_ranked_groups(*groups):
     return merged
 
 
+def _merge_cached_idcap_results(cards):
+    """Reconstrói a janela paginável do IDCAP a partir do cache persistido."""
+    cached_crawler = [
+        card for card in cards
+        if str(card.get("source") or "").lower() == "idcap"
+    ]
+    cached_catalog = [
+        card for card in cards
+        if str(card.get("source") or "").lower() != "idcap"
+    ]
+    return _merge_ranked_groups(
+        (cached_crawler, DEFAULT_SEARCH_RESULT_LIMIT),
+        (cached_catalog, DEFAULT_SEARCH_RESULT_LIMIT),
+    )[:COMBINED_IDCAP_RESULT_LIMIT]
+
+
 def _search_result_items(cards):
     return [
         SearchResultItem(
@@ -107,11 +123,35 @@ def _search_result_items(cards):
         for card in cards
     ]
 
-@router.get("/search", response_model=List[SearchResultItem])
+def _has_search_page(cards, page: int, page_size: int) -> bool:
+    """Indica se o cache já consegue preencher a página solicitada."""
+    required_count = page * page_size
+    return len(cards) >= required_count
+
+
+def _paginated_search_response(cards, page: int, page_size: int) -> SearchResultsResponse:
+    total = len(cards)
+    total_pages = (total + page_size - 1) // page_size if total else 0
+    start = (page - 1) * page_size
+    end = start + page_size
+    return SearchResultsResponse(
+        items=_search_result_items(cards[start:end]),
+        page=page,
+        page_size=page_size,
+        total=total,
+        total_pages=total_pages,
+        has_previous=page > 1 and total > 0,
+        has_next=end < total,
+    )
+
+
+@router.get("/search", response_model=SearchResultsResponse)
 def search_exams_api(
     q: str = Query(..., min_length=1),
     sources: Optional[str] = Query(None),
     refresh: bool = Query(False),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(DEFAULT_SEARCH_RESULT_LIMIT, ge=1, le=DEFAULT_SEARCH_RESULT_LIMIT),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -119,6 +159,17 @@ def search_exams_api(
     Busca de provas com cache de catálogo instantâneo, NLP determinístico,
     padronização canônica de títulos e ranqueamento por Match Score.
     """
+    # Chamadas diretas em testes/integrações não passam pelo resolvedor do
+    # FastAPI e recebem os objetos Query como defaults; normalize-os aqui.
+    if not isinstance(sources, str):
+        sources = None
+    if not isinstance(refresh, bool):
+        refresh = False
+    if not isinstance(page, int) or isinstance(page, bool):
+        page = 1
+    if not isinstance(page_size, int) or isinstance(page_size, bool):
+        page_size = DEFAULT_SEARCH_RESULT_LIMIT
+
     import time
     t_start = time.time()
     query_clean = q.strip().lower()
@@ -131,11 +182,6 @@ def search_exams_api(
     active_sources = _normalize_active_sources(sources)
     combine_idcap_results = _is_idcap_only_query(query_clean) or bool(
         sources and 'idcap' in active_sources
-    )
-    response_limit = (
-        COMBINED_IDCAP_RESULT_LIMIT
-        if combine_idcap_results
-        else DEFAULT_SEARCH_RESULT_LIMIT
     )
     ranked_cached = []
 
@@ -157,6 +203,13 @@ def search_exams_api(
             catalog_query = catalog_query.filter(ExamCatalog.title.ilike(f"%{nlp_data['orgao']}%"))
         if nlp_data.get("cargo"):
             catalog_query = catalog_query.filter(ExamCatalog.title.ilike(f"%{nlp_data['cargo']}%"))
+        if nlp_data.get("ano"):
+            catalog_query = catalog_query.filter(
+                or_(
+                    ExamCatalog.title.ilike(f"%{nlp_data['ano']}%"),
+                    ExamCatalog.source_url.ilike(f"%{nlp_data['ano']}%"),
+                )
+            )
 
         cached_entries = catalog_query.order_by(ExamCatalog.match_score.desc()).limit(SEARCH_CANDIDATE_LIMIT).all()
 
@@ -176,12 +229,16 @@ def search_exams_api(
                 limit=SEARCH_CANDIDATE_LIMIT,
             )
             if ranked_cached:
+                if combine_idcap_results and page > 1:
+                    ranked_cached = _merge_cached_idcap_results(ranked_cached)
                 prepared_cached = prepare_search_results_for_user(db, ranked_cached, current_user.id)
                 elapsed = round((time.time() - t_start) * 1000, 1)
                 print(f"   ├─ ⚡ [CACHE HIT] {len(prepared_cached)} provas disponíveis no catálogo local ({elapsed}ms)", flush=True)
-                if not combine_idcap_results and len(prepared_cached) >= DEFAULT_SEARCH_RESULT_LIMIT:
+                if _has_search_page(prepared_cached, page, page_size) and (
+                    not combine_idcap_results or page > 1
+                ):
                     print(f"{'='*70}\n", flush=True)
-                    return _search_result_items(prepared_cached[:DEFAULT_SEARCH_RESULT_LIMIT])
+                    return _paginated_search_response(prepared_cached, page, page_size)
 
     # 2. Scrapers Concorrentes
     from services.crawlers import _scrape_idcap_pdfs, _scrape_pci_pdfs, _search_pdfs_web, _search_known_exams, _search_qc_provas
@@ -247,7 +304,7 @@ def search_exams_api(
         ranked_cards = _merge_ranked_groups(
             (ranked_crawler, DEFAULT_SEARCH_RESULT_LIMIT),
             (ranked_cached, DEFAULT_SEARCH_RESULT_LIMIT),
-        )
+        )[:COMBINED_IDCAP_RESULT_LIMIT]
         raw_result_count = len(crawler_results) + len(ranked_cached)
     else:
         raw_results = [*ranked_cached, *crawler_results]
@@ -286,7 +343,7 @@ def search_exams_api(
     print(f"{'='*70}\n", flush=True)
 
     prepared_cards = prepare_search_results_for_user(db, ranked_cards, current_user.id)
-    return _search_result_items(prepared_cards[:response_limit])
+    return _paginated_search_response(prepared_cards, page, page_size)
 
 @router.get("/downloads/active")
 def get_active_downloads_api(
@@ -298,10 +355,15 @@ def get_active_downloads_api(
     if not user_exam_ids:
         return []
 
+    # Erros são estados terminais e não podem continuar aparecendo na Navbar
+    # como se o worker ainda estivesse processando a prova. O detalhe do erro
+    # continua disponível no acompanhamento da ingestão e nos avisos da UI.
     active_exams = db.query(Exam).filter(
         Exam.id.in_(user_exam_ids),
-        Exam.status != 'Pendente',
-        ((Exam.progress < 100) & (Exam.progress > 0)) | (Exam.progress == -1)
+        Exam.status == 'Processando',
+        Exam.progress > 0,
+        Exam.progress < 100,
+        Exam.error_type.is_(None),
     ).all()
 
     return [{

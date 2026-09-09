@@ -152,6 +152,7 @@ def parse_html_exam(html_content: str, source_url: str = "") -> List[Dict[str, A
                 'enunciado': enunciado_clean,
                 'opcoes': options,
                 'resposta': correct_ans,
+                'has_embedded_answer': idx < len(gabaritos_list),
                 'disciplina': 'Conhecimentos Gerais',
                 'images': q_images if q_images else None
             })

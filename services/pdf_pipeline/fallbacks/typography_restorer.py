@@ -11,6 +11,8 @@ import os
 import json
 import re
 import urllib.parse
+from functools import lru_cache
+from typing import Dict, Optional, Tuple
 
 # Carregamento dinâmico de checkpoints treinados pelo otimizador genético
 _CHECKPOINT_PATTERNS: dict[str, str] = {}
@@ -111,7 +113,92 @@ def format_poem_stanza(lines: list[str]) -> str:
 
 
 
-def restore_ocr_lexical_spacing(text: str) -> str:
+@lru_cache(maxsize=1)
+def _default_ocr_spacing_vocabulary() -> Dict[str, Tuple[str, float]]:
+    """Carrega o vocabulário comum usado pelo separador de OCR.
+
+    O import é tardio porque o vocabulário principal mora no pipeline de
+    visão e esse módulo também é importado por ele. Assim a correção pode ser
+    compartilhada sem criar um ciclo durante o carregamento dos módulos.
+    """
+
+    try:
+        from services.pdf_pipeline.media.scan_pipeline import _build_spacing_vocabulary
+
+        return _build_spacing_vocabulary(())
+    except Exception:
+        return {}
+
+
+def _apply_ocr_spacing_vocabulary(
+    text: str,
+    vocabulary: Optional[Dict[str, Tuple[str, float]]] = None,
+) -> str:
+    """Aplica a mesma desaglutinação lexical usada no pipeline de scans."""
+
+    if not text:
+        return ""
+
+    try:
+        from services.pdf_pipeline.media.scan_pipeline import (
+            restore_ocr_spacing,
+            restore_ocr_word_forms,
+            restore_ocr_split_words,
+        )
+
+        active_vocabulary = (
+            vocabulary if vocabulary is not None else _default_ocr_spacing_vocabulary()
+        )
+        if not active_vocabulary:
+            return text
+
+        # Só aciona a rotina que consulta o corpus de palavras separadas
+        # quando existe uma concatenação confirmada pelo léxico atual. Isso
+        # evita carregar o corpus para cada linha normal do OCR.
+        split_candidate_re = re.compile(
+            r"(?P<left>[A-Za-zÀ-ÿ]{2,})\s+(?P<right>[A-Za-zÀ-ÿ]{2,})"
+        )
+        has_known_split = any(
+            _normalise_ocr_word(match.group("left"))
+            + _normalise_ocr_word(match.group("right"))
+            in active_vocabulary
+            and not (
+                _normalise_ocr_word(match.group("left")) in active_vocabulary
+                and _normalise_ocr_word(match.group("right")) in active_vocabulary
+            )
+            for match in split_candidate_re.finditer(text)
+        )
+        value = (
+            restore_ocr_split_words(
+                text,
+                active_vocabulary,
+                use_training=False,
+            )
+            if has_known_split
+            else text
+        )
+        value = restore_ocr_spacing(value, active_vocabulary)
+        return restore_ocr_word_forms(value, active_vocabulary)
+    except Exception:
+        # A restauração tipográfica não pode derrubar a ingestão só porque o
+        # módulo opcional do separador lexical não carregou.
+        return text
+
+
+def _normalise_ocr_word(value: str) -> str:
+    """Normaliza uma palavra para consultar o dicionário do segmentador."""
+
+    import unicodedata
+
+    normalized = unicodedata.normalize("NFKD", str(value or ""))
+    normalized = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    return re.sub(r"[^a-z0-9]", "", normalized.casefold())
+
+
+def restore_ocr_lexical_spacing(
+    text: str,
+    vocabulary: Optional[Dict[str, Tuple[str, float]]] = None,
+) -> str:
     """
     Desacopla palavras aglutinadas geradas por motores de OCR devido a kerning apertado
     ou baixa resolução de scanner (ex: "oMicrosoftWord" -> "o Microsoft Word", "dacidade" -> "da cidade").
@@ -119,19 +206,29 @@ def restore_ocr_lexical_spacing(text: str) -> str:
     if not text:
         return ""
     
-    if rust_restore_ocr_lexical_spacing:
-        res = rust_restore_ocr_lexical_spacing(text)
-        if res is not None:
-            return res
-    
+    # O Rust cobre as regras estruturais mais baratas, mas sua implementação
+    # não conhece o vocabulário específico da prova. O resultado nativo é
+    # portanto apenas a base; a etapa lexical Python continua obrigatória.
     t = text
+    if rust_restore_ocr_lexical_spacing:
+        rust_result = rust_restore_ocr_lexical_spacing(text)
+        if rust_result is not None:
+            t = rust_result
 
     # 1. Aglutinações de preposições e palavras comuns com maiúsculas (CamelCase OCR)
-    t = re.sub(
-        r"\b(o|a|os|as|do|da|dos|das|no|na|nos|nas|ao|aos|em|de|que|se|com|para|por|e|ou|um|uma|uns|umas|seu|sua|seus|suas|este|esta|estes|estas|esse|essa|esses|essas|aquele|aquela|aqueles|aquelas|cada|pelo|pela|pelos|pelas|sobre|entre|sem|sob|como|onde|quando|mais|menos|muito|muitos|muita|muitas|bem|mal|já|ainda|assim|qual|quais|qualquer|quaisquer|todo|toda|todos|todas|outro|outra|outros|outras)([A-Z\u00C0-\u00DC][a-z\u00E0-\u00FC0-9]+)\b",
-        r"\1 \2",
-        t
+    camel_prefix_re = re.compile(
+        r"\b(o|a|os|as|do|da|dos|das|no|na|nos|nas|ao|aos|em|de|que|se|com|para|por|e|ou|um|uma|uns|umas|seu|sua|seus|suas|este|esta|estes|estas|esse|essa|esses|aquela|aquele|aqueles|aquelas|cada|pelo|pela|pelos|pelas|sobre|entre|sem|sob|como|onde|quando|mais|menos|muito|muitos|muita|muitas|bem|mal|já|ainda|assim|qual|quais|qualquer|quaisquer|todo|toda|todos|todas|outro|outra|outros|outras)([A-Z\u00C0-\u00DC][a-z\u00E0-\u00FC0-9]*(?:[A-Z\u00C0-\u00DC][a-z\u00E0-\u00FC0-9]*)*)\b",
     )
+
+    def split_camel_prefix(match: re.Match[str]) -> str:
+        body = re.sub(
+            r"(?<=[a-z\u00E0-\u00FC0-9])(?=[A-Z\u00C0-\u00DC])",
+            " ",
+            match.group(2),
+        )
+        return f"{match.group(1)} {body}"
+
+    t = camel_prefix_re.sub(split_camel_prefix, t)
 
     # 2. Aglutinações específicas frequentes em editais e provas
     merges = [
@@ -204,6 +301,12 @@ def restore_ocr_lexical_spacing(text: str) -> str:
     for pattern, repl in merges:
         t = re.sub(pattern, repl, t, flags=re.IGNORECASE)
 
+    # Recupera aglutinações que não podem ser cobertas por uma lista fixa de
+    # expressões (por exemplo, ``Segundopesquisa`` e ``Pordecisao``). Quando o
+    # chamador conhece o texto nativo do PDF, seu vocabulário é usado; caso
+    # contrário, cai no vocabulário comum e mantém a correção conservadora.
+    t = _apply_ocr_spacing_vocabulary(t, vocabulary)
+
     # 3. Limpeza de bullets OCR corrompidos em alternativas (!P, lO, /-d, @, etc.) estritamente em início de linha
     t = re.sub(r"(?m)^[ \t]*(?:\!P|\(p|\[p)\s+(?=[A-Za-z\u00C0-\u00DC0-9\"])", r"B) ", t)
     t = re.sub(r"(?m)^[ \t]*(?:lO|LO|\(o|\[o|\(g)\s+(?=[A-Za-z\u00C0-\u00DC0-9\"])", r"C) ", t)
@@ -225,12 +328,15 @@ def restore_exam_typography(text: str, is_option: bool = False) -> str:
     if not text:
         return ""
 
+    # Faz a desaglutinação antes do caminho Rust e novamente no retorno para
+    # que a implementação nativa não esconda palavras que ela não conhece.
+    lexical_text = restore_ocr_lexical_spacing(text)
     if rust_restore_typography:
-        res = rust_restore_typography(text, is_option)
+        res = rust_restore_typography(lexical_text, is_option)
         if res is not None:
-            return res
+            return restore_ocr_lexical_spacing(res).strip()
 
-    t = restore_ocr_lexical_spacing(text)
+    t = lexical_text
 
     # 1. Elimina o bug de espaçamento excessivo por justificação de PDF ("As         formigas         estão")
     t = re.sub(r"[ \t]{2,}", " ", t)

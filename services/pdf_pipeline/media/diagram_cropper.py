@@ -46,9 +46,9 @@ except ImportError:
 IMAGE_TRIGGER_PATTERN = (
     r'\b('
     r'figura|gr[áa]fico|quadro|tabela|diagrama|desenho|'
-    r'ilustra[çc][ãa]o|mapa|esquema|imagem|paqu[íi]metro|'
+    r'ilustra[çc][ãa]o|mapa|esquema|imagens?|quadrinhos?|logotipo|logomarca|paqu[íi]metro|'
     r'planta|fluxograma|fotografia|foto|tira|tirinha|charge|'
-    r'cartum|organograma|histograma|exemplo|casinha|vilarejo|estrada|malha|'
+    r'cartum|organograma|histograma|casinha|vilarejo|estrada|malha|'
     r'circuito\s+(?:abaixo|acima|a\s+seguir|da\s+figura)|diagrama\s+de\s+circuito|'
     r'regi[ãa]o\s+(?:plana\s+)?representada\s+(?:abaixo|acima|a\s+seguir)|'
     r'representad[ao]\s+(?:abaixo|acima|a\s+seguir)|'
@@ -328,7 +328,8 @@ class ExamImageExtractor:
         cluster: fitz.Rect,
         exam_id: Any,
         q_num: Any,
-        img_index: int
+        img_index: int,
+        clamp_to_text: bool = True,
     ) -> Optional[str]:
         """
         Recorta a região com padding de segurança, renderiza em DPI configurado,
@@ -344,31 +345,32 @@ class ExamImageExtractor:
         max_x1 = float(page_w)
         max_y1 = float(page_h)
 
-        try:
-            text_blocks = [b for b in page_obj.get_text('blocks') if b[4].strip()]
-            for b in text_blocks:
-                bx0, by0, bx1, by1 = b[:4]
-                # Verifica sobreposição horizontal e vertical de vizinhança
-                h_overlap = not (bx1 < cluster.x0 - 15 or bx0 > cluster.x1 + 15)
-                v_overlap = not (by1 < cluster.y0 - 15 or by0 > cluster.y1 + 15)
+        if clamp_to_text:
+            try:
+                text_blocks = [b for b in page_obj.get_text('blocks') if b[4].strip()]
+                for b in text_blocks:
+                    bx0, by0, bx1, by1 = b[:4]
+                    # Verifica sobreposição horizontal e vertical de vizinhança
+                    h_overlap = not (bx1 < cluster.x0 - 15 or bx0 > cluster.x1 + 15)
+                    v_overlap = not (by1 < cluster.y0 - 15 or by0 > cluster.y1 + 15)
 
-                if h_overlap:
-                    # Texto está abaixo do cluster de imagem
-                    if by0 >= cluster.y1 - 1:
-                        max_y1 = min(max_y1, by0 - 1.0)
-                    # Texto está acima do cluster de imagem
-                    if by1 <= cluster.y0 + 1:
-                        min_y0 = max(min_y0, by1 + 1.0)
+                    if h_overlap:
+                        # Texto está abaixo do cluster de imagem
+                        if by0 >= cluster.y1 - 1:
+                            max_y1 = min(max_y1, by0 - 1.0)
+                        # Texto está acima do cluster de imagem
+                        if by1 <= cluster.y0 + 1:
+                            min_y0 = max(min_y0, by1 + 1.0)
 
-                if v_overlap:
-                    # Texto está à direita do cluster
-                    if bx0 >= cluster.x1 - 1:
-                        max_x1 = min(max_x1, bx0 - 1.0)
-                    # Texto está à esquerda do cluster
-                    if bx1 <= cluster.x0 + 1:
-                        min_x0 = max(min_x0, bx1 + 1.0)
-        except Exception:
-            pass
+                    if v_overlap:
+                        # Texto está à direita do cluster
+                        if bx0 >= cluster.x1 - 1:
+                            max_x1 = min(max_x1, bx0 - 1.0)
+                        # Texto está à esquerda do cluster
+                        if bx1 <= cluster.x0 + 1:
+                            min_x0 = max(min_x0, bx1 + 1.0)
+            except Exception:
+                pass
 
         crop_rect = fitz.Rect(
             max(min_x0, cluster.x0 - pad),

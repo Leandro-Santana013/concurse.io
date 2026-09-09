@@ -10,6 +10,7 @@ from .gabarito_service import (
     extract_gabarito_from_doc,
     extract_exam_code_ranges_from_pdf,
     extract_answer_key_blocks,
+    extract_plain_cargo_answer_key_blocks,
     _extract_gabarito_from_doc,
     normalize_answer_or_empty,
 )
@@ -30,6 +31,7 @@ __all__ = [
     "extract_gabarito_from_doc",
     "extract_exam_code_ranges_from_pdf",
     "extract_answer_key_blocks",
+    "extract_plain_cargo_answer_key_blocks",
     "_extract_gabarito_from_doc",
     "normalize_answer_or_empty",
     "AnswerKeyMatchResult",

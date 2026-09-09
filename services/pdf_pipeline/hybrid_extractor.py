@@ -1,6 +1,7 @@
 import os
 import re
 import io
+import math
 import hashlib
 import json
 import time
@@ -32,7 +33,7 @@ from .parse_cache import load_parse_cache, prepare_parse_source, save_parse_cach
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
-    """Lê flags de rollout sem permitir valores arbitrários no pipeline."""
+    """Lê flags operacionais sem registrar conteúdo do documento."""
     value = os.getenv(name)
     if value is None:
         return default
@@ -40,7 +41,7 @@ def _env_flag(name: str, default: bool = False) -> bool:
 
 
 class _PipelineTiming:
-    """Medição opcional, sem registrar texto da prova ou dados do usuário."""
+    """Mede etapas sem incluir enunciados, respostas ou dados do usuário."""
 
     def __init__(self) -> None:
         self.enabled = _env_flag("PDF_PIPELINE_TIMING", default=False)
@@ -58,7 +59,7 @@ class _PipelineTiming:
             return
         payload = {
             "event": "pdf_pipeline_timing",
-            "pages": pages,
+            "pages": int(pages),
             "questions": questions,
             "stages_seconds": self.stages,
             "total_seconds": round(time.perf_counter() - self.started_at, 4),
@@ -66,178 +67,181 @@ class _PipelineTiming:
         print(json.dumps(payload, ensure_ascii=False, sort_keys=True), flush=True)
 
 
-def _build_question_spatial_map_legacy(
-    doc: fitz.Document,
-    start_page: int,
-    total_pages: int,
-) -> Tuple[Dict[int, Tuple[int, float, float]], Dict[int, List[Any]]]:
-    """Implementação anterior, mantida como fallback operacional imediato."""
-    q_spatial_map: Dict[int, Tuple[int, float, float]] = {}
-    page_text_blocks: Dict[int, List[Any]] = {}
-
-    for p_idx in range(start_page, total_pages):
-        page = doc[p_idx]
-        blocks = page.get_text('blocks')
-        page_text_blocks[p_idx] = blocks
-        for q_num in range(1, 201):
-            if q_num in q_spatial_map:
-                continue
-            queries = [
-                f"Questão {q_num:02d}",
-                f"Questão {q_num}",
-                f"QUESTÃO {q_num:02d}",
-                f"QUESTÃO {q_num}",
-                f"ITEM {q_num:02d}",
-                f"ITEM {q_num}",
-                f"Questão\n{q_num:02d}",
-                f"Questão\n{q_num}",
-            ]
-            for q_str in queries:
-                rects = page.search_for(q_str)
-                if rects:
-                    rects.sort(key=lambda r: r.y0)
-                    r = rects[0]
-                    q_spatial_map[q_num] = (p_idx, r.x0, r.y0)
-                    break
-
-    for p_idx in range(start_page, total_pages):
-        for b in page_text_blocks[p_idx]:
-            bx0, by0, bx1, by1, b_text = b[:5]
-            for hm in re.finditer(
-                r'(?:^|\n)\s*(0*\d{1,3})\s*[\.\-\–\—\)]\s+(?=[A-Z\u00C0-\u00DC"\'\(])',
-                b_text,
-            ):
-                try:
-                    num_val = int(hm.group(1))
-                    if 1 <= num_val <= 200 and num_val not in q_spatial_map:
-                        q_spatial_map[num_val] = (p_idx, bx0, by0)
-                except ValueError:
-                    pass
-
-    for p_idx in range(start_page, total_pages):
-        for b in page_text_blocks[p_idx]:
-            bx0, by0, bx1, by1, b_text = b[:5]
-            clean_bt = b_text.strip()
-            if clean_bt.isdigit():
-                try:
-                    num_val = int(clean_bt)
-                    if 1 <= num_val <= 200 and num_val not in q_spatial_map:
-                        q_spatial_map[num_val] = (p_idx, bx0, by0)
-                except ValueError:
-                    pass
-            else:
-                for hm in re.finditer(
-                    r'(?:^|\n)\s*(0*\d{1,3})\s*(?:\n|\s{2,})(?=[A-Z\u00C0-\u00DC"\'\(\«\“\‘]|$)',
-                    b_text,
-                ):
-                    try:
-                        num_val = int(hm.group(1))
-                        if 1 <= num_val <= 200 and num_val not in q_spatial_map:
-                            q_spatial_map[num_val] = (p_idx, bx0, by0)
-                    except ValueError:
-                        pass
-
-    return q_spatial_map, page_text_blocks
+_NATIVE_QUESTION_HEADER_RE = re.compile(
+    r"(?im)^\s*(?:(?:quest(?:[ãa]o|ao)|item)\s*)?"
+    # Scans antigos às vezes convertem o ponto de ``19.`` em aspas.
+    r"0*(\d{1,3})\s*[\.\)\-–—,:\"'](?=\s|$)"
+)
+_NATIVE_OPTION_MARKER_RE = re.compile(
+    r"(?im)^\s*(?:\(?[A-Ea-e]\s*\)|[A-Ea-e]\s*[\.\-:])\s+"
+)
+_DECLARED_QUESTION_COUNT_PATTERNS = (
+    re.compile(
+        r"(?i)\b(?:composto|cont[eé]m|contendo|total(?:iza|de)?)"
+        r"\D{0,30}(\d{1,3})\s+quest(?:[õo]es|oes)\b"
+    ),
+    re.compile(r"(?i)\b(\d{1,3})\s+quest(?:[õo]es|oes)\b"),
+)
 
 
-def _build_question_spatial_map_fast(
-    doc: fitz.Document,
-    start_page: int,
-    total_pages: int,
-) -> Tuple[Dict[int, Tuple[int, float, float]], Dict[int, List[Any]]]:
-    """Mapeia cabeçalhos em uma passagem e usa busca física só nos candidatos reais.
+def _native_question_numbers(text: str) -> List[int]:
+    """Retorna os rótulos numéricos que parecem cabeçalhos de questões."""
+    numbers = {
+        int(match.group(1))
+        for match in _NATIVE_QUESTION_HEADER_RE.finditer(str(text or ""))
+        if 1 <= int(match.group(1)) <= 250
+    }
+    return sorted(numbers)
 
-    O comportamento semântico continua igual: quando um cabeçalho textual existe,
-    a coordenada precisa do ``search_for`` tem precedência; coordenadas de bloco
-    são o fallback para numeração quebrada, OCR e cabeçalhos pontuados.
+
+def _declared_question_count(text: str) -> Optional[int]:
+    """Encontra uma quantidade de questões declarada no caderno/capa."""
+    candidates = []
+    source = str(text or "")
+    for pattern in _DECLARED_QUESTION_COUNT_PATTERNS:
+        candidates.extend(int(match.group(1)) for match in pattern.finditer(source))
+    plausible = [value for value in candidates if 5 <= value <= 250]
+    return max(plausible) if plausible else None
+
+
+def _assess_native_text_quality(
+    full_text: str,
+    *,
+    document_text: str = "",
+    total_pages: int = 1,
+    image_page_count: int = 0,
+    total_image_count: int = 0,
+) -> Dict[str, Any]:
+    """Avalia se a camada nativa parece confiável para estruturar a prova.
+
+    PDFs escaneados frequentemente carregam uma camada OCR ruim: ela pode ter
+    milhares de caracteres, mas perder cabeçalhos, letras das alternativas e
+    pedaços de palavras. Contar caracteres, sozinho, classifica esses arquivos
+    incorretamente como documentos textuais.
     """
-    explicit_re = re.compile(
-        r'(?:^|\n)\s*(?:(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+)|ITEM\s+)(0*\d{1,3})\b',
+    text = str(full_text or "")
+    document_source = str(document_text or text)
+    question_numbers = _native_question_numbers(text)
+    declared_count = _declared_question_count(document_source)
+    option_marker_count = len(_NATIVE_OPTION_MARKER_RE.findall(text))
+    replacement_count = text.count("\ufffd")
+    mojibake_count = len(
+        re.findall(r"(?:Ã[\x80-\xbf]|Â[\x80-\xbf]|â(?:[\x80-\xbf]|[€™œ]))", text)
+    )
+    page_count = max(1, int(total_pages or 1))
+    image_ratio = float(image_page_count or 0) / page_count
+    average_images = float(total_image_count or 0) / page_count
+    scan_like = image_ratio >= 0.75 and average_images >= 2.0
+
+    reasons: List[str] = []
+    if replacement_count >= 3:
+        reasons.append(f"replacement_chars:{replacement_count}")
+    if mojibake_count >= 3:
+        reasons.append(f"mojibake_sequences:{mojibake_count}")
+    if declared_count and len(question_numbers) < declared_count:
+        reasons.append(
+            f"question_coverage:{len(question_numbers)}/{declared_count}"
+        )
+
+    # Em um scan com várias imagens, a ausência das marcações A..E é um sinal
+    # forte de que a camada nativa perdeu a estrutura visual das alternativas.
+    if scan_like and question_numbers and option_marker_count < max(
+        4, math.ceil(len(question_numbers) * 0.5)
+    ):
+        reasons.append(
+            f"option_marker_density:{option_marker_count}/{len(question_numbers)}"
+        )
+
+    return {
+        "needs_vision_ocr": bool(reasons),
+        "reasons": reasons,
+        "declared_question_count": declared_count,
+        "question_numbers": question_numbers,
+        "question_count": len(question_numbers),
+        "option_marker_count": option_marker_count,
+        "replacement_count": replacement_count,
+        "mojibake_count": mojibake_count,
+        "image_page_ratio": image_ratio,
+        "average_images_per_page": average_images,
+    }
+
+
+def _extract_native_question_chunks(doc: fitz.Document) -> Dict[int, str]:
+    """Extrai blocos espaciais da camada nativa para recuperação do scan."""
+    damaged_header_re = re.compile(
+        r'^\s*(?:\ufffd|í|I|!|\|)\s*(\d)\s*[\.,\-–—\)\"\']\s*(.*)$',
         re.IGNORECASE,
     )
-    punctuated_re = re.compile(
-        r'(?:^|\n)\s*(0*\d{1,3})\s*[\.\-\–\—\)]\s+(?=[A-Z\u00C0-\u00DC"\'\(])',
+    damaged_thirty_re = re.compile(
+        r'^\s*3\s*[üuU]\s*[\.,\-–—\)\"\']\s*(.*)$',
+        re.IGNORECASE,
     )
-    separated_re = re.compile(
-        r'(?:^|\n)\s*(0*\d{1,3})\s*(?:\n|\s{2,})(?=[A-Z\u00C0-\u00DC"\'\(\«\“\‘]|$)',
-    )
+    chunks: Dict[int, str] = {}
+    current_number: Optional[int] = None
+    current_lines: List[str] = []
 
-    q_spatial_map: Dict[int, Tuple[int, float, float]] = {}
-    page_text_blocks: Dict[int, List[Any]] = {}
-    explicit_candidates: Dict[int, List[Tuple[int, float, float, str]]] = {}
+    def flush_current() -> None:
+        nonlocal current_number, current_lines
+        if current_number is not None and current_lines:
+            chunks.setdefault(current_number, '\n'.join(current_lines).strip())
+        current_number = None
+        current_lines = []
 
-    for p_idx in range(start_page, total_pages):
-        page = doc[p_idx]
-        blocks = page.get_text('blocks')
-        page_text_blocks[p_idx] = blocks
-
-        for b in blocks:
-            bx0, by0, _bx1, _by1, b_text = b[:5]
-            block_text = str(b_text or '')
-
-            for match in explicit_re.finditer(block_text):
-                try:
-                    q_num = int(match.group(1))
-                except ValueError:
+    for page in doc:
+        try:
+            native_dict = page.get_text('dict')
+        except Exception:
+            continue
+        page_lines = []
+        for block in native_dict.get('blocks', []):
+            if block.get('type') != 0:
+                continue
+            for native_line in block.get('lines', []):
+                text = ' '.join(
+                    str(span.get('text') or '').strip()
+                    for span in native_line.get('spans', [])
+                    if str(span.get('text') or '').strip()
+                ).strip()
+                if not text:
                     continue
-                if 1 <= q_num <= 200:
-                    prefix = block_text[match.start():match.end()].upper()
-                    kind = 'ITEM' if prefix.lstrip().startswith('ITEM') else 'QUESTAO'
-                    explicit_candidates.setdefault(q_num, []).append((p_idx, bx0, by0, kind))
+                x0 = float(native_line.get('bbox', (999, 0, 0, 0))[0])
+                y0 = float(native_line.get('bbox', (0, 999999, 0, 0))[1])
+                page_lines.append((y0, x0, text))
 
-            for pattern in (punctuated_re, separated_re):
-                for match in pattern.finditer(block_text):
-                    try:
-                        q_num = int(match.group(1))
-                    except ValueError:
+        # A camada OCR embutida do PDF nem sempre está ordenada pelos blocos
+        # visuais. Em scans isso colocava o texto da questão 39 dentro da 38
+        # e o da 16 dentro da 15, apesar de os cabeçalhos terem coordenadas
+        # corretas.
+        for _y0, x0, text in sorted(
+            page_lines,
+            key=lambda item: (round(item[0] / 3.0) * 3.0, item[1]),
+        ):
+                match = _NATIVE_QUESTION_HEADER_RE.match(text)
+                damaged_match = damaged_header_re.match(text) if not match else None
+                thirty_match = damaged_thirty_re.match(text) if not match and not damaged_match else None
+                if (match or damaged_match or thirty_match) and x0 < 75:
+                    if damaged_match:
+                        suffix = int(damaged_match.group(1))
+                        question_number = 10 + suffix
+                        normalized = f'{question_number}. {damaged_match.group(2).strip()}'.strip()
+                    elif thirty_match:
+                        question_number = 30
+                        normalized = f'30. {thirty_match.group(1).strip()}'.strip()
+                    else:
+                        question_number = int(match.group(1))
+                        normalized = text
+                    if not 1 <= question_number <= 250:
                         continue
-                    if 1 <= q_num <= 200 and q_num not in q_spatial_map:
-                        q_spatial_map[q_num] = (p_idx, bx0, by0)
+                    flush_current()
+                    current_number = question_number
+                    current_lines = [normalized]
+                elif current_number is not None:
+                    current_lines.append(text)
+        # A question may continue on the next page, so the active block is
+        # intentionally carried across page boundaries.
 
-            if block_text.strip().isdigit():
-                try:
-                    q_num = int(block_text.strip())
-                except ValueError:
-                    q_num = 0
-                if 1 <= q_num <= 200 and q_num not in q_spatial_map:
-                    q_spatial_map[q_num] = (p_idx, bx0, by0)
-
-    for q_num, candidates in explicit_candidates.items():
-        candidates.sort(key=lambda item: (item[0], item[2], item[1]))
-        for p_idx, bx0, by0, kind in candidates:
-            label = 'ITEM' if kind == 'ITEM' else 'Questão'
-            queries = [
-                f'{label} {q_num:02d}',
-                f'{label} {q_num}',
-                f'{label.upper()} {q_num:02d}',
-                f'{label.upper()} {q_num}',
-            ]
-            page = doc[p_idx]
-            found = None
-            for query in queries:
-                rects = page.search_for(query)
-                if rects:
-                    rects.sort(key=lambda r: r.y0)
-                    found = rects[0]
-                    break
-            if found is not None:
-                q_spatial_map[q_num] = (p_idx, found.x0, found.y0)
-            else:
-                q_spatial_map[q_num] = (p_idx, bx0, by0)
-            break
-
-    return q_spatial_map, page_text_blocks
-
-
-def _build_question_spatial_map(
-    doc: fitz.Document,
-    start_page: int,
-    total_pages: int,
-) -> Tuple[Dict[int, Tuple[int, float, float]], Dict[int, List[Any]]]:
-    """Seleciona o mapa rápido; ``PDF_PIPELINE_FAST_SPATIAL_MAP=0`` faz rollback."""
-    if not _env_flag("PDF_PIPELINE_FAST_SPATIAL_MAP", default=True):
-        return _build_question_spatial_map_legacy(doc, start_page, total_pages)
-    return _build_question_spatial_map_fast(doc, start_page, total_pages)
+    flush_current()
+    return chunks
 
 def extract_options_from_chunk(chunk: str) -> Tuple[Dict[str, str], Optional[str]]:
     """
@@ -318,6 +322,17 @@ def extract_options_from_chunk(chunk: str) -> Tuple[Dict[str, str], Optional[str
         formatted_opt, _ = format_latex_formulas(opt_content)
         options[letter] = formatted_opt
 
+    short_non_numeric = sum(
+        1
+        for value in options.values()
+        if len(re.sub(r'\s+', '', str(value or ''))) <= 3
+        and not re.search(r'\d', str(value or ''))
+    )
+    if short_non_numeric >= 2:
+        # Sequências A..D capturadas em rótulos de diagramas costumam gerar
+        # valores como "D A", "E" e "C B". Elas não são alternativas válidas.
+        return {}, None
+
     return options, new_enunciado
 
 def extract_heuristic_options(chunk: str) -> Tuple[Optional[Dict[str, str]], str]:
@@ -329,43 +344,728 @@ def extract_heuristic_options(chunk: str) -> Tuple[Optional[Dict[str, str]], str
     if not chunk or len(chunk.strip()) < 20:
         return None, chunk
 
-    lines = [l.strip() for l in chunk.split('\n') if l.strip()]
-    
-    # Se temos poucas linhas separadas por newline, tenta quebrar por períodos após o comando da questão
-    if len(lines) < 4:
-        # Tenta isolar o comando (ex: "assinale a alternativa correta:")
-        m_cmd = re.search(r'(?:assinale|marque|indique|identifique|correto|incorreto|podemos\s+afirmar|conclui-se|qual\s+alternativa)[^\.\:\?]*[\.\:\?]\s*', chunk, re.IGNORECASE)
-        if m_cmd:
-            cmd_end = m_cmd.end()
-            enunc_part = chunk[:cmd_end].strip()
-            rest_part = chunk[cmd_end:].strip()
-            sub_lines = [l.strip() for l in re.split(r'(?:\n+|\.(?=\s+[A-Z\u00C0-\u00DC]))', rest_part) if l.strip()]
-            if len(sub_lines) in [4, 5]:
-                lines = [enunc_part] + sub_lines
+    def is_noise_line(line: str) -> bool:
+        normalized = re.sub(r'[^a-zA-Z0-9]', '', line or '').lower()
+        if normalized in {
+            'oficialdeadministracao',
+            'pcimarkpci',
+            'wwwpciconcursoscombr',
+            '1n',
+            '2n',
+            '3n',
+            '4n',
+            '5n',
+            '6n',
+            '7n',
+        }:
+            return True
+        if (
+            normalized.startswith('pcimarkpci')
+            or normalized.startswith('wwwpciconcursoscombr')
+            or normalized.startswith(('oicialdeadministra', 'oflcialdeadministra'))
+        ):
+            return True
+        if re.fullmatch(r'(?i)f{2,}i?\s*[itluü]*', line or ''):
+            return True
+        if re.fullmatch(r'\s*[Àà]\s*', line or ''):
+            return True
+        return bool(re.search(
+            r'(?i)(?:of[ií]cial|o[ií]icial|oflcial)\s+de\s+administra',
+            line or '',
+        ))
 
+    def is_standalone_marker(line: str) -> bool:
+        if re.fullmatch(
+            r'\s*[\(\[\{]?\s*[A-Ea-e]\s*[\)\]\}\.\-]?\s*',
+            line or '',
+        ):
+            return True
+        if re.fullmatch(r'\s*[\(\[\{]\s*[A-Za-z]\s*[\)\]\}]?\s*', line or ''):
+            # Ex.: ``(p`` é a leitura degradada de um marcador circular da
+            # figura, não uma quinta alternativa.
+            return True
+        # Símbolos de círculos e letras corrompidas que o OCR separa do texto.
+        return bool(re.fullmatch(
+            r'\s*[\(\[\{]?(?:[@§©®•*#�]+|[!|/\\]{1,3}[A-Za-z]?|[lI][O0]?|'
+            r'[GgÜüYyOoVv]|[âãäöüç§©®]+|\d{1,2})\s*[\)\]\}\.,:\-]?\s*',
+            line or '',
+        ))
+
+    def clean_marker_prefix(line: str) -> str:
+        text = (line or '').strip()
+        text = re.sub(
+            r'^\s*\(?[A-Ea-e]\s*[\)\.\-–—:]\s+(?=\S)',
+            '',
+            text,
+        )
+        text = re.sub(
+            r'^\s*[\{\[\(@§©®•*#�/\\|]+'
+            r'(?:\s*["\']?\d+)?\s*',
+            '',
+            text,
+        )
+        text = re.sub(
+            r'^\s*[-/]{1,3}[A-Za-z]{0,2}\s+',
+            '',
+            text,
+        )
+        text = re.sub(
+            r'^\s*[!|/\\]{1,3}[A-Za-z]?\s+',
+            '',
+            text,
+        )
+        text = re.sub(
+            r'^\s*[A-Za-z]{1,3}\s*[\)\.\-]\s+(?=\S)',
+            '',
+            text,
+        )
+        text = re.sub(
+            r'^\s*[lI][O0]\s+',
+            '',
+            text,
+        )
+        # Uma alternativa da questão 40 pode começar por ``I,``/``II,``.
+        # Não tratar esse prefixo romano como uma letra de marcador perdida;
+        # somente remove sequências alfabéticas fora da lista romana.
+        roman_list_prefix_re = re.compile(
+            r'^\s*(?:I|II|III|IV|V|VI|VII|VIII|IX|Il|Ill|lV|Vl|VIl|Vll|Vlll|lX)\s*[,;:]\s+',
+            re.IGNORECASE,
+        )
+        if not roman_list_prefix_re.match(text):
+            text = re.sub(
+                r'^\s*[A-ZÀ-Ý]{1,3}\s*[,;:]\s+(?=[A-Za-zÀ-ÿ0-9])',
+                '',
+                text,
+            )
+        text = re.sub(
+            r'^\s*[íÍàÀäöüç]{1,3}\s+(?=[A-Za-zÀ-ÿ])',
+            '',
+            text,
+        )
+        return text.strip()
+
+    raw_lines = []
+    for raw_line in chunk.split('\n'):
+        line = raw_line.strip()
+        if not line or is_noise_line(line):
+            continue
+        raw_lines.append(line)
+
+    if len(raw_lines) < 4:
+        return None, chunk
+
+    def cleaned_lines_from(source: List[str]) -> List[str]:
+        cleaned = []
+        for line in source:
+            if is_standalone_marker(line):
+                continue
+            text = clean_marker_prefix(line)
+            if text:
+                cleaned.append(text)
+        return cleaned
+
+    lines = cleaned_lines_from(raw_lines)
     if len(lines) < 4:
         return None, chunk
 
-    cleaned_lines = []
-    for l in lines:
-        c = re.sub(r'^(?:[\@\§\©\®\•\*\#\(\[\{]{1,3}[A-Za-z0-9\s]*[\)\]\}]?|[A-Za-z]\s*[\.\,\)]|[\(]?\s*[\â\ã\ä\ö\ü\ç\§\©\®\d]\s*[\)]?)\s*', '', l).strip()
-        cleaned_lines.append(c if c else l)
+    def format_option_candidate(candidate_opts: List[str], candidate_enunciado: str):
+        if len(candidate_opts) not in (4, 5) or len(candidate_enunciado) < 15:
+            return None
+        letters = ['A', 'B', 'C', 'D', 'E'][:len(candidate_opts)]
+        options_dict = {}
+        for idx, opt_txt in enumerate(candidate_opts):
+            opt_clean = restore_exam_typography(opt_txt, is_option=True)
+            formatted_opt, _ = format_latex_formulas(opt_clean)
+            options_dict[letters[idx]] = formatted_opt
+        return options_dict, candidate_enunciado
+
+    def marked_option_groups(source: List[str]) -> List[str]:
+        """Reconstrói opções quando o círculo/rotulagem ficou separado."""
+        groups: List[str] = []
+        current: List[str] = []
+        pending_marker = False
+
+        for raw_line in source:
+            if is_noise_line(raw_line):
+                continue
+            if is_standalone_marker(raw_line):
+                pending_marker = True
+                continue
+
+            cleaned = clean_marker_prefix(raw_line)
+            if not cleaned:
+                continue
+            attached_marker = cleaned != raw_line.strip()
+            starts_option = pending_marker or attached_marker
+
+            if starts_option and current:
+                groups.append(' '.join(current).strip())
+                current = []
+            if starts_option or current:
+                current.append(cleaned)
+            else:
+                current = [cleaned]
+            pending_marker = False
+
+        if current:
+            groups.append(' '.join(current).strip())
+        return groups
+
+    punctuation_commands = [
+        idx for idx, line in enumerate(lines)
+        if re.search(r'[\?\:]\s*$', line)
+    ]
+    keyword_commands = [
+        idx for idx, line in enumerate(lines)
+        if re.search(
+            r'(?:assinale|marque|indique|identifique|correto|incorreto|'
+            r'podemos\s+afirmar|qual\s+alternativa|dizer)',
+            line,
+            re.IGNORECASE,
+        )
+    ]
+    if punctuation_commands:
+        command_index = punctuation_commands[-1]
+    elif keyword_commands:
+        command_index = keyword_commands[0]
+    else:
+        command_index = -1
+
+    # Usa os marcadores danificados como fronteiras. Isso evita juntar as
+    # duas linhas de uma alternativa ao início da alternativa seguinte.
+    if command_index >= 0:
+        raw_command = lines[command_index]
+        raw_command_position = raw_lines.index(raw_command) if raw_command in raw_lines else command_index
+        raw_tail = raw_lines[raw_command_position + 1:]
+        marker_start = next(
+            (
+                marker_idx
+                for marker_idx, marker_line in enumerate(raw_tail)
+                if is_standalone_marker(marker_line)
+                or clean_marker_prefix(marker_line) != marker_line.strip()
+            ),
+            0,
+        )
+        marked_groups = marked_option_groups(raw_tail[marker_start:])
+        if len(marked_groups) in (4, 5):
+            statement_lines = cleaned_lines_from(
+                raw_lines[:raw_command_position + 1 + marker_start],
+            )
+            candidate = format_option_candidate(
+                marked_groups,
+                '\n'.join(statement_lines).strip(),
+            )
+            if candidate:
+                return candidate
+        direct_tail = lines[command_index + 1:]
+        if len(direct_tail) in (4, 5):
+            candidate = format_option_candidate(
+                direct_tail,
+                '\n'.join(lines[:command_index + 1]).strip(),
+            )
+            if candidate:
+                return candidate
+
+    # Quando o comando da questão termina em ':' ou '?', a sequência seguinte
+    # costuma ser exatamente a lista de alternativas. Usar essa fronteira é
+    # mais seguro que pegar cegamente as últimas quatro linhas: em scans o OCR
+    # pode inserir letras soltas de diagramas entre elas.
+    for cmd_idx in range(len(lines) - 4, -1, -1):
+        command_line = lines[cmd_idx]
+        if not (
+            re.search(r'[\?\:]\s*$', command_line)
+            or re.search(
+                r'(?:assinale|marque|indique|identifique|correto|incorreto|'
+                r'podemos\s+afirmar|qual\s+alternativa|dizer)',
+                command_line,
+                re.IGNORECASE,
+            )
+        ):
+            continue
+        tail = lines[cmd_idx + 1:]
+        if len(tail) in (4, 5):
+            candidate = format_option_candidate(
+                tail,
+                '\n'.join(lines[:cmd_idx + 1]).strip(),
+            )
+            if candidate:
+                return candidate
 
     for num_opts in [5, 4]:
-        if len(cleaned_lines) >= num_opts + 1:
-            candidate_opts = cleaned_lines[-num_opts:]
+        if len(lines) >= num_opts + 1:
+            candidate_opts = lines[-num_opts:]
             candidate_enunciado = '\n'.join(lines[:-num_opts]).strip()
 
-            if all(len(opt) >= 1 for opt in candidate_opts) and len(candidate_enunciado) >= 15:
-                letters = ['A', 'B', 'C', 'D', 'E'][:num_opts]
-                options_dict = {}
-                for idx, opt_txt in enumerate(candidate_opts):
-                    opt_clean = restore_exam_typography(opt_txt, is_option=True)
-                    formatted_opt, _ = format_latex_formulas(opt_clean)
-                    options_dict[letters[idx]] = formatted_opt
-                return options_dict, candidate_enunciado
+            if all(len(opt) >= 1 for opt in candidate_opts):
+                candidate = format_option_candidate(candidate_opts, candidate_enunciado)
+                if candidate:
+                    return candidate
 
     return None, chunk
+
+
+def _score_option_map(options: Optional[Dict[str, str]]) -> float:
+    """Pontua a qualidade estrutural de um conjunto de alternativas."""
+    if not options or len(options) < 4:
+        return float('-inf')
+
+    roman_tokens = {
+        'i': 'I', 'ii': 'II', 'iii': 'III', 'iv': 'IV', 'v': 'V',
+        'vi': 'VI', 'vii': 'VII', 'viii': 'VIII', 'ix': 'IX',
+        # Confusões recorrentes do OCR visual/nativo desta família de provas.
+        'i1': 'II', 'il': 'II', 'll': 'II', 'ill': 'III', 'lll': 'III', 'lv': 'IV', 'vl': 'VI',
+        'vil': 'VII', 'vll': 'VII', 'vill': 'VIII', 'vlll': 'VIII', 'lx': 'IX', '1': 'I',
+    }
+
+    def roman_list_profile(value: str) -> Tuple[int, int]:
+        tokens = re.findall(r'[A-Za-z0-9]+', value or '')
+        if len(tokens) < 3 or not (',' in value or re.search(r'\be\b', value, re.I)):
+            return 0, 0
+        content_tokens = [token for token in tokens if token.lower() != 'e']
+        if len(content_tokens) < 3:
+            return 0, 0
+        # Texto comum de alternativas como ``nos itens I e III, apenas``
+        # também contém algarismos romanos, mas não é uma lista romana pura.
+        # Palavras maiores que quatro caracteres distinguem esse caso dos
+        # conjuntos curtos usados nas questões de protocolo.
+        if any(len(token) > 4 for token in content_tokens):
+            return 0, 0
+        valid = sum(1 for token in content_tokens if token.lower() in roman_tokens)
+        invalid = len(content_tokens) - valid
+        return valid, invalid
+
+    score = 40.0 if len(options) == 4 else 15.0
+    for value in options.values():
+        text = str(value or '').strip()
+        compact = re.sub(r'\s+', '', text)
+        words = re.findall(r'[A-Za-zÀ-ÿ]{2,}', text)
+        score += min(len(text), 220) / 6.0
+        score += min(len(words), 24) * 2.0
+        score += min(text.count(' '), 20) * 0.5
+
+        if len(compact) <= 3:
+            score -= 28.0
+            if not re.search(r'\d', text):
+                score -= 42.0
+        elif len(compact) <= 6 and not re.search(r'\d', text):
+            score -= 12.0
+        if re.search(r'pcimarkpci|www\.pciconcursos|oficial\s+de\s+administra', text, re.I):
+            score -= 100.0
+        if '\ufffd' in text or re.search(r'(?:Ã[\x80-\xbf]|Â[\x80-\xbf])', text):
+            score -= 12.0
+        if re.match(r'^\s*[^A-Za-zÀ-ÿ0-9"\']{1,3}\s*$', text):
+            score -= 24.0
+
+        # Alternativas matemáticas curtas continuam sendo válidas quando
+        # apresentam uma expressão numérica reconhecível.
+        if len(compact) <= 10 and re.search(r'\d', text):
+            score += 16.0
+
+        # Frações/razões são alternativas completas mesmo quando têm somente
+        # três ou quatro caracteres; sem este bônus elas perdem para ruídos
+        # como ``2tt3`` por causa da penalização de texto curto.
+        if re.fullmatch(r'\d+\s*/\s*\d+\.?', text):
+            score += 72.0
+        elif len(compact) <= 12 and re.search(r'\d', text) and not re.fullmatch(
+            r'[\d\s.,%()+\-×*/^]+', text
+        ):
+            # Não deixar uma expressão numérica corrompida (``2tt3`` ou
+            # ``Gi t4``) vencer uma fração recuperada do OCR visual.
+            score -= 55.0
+
+        valid_roman, invalid_roman = roman_list_profile(text)
+        if valid_roman:
+            score += valid_roman * 16.0
+            score -= invalid_roman * 34.0
+
+    return score
+
+
+def _normalize_roman_list_option(text: str) -> str:
+    """Normaliza tokens romanos somente em alternativas que são listas."""
+    value = str(text or '')
+    # O OCR ocasionalmente cola o conector em ``V e VI`` como ``Ve Vl``.
+    value = re.sub(
+        r'(?i)(?<![A-Za-z0-9])([ivx]+)e(?=\s*[ivx])',
+        r'\1 e',
+        value,
+    )
+    roman_tokens = {
+        'i': 'I', 'ii': 'II', 'iii': 'III', 'iv': 'IV', 'v': 'V',
+        'vi': 'VI', 'vii': 'VII', 'viii': 'VIII', 'ix': 'IX',
+        'i1': 'II', 'il': 'II', 'll': 'II', 'ill': 'III', 'lll': 'III', 'lv': 'IV', 'vl': 'VI',
+        'vil': 'VII', 'vll': 'VII', 'vill': 'VIII', 'vlll': 'VIII', 'lx': 'IX', '1': 'I',
+    }
+    tokens = re.findall(r'[A-Za-z0-9]+', value)
+    content_tokens = [token for token in tokens if token.lower() != 'e']
+    if len(content_tokens) < 3 or not (',' in value or re.search(r'\be\b', value, re.I)):
+        return value
+    if not all(token.lower() in roman_tokens for token in content_tokens):
+        return value
+
+    return re.sub(
+        r'(?<![A-Za-z0-9])[A-Za-z0-9]+(?![A-Za-z0-9])',
+        lambda match: roman_tokens.get(match.group(0).lower(), match.group(0)),
+        value,
+    )
+
+
+def _recover_scan_options_at_high_resolution(
+    doc: fitz.Document,
+    questions: List[Dict[str, Any]],
+    q_spatial_map: Dict[int, Tuple[int, float, float]],
+    dpi: int = 400,
+) -> None:
+    """Recupera alternativas curtas que o OCR padrão confundiu no scan.
+
+    A passada normal é suficiente para a maior parte do caderno. Se uma
+    questão ainda tiver uma expressão numérica corrompida, uma lista romana
+    ambígua ou quantidade diferente de quatro alternativas, repete somente a
+    página correspondente em alta resolução e substitui o mapa apenas quando
+    a nova estrutura for claramente melhor.
+    """
+    from .media.vision_pipeline import _supplement_native_question_headers
+    from services.pdf_pipeline.layout.layout_detector import (
+        _get_ocr_engine,
+        extract_ocr_lines_three_passes,
+    )
+
+    roman_confusion_re = re.compile(
+        r"(?i)(?<![A-Za-z0-9])(?:i1|il|ill|ivl?|vll|vlll|lx)(?![A-Za-z0-9])"
+    )
+
+    def needs_precision(question: Dict[str, Any]) -> bool:
+        options = question.get('opcoes') or {}
+        if len(options) != 4:
+            return True
+        for value in options.values():
+            text = str(value or '').strip()
+            compact = re.sub(r'\s+', '', text)
+            if roman_confusion_re.search(text):
+                return True
+            if (
+                len(compact) <= 12
+                and re.search(r'\d', text)
+                and not re.fullmatch(r'[\d\s.,%()+\-×*/^]+', text)
+            ):
+                return True
+        return False
+
+    targets = {
+        int(question.get('numero_questao'))
+        for question in questions
+        if str(question.get('numero_questao', '')).isdigit()
+        and needs_precision(question)
+    }
+    if not targets:
+        return
+
+    page_targets: Dict[int, Set[int]] = {}
+    for q_num in targets:
+        spatial = q_spatial_map.get(q_num)
+        if spatial:
+            page_targets.setdefault(int(spatial[0]), set()).add(q_num)
+    if not page_targets:
+        return
+
+    question_by_number = {
+        int(question['numero_questao']): question
+        for question in questions
+        if str(question.get('numero_questao', '')).isdigit()
+    }
+    header_re = re.compile(r'^\s*0*(\d{1,3})\s*[\.\)\-–—,:]\s*')
+
+    def crop_option_lines(
+        page: fitz.Page,
+        block_lines: List[Dict[str, Any]],
+    ) -> List[str]:
+        """Executa OCR em uma faixa estreita, onde as opções realmente estão."""
+        option_lines = []
+        page_width = float(page.rect.width)
+        for line in block_lines:
+            text = str(line.get('text') or '').strip()
+            x0 = float(line.get('x0', 0.0))
+            y0 = float(line.get('y0', 0.0))
+            if not text or not (page_width * 0.16 <= x0 <= page_width * 0.50):
+                continue
+            if y0 >= float(page.rect.height) * 0.95:
+                continue
+            if re.fullmatch(r'\s*[A-Ea-e]\s*', text):
+                continue
+            if re.fullmatch(r'\s*\d{2,4}\s*', text):
+                continue
+            option_lines.append(line)
+        if len(option_lines) < 4:
+            return []
+
+        # Uma faixa um pouco mais larga preserva o contexto dos círculos e da
+        # linha inteira. O recorte estreito fazia o RapidOCR trocar ``VI``
+        # por ``V`` e fundir o conector ``e``.
+        x0 = max(0.0, float(page.rect.width) * 0.097)
+        x1 = min(float(page.rect.width), float(page.rect.width) * 0.529)
+        y0 = max(0.0, min(float(line.get('y0', 0.0)) for line in option_lines) - 21.0)
+        y1 = min(float(page.rect.height), max(float(line.get('y1', 0.0)) for line in option_lines) + 10.0)
+        if x1 <= x0 or y1 <= y0:
+            return []
+
+        engine = _get_ocr_engine()
+        if not engine:
+            return []
+        try:
+            crop_rect = fitz.Rect(x0, y0, x1, y1)
+            precision_dpi = 400
+            pix = page.get_pixmap(clip=crop_rect, dpi=precision_dpi)
+            results, _ = engine(pix.tobytes('png'))
+        except Exception:
+            return []
+        if not results:
+            return []
+
+        scale = 72.0 / precision_dpi
+        recognized = []
+        for box, text, score in results:
+            clean_text = str(text or '').strip()
+            if not clean_text or float(score or 0.0) < 0.4:
+                continue
+            xs = [float(point[0]) for point in box]
+            ys = [float(point[1]) for point in box]
+            recognized.append((
+                y0 + min(ys) * scale,
+                x0 + min(xs) * scale,
+                clean_text,
+            ))
+        recognized.sort(key=lambda item: (item[0], item[1]))
+
+        texts = []
+        for _line_y, line_x, text in recognized:
+            if line_x < page_width * 0.14:
+                continue
+            if re.fullmatch(r'\s*[A-Ea-e]\s*', text):
+                continue
+            if re.fullmatch(r'\s*[\(\[\{]?[A-Za-z]\s*[\)\]\}]?\s*', text):
+                continue
+            if re.fullmatch(r'\s*\d{2,4}\s*', text):
+                continue
+            texts.append(text)
+        return texts if len(texts) == 4 else texts[-4:]
+
+    for page_index, page_question_numbers in page_targets.items():
+        if page_index < 0 or page_index >= len(doc):
+            continue
+        page = doc[page_index]
+        try:
+            lines = extract_ocr_lines_three_passes(
+                page,
+                dpi=max(300, int(dpi)),
+                min_score=0.25,
+            )
+            lines = _supplement_native_question_headers(page, lines)
+        except Exception as exc:
+            print(f"[Precision OCR] Falha na página {page_index + 1}: {exc}", flush=True)
+            continue
+        if not lines:
+            continue
+
+        blocks: Dict[int, List[Dict[str, Any]]] = {}
+        current_number: Optional[int] = None
+        for line in sorted(
+            lines,
+            key=lambda item: (
+                round(float(item.get('y0', 0.0)) / 4.0) * 4.0,
+                float(item.get('x0', 0.0)),
+            ),
+        ):
+            text = str(line.get('text') or '').strip()
+            if not text:
+                continue
+            match = header_re.match(text)
+            if match and float(line.get('x0', 0.0)) < 72.0:
+                current_number = int(match.group(1))
+                blocks.setdefault(current_number, []).append(line)
+            elif current_number is not None:
+                blocks.setdefault(current_number, []).append(line)
+
+        for q_num in page_question_numbers:
+            block_lines = blocks.get(q_num) or []
+            if not block_lines:
+                continue
+            chunk = '\n'.join(str(line.get('text') or '').strip() for line in block_lines)
+            explicit_options, _ = extract_options_from_chunk(chunk)
+            heuristic_options, _ = extract_heuristic_options(chunk)
+            candidates = [
+                candidate
+                for candidate in (explicit_options, heuristic_options or {})
+                if candidate and len(candidate) == 4
+            ]
+            crop_texts = crop_option_lines(page, block_lines)
+            if len(crop_texts) == 4:
+                candidates.append({
+                    letter: text
+                    for letter, text in zip(('A', 'B', 'C', 'D'), crop_texts)
+                })
+            if not candidates:
+                continue
+            recovered_options = max(candidates, key=_score_option_map)
+            question = question_by_number.get(q_num)
+            if not question:
+                continue
+            current_options = question.get('opcoes') or {}
+            if len(current_options) == 4 and _score_option_map(recovered_options) <= _score_option_map(current_options):
+                continue
+
+            formatted_options = {}
+            for letter, value in recovered_options.items():
+                clean_value = _normalize_roman_list_option(str(value or '').strip())
+                clean_value = restore_exam_typography(clean_value, is_option=True)
+                clean_value, _ = format_latex_formulas(clean_value)
+                formatted_options[letter] = clean_value
+            question['opcoes'] = formatted_options
+            print(
+                f"[Precision OCR] Alternativas recuperadas na questão {q_num} "
+                f"(página {page_index + 1})",
+                flush=True,
+            )
+
+
+def _spatial_fast_enabled() -> bool:
+    value = os.getenv("PDF_PIPELINE_FAST_SPATIAL_MAP")
+    if value is None:
+        return True
+    return value.strip().lower() not in {"0", "false", "off", "no"}
+
+
+def _build_question_spatial_map_legacy(
+    doc: fitz.Document,
+    start_page: int,
+    total_pages: int,
+) -> Tuple[Dict[int, Tuple[int, float, float]], Dict[int, List[Any]]]:
+    """Mapa anterior, preservado para rollback operacional."""
+    q_spatial_map: Dict[int, Tuple[int, float, float]] = {}
+    page_text_blocks: Dict[int, List[Any]] = {}
+
+    for p_idx in range(start_page, total_pages):
+        page = doc[p_idx]
+        blocks = page.get_text('blocks')
+        page_text_blocks[p_idx] = blocks
+        for q_num in range(1, 201):
+            if q_num in q_spatial_map:
+                continue
+            queries = [
+                f"Questão {q_num:02d}", f"Questão {q_num}",
+                f"QUESTÃO {q_num:02d}", f"QUESTÃO {q_num}",
+                f"ITEM {q_num:02d}", f"ITEM {q_num}",
+                f"Questão\n{q_num:02d}", f"Questão\n{q_num}",
+            ]
+            for query in queries:
+                rects = page.search_for(query)
+                if rects:
+                    rects.sort(key=lambda r: r.y0)
+                    rect = rects[0]
+                    q_spatial_map[q_num] = (p_idx, rect.x0, rect.y0)
+                    break
+
+    for p_idx, blocks in page_text_blocks.items():
+        for block in blocks:
+            bx0, by0, _bx1, _by1, block_text = block[:5]
+            for match in re.finditer(
+                r'(?:^|\n)\s*(0*\d{1,3})\s*[\.\-\–\—\)]\s+(?=[A-Z\u00C0-\u00DC"\'\(])',
+                block_text,
+            ):
+                number = int(match.group(1))
+                if 1 <= number <= 200 and number not in q_spatial_map:
+                    q_spatial_map[number] = (p_idx, bx0, by0)
+
+            clean_text = block_text.strip()
+            if clean_text.isdigit():
+                number = int(clean_text)
+                if 1 <= number <= 200 and number not in q_spatial_map:
+                    q_spatial_map[number] = (p_idx, bx0, by0)
+            else:
+                for match in re.finditer(
+                    r'(?:^|\n)\s*(0*\d{1,3})\s*(?:\n|\s{2,})(?=[A-Z\u00C0-\u00DC"\'\(\«\“\‘]|$)',
+                    block_text,
+                ):
+                    number = int(match.group(1))
+                    if 1 <= number <= 200 and number not in q_spatial_map:
+                        q_spatial_map[number] = (p_idx, bx0, by0)
+
+    return q_spatial_map, page_text_blocks
+
+
+def _build_question_spatial_map_fast(
+    doc: fitz.Document,
+    start_page: int,
+    total_pages: int,
+) -> Tuple[Dict[int, Tuple[int, float, float]], Dict[int, List[Any]]]:
+    """Lê blocos uma vez e chama ``search_for`` apenas para candidatos reais."""
+    explicit_re = re.compile(
+        r'(?:^|\n)\s*(?:(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+)|ITEM\s+)(0*\d{1,3})\b',
+        re.IGNORECASE,
+    )
+    punctuated_re = re.compile(
+        r'(?:^|\n)\s*(0*\d{1,3})\s*[\.\-\–\—\)]\s+(?=[A-Z\u00C0-\u00DC"\'\(])',
+    )
+    separated_re = re.compile(
+        r'(?:^|\n)\s*(0*\d{1,3})\s*(?:\n|\s{2,})(?=[A-Z\u00C0-\u00DC"\'\(\«\“\‘]|$)',
+    )
+    q_spatial_map: Dict[int, Tuple[int, float, float]] = {}
+    page_text_blocks: Dict[int, List[Any]] = {}
+    explicit_candidates: Dict[int, List[Tuple[int, float, float, str]]] = {}
+
+    for p_idx in range(start_page, total_pages):
+        blocks = doc[p_idx].get_text('blocks')
+        page_text_blocks[p_idx] = blocks
+        for block in blocks:
+            bx0, by0, _bx1, _by1, raw_text = block[:5]
+            block_text = str(raw_text or '')
+            for match in explicit_re.finditer(block_text):
+                number = int(match.group(1))
+                if 1 <= number <= 200:
+                    prefix = block_text[match.start():match.end()].upper()
+                    kind = 'ITEM' if prefix.lstrip().startswith('ITEM') else 'QUESTAO'
+                    explicit_candidates.setdefault(number, []).append((p_idx, bx0, by0, kind))
+            for pattern in (punctuated_re, separated_re):
+                for match in pattern.finditer(block_text):
+                    number = int(match.group(1))
+                    if 1 <= number <= 200 and number not in q_spatial_map:
+                        q_spatial_map[number] = (p_idx, bx0, by0)
+            if block_text.strip().isdigit():
+                number = int(block_text.strip())
+                if 1 <= number <= 200 and number not in q_spatial_map:
+                    q_spatial_map[number] = (p_idx, bx0, by0)
+
+    for number, candidates in explicit_candidates.items():
+        candidates.sort(key=lambda item: (item[0], item[2], item[1]))
+        p_idx, bx0, by0, kind = candidates[0]
+        label = 'ITEM' if kind == 'ITEM' else 'Questão'
+        found = None
+        for query in (
+            f'{label} {number:02d}', f'{label} {number}',
+            f'{label.upper()} {number:02d}', f'{label.upper()} {number}',
+        ):
+            rects = doc[p_idx].search_for(query)
+            if rects:
+                rects.sort(key=lambda r: r.y0)
+                found = rects[0]
+                break
+        q_spatial_map[number] = (
+            p_idx,
+            found.x0 if found is not None else bx0,
+            found.y0 if found is not None else by0,
+        )
+
+    return q_spatial_map, page_text_blocks
+
+
+def _build_question_spatial_map(
+    doc: fitz.Document,
+    start_page: int,
+    total_pages: int,
+) -> Tuple[Dict[int, Tuple[int, float, float]], Dict[int, List[Any]]]:
+    if not _spatial_fast_enabled():
+        return _build_question_spatial_map_legacy(doc, start_page, total_pages)
+    return _build_question_spatial_map_fast(doc, start_page, total_pages)
+
 
 def parse_exam_document(
     pdf_bytes_or_path: Any,
@@ -403,8 +1103,6 @@ def parse_exam_document(
     document_sha256 = None
     if isinstance(parse_source, (bytes, bytearray)):
         document_sha256 = hashlib.sha256(bytes(parse_source)).hexdigest()
-
-    if isinstance(parse_source, (bytes, bytearray)):
         doc = fitz.open(stream=parse_source, filetype='pdf')
     else:
         doc = fitz.open(parse_source)
@@ -415,6 +1113,10 @@ def parse_exam_document(
         timing.finish(pages=0, questions=0)
         doc.close()
         return []
+
+    document_native_text = "\n".join(page.get_text() for page in doc)
+    image_counts = [len(page.get_images(full=True)) for page in doc]
+    native_question_chunks = _extract_native_question_chunks(doc)
 
     # 1. Identificação de marcas d'água e inicialização do extrator de imagens
     image_extractor = ExamImageExtractor(
@@ -460,6 +1162,13 @@ def parse_exam_document(
     )
     timing.mark("question_spatial_map")
 
+    # Classifica o documento antes de montar os blocos. Em um scan de página
+    # inteira os blocos nativos servem apenas para coordenadas de diagramas; o
+    # OCR estruturado abaixo é a fonte canônica. Evitar o fallback OCR do
+    # detector aqui impede duas extrações completas da mesma página.
+    from .media.scan_pipeline import scan_document_profile, extract_scan_questions
+    scan_profile = scan_document_profile(doc)
+
     doc_topology = infer_document_topology(doc, watermarks)
     effective_layout_config = layout_config or LayoutConfig(topology=doc_topology)
     if not effective_layout_config.topology or effective_layout_config.topology == 'AUTO':
@@ -478,7 +1187,13 @@ def parse_exam_document(
         if page_raw_blocks is None:
             page_raw_blocks = page.get_text('blocks')
 
-        ordered_blocks = detect_layout_and_ordered_blocks(page, watermarks, force_ocr=force_ocr, config=effective_layout_config)
+        ordered_blocks = detect_layout_and_ordered_blocks(
+            page,
+            watermarks,
+            force_ocr=bool(force_ocr and not scan_profile.get("scan_like")),
+            config=effective_layout_config,
+            allow_ocr_fallback=not bool(scan_profile.get("scan_like")),
+        )
         for b in ordered_blocks:
             raw_blocks.append(b['text'])
 
@@ -490,19 +1205,148 @@ def parse_exam_document(
     timing.mark("layout_and_diagrams")
 
     full_text = '\n\n'.join(raw_blocks)
-    
-    # Detecção automática se o documento necessita de Vision OCR de alta fidelidade:
-    # 1. Menos de 500 caracteres ou force_ocr explícito
-    # 2. Em exames multipáginas, se a camada embutida for degradada / scan corrompido
-    needs_vision_ocr = len(full_text.strip()) < 500 or force_ocr
+
+    # Detecção automática se o documento necessita de Vision OCR de alta
+    # fidelidade. A quantidade de caracteres não é suficiente: PDFs escaneados
+    # podem conter uma camada OCR extensa, porém sem a estrutura das questões.
+    native_quality = _assess_native_text_quality(
+        full_text,
+        document_text=document_native_text,
+        total_pages=total_pages,
+        image_page_count=sum(1 for count in image_counts if count > 0),
+        total_image_count=sum(image_counts),
+    )
+    native_declared_count = int(
+        native_quality.get("declared_question_count")
+        or _declared_question_count(document_native_text)
+        or 0
+    )
+    native_chunk_count = len(native_question_chunks)
+    # Alguns PDFs são digitalizações visuais, mas carregam uma camada OCR
+    # nativa suficientemente completa para estruturar o caderno. Nesses casos
+    # a ingestão padrão deve continuar sendo a fonte canônica; a rota de scan
+    # geométrico fica reservada aos documentos sem camada aproveitável.
+    native_layer_usable = bool(
+        scan_profile.get("scan_like")
+        and native_declared_count >= 5
+        and native_chunk_count >= max(5, math.ceil(native_declared_count * 0.95))
+        and len(document_native_text.strip()) >= 1000
+        and not native_quality.get("reasons")
+    )
+    if native_layer_usable:
+        print(
+            f"[Ingestão padrão] Camada OCR nativa utilizável: "
+            f"{native_chunk_count}/{native_declared_count} questões; "
+            "seguindo o mesmo pós-processamento e gate da rota comum.",
+            flush=True,
+        )
+    # Um scan de página inteira precisa de uma rota estruturada. O OCR textual
+    # legado devolve um ``full_text`` linear e perde justamente a relação entre
+    # enunciado, alternativas e figuras; para esses PDFs a decisão é feita por
+    # coordenada, em uma passada visual por página.
+    needs_vision_ocr = len(full_text.strip()) < 500 or force_ocr or native_quality["needs_vision_ocr"]
     avg_chars_per_page = len(full_text.strip()) / max(1, total_pages)
     if not needs_vision_ocr and avg_chars_per_page < 150 and total_pages >= 3:
         test_rq = rust_process_exam_text(full_text)
         if not test_rq or len(test_rq) < 2:
             needs_vision_ocr = True
 
-    if needs_vision_ocr:
+    if scan_profile.get("scan_like") and not native_layer_usable:
+        print(
+            "[Scan OCR] Documento identificado como scan de página inteira; "
+            "extraindo linhas, contexto e regiões visuais por coordenada.",
+            flush=True,
+        )
+        scan_result = extract_scan_questions(
+            doc,
+            start_page=start_page,
+            exam_id=exam_id or 0,
+            extract_images=extract_images,
+            image_extractor=image_extractor,
+            ocr_dpi=300,
+        )
+        scan_questions = scan_result.get("questions") or []
+        scan_quality = scan_result.get("quality") or {}
+        declared_count = (
+            scan_quality.get("declared_question_count")
+            or native_quality.get("declared_question_count")
+        )
+        scan_count = len(scan_questions)
+        option_ready = int(scan_quality.get("questions_with_four_or_more_options", 0))
+        text_integrity_ready = int(scan_quality.get("questions_with_text_integrity", 0))
+        min_expected = int(declared_count or native_quality.get("question_count") or 0)
+        count_ready = scan_count >= max(5, math.ceil(min_expected * 0.95)) if min_expected else scan_count >= 5
+        options_ready = option_ready >= max(5, math.ceil(scan_count * 0.90))
+        text_ready = text_integrity_ready == scan_count and scan_count > 0
+        if count_ready and options_ready and text_ready:
+            for q in scan_questions:
+                try:
+                    q_num = int(q.get("numero_questao"))
+                except (TypeError, ValueError):
+                    continue
+                q["resposta"] = normalize_answer_or_empty(
+                    master_gabarito.get(q_num) or q.get("resposta")
+                )
+                q["has_embedded_answer"] = bool(master_gabarito.get(q_num))
+                inferred_subject = rust_classify_subject(q.get("enunciado", ""))
+                if inferred_subject:
+                    q["disciplina"] = inferred_subject
+                q["enunciado"] = format_markdown_tables_in_text(q.get("enunciado", ""))
+                q.pop("_page", None)
+                q.pop("_x", None)
+                q.pop("_y", None)
+
+            scan_questions.sort(
+                key=lambda item: int(item.get("numero_questao", 9999))
+                if str(item.get("numero_questao", "")).isdigit()
+                else 9999
+            )
+            print(
+                f"[Scan OCR] {scan_count} questões estruturadas; "
+                f"{option_ready} com quatro ou mais alternativas; "
+                f"{text_integrity_ready} com integridade textual; "
+                f"{scan_quality.get('ocr_readings', 0)} leituras OCR; "
+                f"{scan_quality.get('images_attached', 0)} imagem(ns) vinculada(s).",
+                flush=True,
+            )
+            timing.mark("scan_ocr")
+            save_parse_cache(cache_key, scan_questions, pages=total_pages)
+            timing.mark("parse_cache_store")
+            timing.finish(pages=total_pages, questions=len(scan_questions))
+            doc.close()
+            return scan_questions
+        print(
+            f"[Scan OCR] Gate de qualidade não aprovado "
+            f"(questões={scan_count}/{min_expected or '?'}, "
+            f"alternativas completas={option_ready}, "
+            f"integridade textual={text_integrity_ready}/{scan_count}, "
+            f"problemas={scan_quality.get('text_integrity_issues') or {}}); "
+            "a prova não será salva com texto incompleto.",
+            flush=True,
+        )
+        # Um scan de página inteira não possui uma camada nativa confiável
+        # para servir de fallback. Prosseguir aqui permitiria que o parser
+        # linear salvasse um resultado estruturalmente menor ou com palavras
+        # coladas. O worker converte a lista vazia em estado de erro e deixa a
+        # prova disponível para reprocessamento após uma nova correção OCR.
+        timing.mark("scan_ocr_rejected")
+        timing.finish(pages=total_pages, questions=0)
+        doc.close()
+        return []
+
+    # A camada nativa completa não precisa de uma segunda OCR global; ainda
+    # assim, ela passa pelo gate textual abaixo para não aceitar mojibake,
+    # ruído ou alternativas incompletas.
+    quality_gate_required = bool(needs_vision_ocr or force_ocr or native_layer_usable)
+
+    if needs_vision_ocr and not native_layer_usable:
         from .media.vision_pipeline import extract_exam_via_vision_ocr
+
+        reasons = native_quality["reasons"] or (["force_ocr"] if force_ocr else ["low_native_text"])
+        print(
+            f"[Vision OCR] Acionado para o documento: {', '.join(reasons)}",
+            flush=True,
+        )
         ocr_text = extract_exam_via_vision_ocr(
             doc,
             dpi=200,
@@ -511,6 +1355,8 @@ def parse_exam_document(
         )
         if len(ocr_text.strip()) > 50:
             full_text = ocr_text
+        else:
+            print("[Vision OCR] Nenhum texto OCR confiável foi retornado; mantendo a camada nativa.", flush=True)
         timing.mark("vision_ocr")
     else:
         timing.mark("vision_ocr_skipped")
@@ -555,6 +1401,7 @@ def parse_exam_document(
                         'enunciado': missing_stmt_clean,
                         'opcoes': missing_opts,
                         'resposta': normalize_answer_or_empty(master_gabarito.get(h_num)),
+                        'has_embedded_answer': h_num in master_gabarito,
                         'disciplina': 'Geral'
                     })
                     existing_q_nums.add(h_num)
@@ -610,30 +1457,129 @@ def parse_exam_document(
                     if len(v_str) <= 3 or v_str.endswith(('de.', 'em.', 'para.', 'com.', 'A.', 'B.', 'C.', 'D.', 'E.')):
                         needs_recovery = True
                         break
+                    if re.match(r'^\s*[A-Ea-e]\s+[A-Za-zÀ-ÿ]', v_str):
+                        needs_recovery = True
+                        break
+                    if re.search(
+                        r'(?:conhecida\s+como\s*:|correto\s+afirmar|'
+                        r'correta\s+em\s+qual|área\s+destinada)',
+                        v_str,
+                        re.IGNORECASE,
+                    ):
+                        needs_recovery = True
+                        break
             
-            if needs_recovery or len(raw_options) < 4:
-                m_curr = re.search(rf'(?:^|\n)\s*(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+|ITEM\s+)0*{q_num}\b', full_text, re.IGNORECASE)
-                if not m_curr:
-                    m_curr = re.search(rf'(?:^|\n)\s*(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+|ITEM\s+|0*)0*{q_num}\b', full_text, re.IGNORECASE)
-                if m_curr:
-                    m_next = re.search(rf'(?:^|\n)\s*(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+|ITEM\s+)0*{q_num + 1}\b', full_text[m_curr.end():], re.IGNORECASE)
-                    if not m_next:
-                        m_next = re.search(rf'(?:^|\n)\s*(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+|ITEM\s+|0*)0*{q_num + 1}\b', full_text[m_curr.end():], re.IGNORECASE)
-                    chunk_q = full_text[m_curr.start():m_curr.end() + m_next.start()] if m_next else full_text[m_curr.start():]
-                    recovered_opts, clean_stmt = extract_options_from_chunk(chunk_q)
-                    if len(recovered_opts) >= 4 or len(recovered_opts) >= len(raw_options):
-                        raw_options = recovered_opts
-                        if clean_stmt and len(clean_stmt) > 10:
-                            clean_stmt = re.sub(rf'^(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+|ITEM\s+|0*)0*{q_num}\b[ \t]*[:\.\-]?[ \t]*', '', clean_stmt, flags=re.IGNORECASE).strip()
-                            formatted_enunciado = clean_stmt
-                            if matching_context:
-                                q_min, q_max, ctx_text = matching_context
-                                cleaned_ctx = restore_exam_typography(ctx_text)
-                                if cleaned_ctx[:30] not in formatted_enunciado:
-                                    formatted_enunciado = f"📖 **Texto de Apoio (Questões {q_min} a {q_max}):**\n\n{cleaned_ctx}\n\n---\n\n{formatted_enunciado}"
-                            formatted_enunciado, has_latex_enunciado = format_latex_formulas(formatted_enunciado)
-                            formatted_enunciado = restore_exam_typography(formatted_enunciado)
-                            formatted_enunciado = format_markdown_tables_in_text(formatted_enunciado)
+            # O parser Rust também possui um fallback por cauda. Em uma prova
+            # escaneada ele pode devolver quatro alternativas válidas, porém
+            # escolhidas do desenho, de um rodapé ou de um bloco deslocado.
+            # Reavalie sempre o bloco OCR quando ele não contém uma sequência
+            # explícita A..D/A..E; caso contrário a quantidade de opções
+            # mascararia uma extração incorreta.
+            m_curr = re.search(
+                rf'(?:^|\n)\s*(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+|ITEM\s+)0*{q_num}\b',
+                full_text,
+                re.IGNORECASE,
+            )
+            if not m_curr:
+                m_curr = re.search(
+                    rf'(?:^|\n)\s*(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+|ITEM\s+|0*)0*{q_num}\b',
+                    full_text,
+                    re.IGNORECASE,
+                )
+            if m_curr:
+                m_next = re.search(
+                    rf'(?:^|\n)\s*(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+|ITEM\s+)0*{q_num + 1}\b',
+                    full_text[m_curr.end():],
+                    re.IGNORECASE,
+                )
+                if not m_next:
+                    m_next = re.search(
+                        rf'(?:^|\n)\s*(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+|ITEM\s+|0*)0*{q_num + 1}\b',
+                        full_text[m_curr.end():],
+                        re.IGNORECASE,
+                    )
+                chunk_q = (
+                    full_text[m_curr.start():m_curr.end() + m_next.start()]
+                    if m_next
+                    else full_text[m_curr.start():]
+                )
+                recovered_opts, clean_stmt = extract_options_from_chunk(chunk_q)
+                heuristic_opts, heuristic_stmt = extract_heuristic_options(chunk_q)
+                candidates = [
+                    (recovered_opts, clean_stmt),
+                    (heuristic_opts or {}, heuristic_stmt),
+                ]
+
+                native_candidate = None
+                # A camada nativa deste scan contém texto completo em várias
+                # alternativas, embora perca as letras dentro dos círculos.
+                # Usa-a somente quando a heurística reconstrói exatamente
+                # quatro opções; assim não troca uma questão de cinco opções
+                # por um bloco nativo ambíguo.
+                native_chunk = native_question_chunks.get(q_num)
+                if native_chunk:
+                    native_opts, native_stmt = extract_heuristic_options(native_chunk)
+                    if native_opts and len(native_opts) == 4:
+                        native_candidate = (native_opts, native_stmt)
+                        candidates.append(native_candidate)
+
+                native_candidate_score = (
+                    _score_option_map(native_candidate[0])
+                    if native_candidate
+                    else float('-inf')
+                )
+                has_five_option_candidate = any(
+                    len(candidate[0]) == 5
+                    for candidate in candidates
+                    if candidate[0]
+                )
+                if native_candidate and native_candidate_score >= 80.0 and has_five_option_candidate:
+                    # Em scans de provas com quatro alternativas, a
+                    # heurística às vezes cruza o enunciado seguinte e cria
+                    # uma quinta opção. Um bloco nativo completo de quatro é
+                    # mais confiável nesse caso.
+                    selected_opts, selected_stmt = native_candidate
+                elif native_candidate and (
+                    len(raw_options) != 4
+                    or needs_recovery
+                    or len(formatted_enunciado.strip()) < 25
+                ) and native_candidate_score >= 80.0:
+                    selected_opts, selected_stmt = native_candidate
+                else:
+                    selected_opts, selected_stmt = max(
+                        candidates,
+                        key=lambda candidate: _score_option_map(candidate[0]),
+                        default=({}, ""),
+                    )
+
+                should_replace = (
+                    len(selected_opts) >= 4
+                    or needs_recovery
+                    or len(raw_options) < 4
+                )
+                if should_replace and (
+                    len(selected_opts) >= 4
+                    or len(selected_opts) >= len(raw_options)
+                ):
+                    if len(selected_opts) >= 4:
+                        raw_options = selected_opts
+                    if selected_stmt and len(selected_stmt) > 10:
+                        selected_stmt = re.sub(
+                            rf'^(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+|ITEM\s+|0*)0*{q_num}\b'
+                            r'[ \t]*[:\.\-,]?[ \t]*',
+                            '',
+                            selected_stmt,
+                            flags=re.IGNORECASE,
+                        ).strip()
+                        formatted_enunciado = selected_stmt
+                        if matching_context:
+                            q_min, q_max, ctx_text = matching_context
+                            cleaned_ctx = restore_exam_typography(ctx_text)
+                            if cleaned_ctx[:30] not in formatted_enunciado:
+                                formatted_enunciado = f"📖 **Texto de Apoio (Questões {q_min} a {q_max}):**\n\n{cleaned_ctx}\n\n---\n\n{formatted_enunciado}"
+                        formatted_enunciado, has_latex_enunciado = format_latex_formulas(formatted_enunciado)
+                        formatted_enunciado = restore_exam_typography(formatted_enunciado)
+                        formatted_enunciado = format_markdown_tables_in_text(formatted_enunciado)
 
             options = {}
             for let, opt_text in raw_options.items():
@@ -645,11 +1591,16 @@ def parse_exam_document(
                 while opt_lines and SUBJECT_REGEX.match(opt_lines[-1].strip()):
                     opt_lines.pop()
                 opt_clean = '\n'.join(opt_lines).strip()
+                opt_clean = _normalize_roman_list_option(opt_clean)
                 opt_clean = re.sub(r'\s*(?:<[^\s>]+>|\*{1,3}|_{1,3})+\s*(?:Conhecimentos\s+Espec[íi\ufffd\?]?ficos|Conhecimentos\s+Gerais|Conhecimentos\s+B[áa\ufffd\?]?sicos|L[íi\ufffd\?]?ngua\s+Portuguesa|Portugu[êe]s|Matem[áa]tica|No[çc\ufffd\?][õo\ufffd\?]?es\s+de\s+[^\n<]+|Racioc[íi\ufffd\?]?nio\s+L[óo\ufffd\?]?gico[^\n<]*|Legisla[çc\ufffd\?][ãa\ufffd\?]?o\s+Espec[íi\ufffd\?]?fica|Inform[áa\ufffd\?]?tica|Direito\s+[^\n<]+|TEXTO:\s*[^\n<]+)(?:<[^\s>]+>|\*{1,3}|_{1,3})+\s*$', '', opt_clean, flags=re.IGNORECASE)
                 opt_clean = restore_exam_typography(opt_clean, is_option=True)
                 opt_formatted, _ = format_latex_formulas(opt_clean)
                 options[let] = opt_formatted
 
+            has_embedded_answer = bool(
+                rq.get('has_embedded_answer')
+                or master_gabarito.get(q_num)
+            )
             final_answer = normalize_answer_or_empty(
                 master_gabarito.get(q_num) or rq.get('resposta')
             )
@@ -660,6 +1611,7 @@ def parse_exam_document(
                 'enunciado': formatted_enunciado,
                 'opcoes': options,
                 'resposta': final_answer,
+                'has_embedded_answer': has_embedded_answer,
                 'disciplina': rq.get('disciplina', 'Geral'),
                 'images': None,
                 'latex_support': 1 if has_latex_enunciado else 0,
@@ -669,6 +1621,16 @@ def parse_exam_document(
                 '_y': q_y
             })
         
+        # Última recuperação direcionada para alternativas curtas de scans.
+        # Executa antes do fechamento do documento e antes do vínculo de
+        # diagramas, preservando o restante da extração já validada.
+        if not native_layer_usable:
+            _recover_scan_options_at_high_resolution(
+                doc=doc,
+                questions=questions,
+                q_spatial_map=q_spatial_map,
+            )
+
         # Anexamento espacial de imagens/diagramas em 2 fases
         if extract_images and page_diagrams:
             questions = image_extractor.attach_images_to_questions(
@@ -676,6 +1638,32 @@ def parse_exam_document(
                 questions=questions,
                 page_diagrams=page_diagrams,
                 exam_id=exam_id or 0
+            )
+
+        if quality_gate_required:
+            from .media.scan_pipeline import assess_question_text_integrity
+
+            text_quality = assess_question_text_integrity(
+                questions,
+                native_text=document_native_text,
+                minimum_options=2,
+            )
+            if text_quality["questions_with_text_integrity"] != len(questions):
+                print(
+                    "[Vision OCR] Gate de integridade não aprovado "
+                    f"({text_quality['questions_with_text_integrity']}/"
+                    f"{len(questions)} questões): "
+                    f"{text_quality['text_integrity_issues']}",
+                    flush=True,
+                )
+                timing.finish(pages=total_pages, questions=0)
+                doc.close()
+                return []
+            print(
+                f"[Vision OCR] Integridade textual aprovada: "
+                f"{text_quality['questions_with_text_integrity']}/"
+                f"{len(questions)} (100%).",
+                flush=True,
             )
 
         # Limpeza de atributos internos temporários
@@ -986,6 +1974,7 @@ def parse_exam_document(
             'enunciado': formatted_enunciado,
             'opcoes': options,
             'resposta': final_answer,
+            'has_embedded_answer': bool(master_gabarito.get(q_num) or embedded_ans),
             'disciplina': question_subject,
             'images': None,
             'latex_support': 1 if has_latex_enunciado else 0,
@@ -994,6 +1983,32 @@ def parse_exam_document(
             '_x': q_x,
             '_y': q_y
         })
+
+    if quality_gate_required:
+        from .media.scan_pipeline import assess_question_text_integrity
+
+        text_quality = assess_question_text_integrity(
+            questions,
+            native_text=document_native_text,
+            minimum_options=2,
+        )
+        if text_quality["questions_with_text_integrity"] != len(questions):
+            print(
+                "[Vision OCR] Gate de integridade não aprovado "
+                f"({text_quality['questions_with_text_integrity']}/"
+                f"{len(questions)} questões): "
+                f"{text_quality['text_integrity_issues']}",
+                flush=True,
+            )
+            timing.finish(pages=total_pages, questions=0)
+            doc.close()
+            return []
+        print(
+            f"[Vision OCR] Integridade textual aprovada: "
+            f"{text_quality['questions_with_text_integrity']}/"
+            f"{len(questions)} (100%).",
+            flush=True,
+        )
 
     # 8. Anexamento Espacial em 2 Fases (Trigger Word + Gap Visual Scan)
     if extract_images and page_diagrams:

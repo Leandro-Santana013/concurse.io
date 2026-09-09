@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { BookOpen, Check, Clipboard, ExternalLink, FileText, X } from 'lucide-react';
 
+const IDCAP_PATTERN = /\b(?:id\s*cap|idecap)\b/i;
+
 export interface SourceModalData {
   title: string;
   source_url?: string | null;
@@ -41,7 +43,8 @@ export const SourceModal: React.FC<SourceModalProps> = ({ isOpen, onClose, data 
   if (!isOpen || !data) return null;
 
   const hasSource = Boolean(data.source_url && data.source_url.trim());
-  const hasGabarito = Boolean(data.gabarito_url && data.gabarito_url.trim());
+  const isIdcapExam = IDCAP_PATTERN.test(`${data.title} ${data.source_url || ''}`);
+  const hasGabarito = !isIdcapExam && Boolean(data.gabarito_url && data.gabarito_url.trim());
 
   const handleCopy = async (url: string, field: 'source' | 'gabarito') => {
     try {
@@ -156,8 +159,8 @@ export const SourceModal: React.FC<SourceModalProps> = ({ isOpen, onClose, data 
             )}
           </div>
 
-          {/* Card 2: Gabarito Oficial */}
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-subtle)] p-4 sm:p-5">
+          {!isIdcapExam && (
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-subtle)] p-4 sm:p-5">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 font-medium text-[var(--text)]">
                 <FileText className="h-4 w-4 text-[var(--primary)]" aria-hidden="true" />
@@ -209,7 +212,8 @@ export const SourceModal: React.FC<SourceModalProps> = ({ isOpen, onClose, data 
                 O link para o PDF do gabarito oficial não está cadastrado nesta prova.
               </p>
             )}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Footer */}

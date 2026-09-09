@@ -27,6 +27,9 @@ from services.search.exam_search_filter import (
 
 import os
 
+PCI_CRAWLER_RESULT_LIMIT = DEFAULT_SEARCH_RESULT_LIMIT * 4
+PCI_MAX_ADDITIONAL_PAGES = 3
+
 def _load_known_exams_catalog():
     """Carrega dinamicamente o catálogo de provas locais conhecidas a partir dos repositórios de bancas."""
     known = []
@@ -168,7 +171,7 @@ def _search_known_exams(query, nlp_data=None):
         "gabarito_url": r.get("gabarito_url"),
         "match_score": min(99, max(50, s)),
         "source": "local_repository"
-    } for s, r in results[:15]]
+    } for s, r in results[:DEFAULT_SEARCH_RESULT_LIMIT]]
 
 def _search_qc_provas(query):
     results = []
@@ -180,7 +183,7 @@ def _search_qc_provas(query):
             for attempt in range(2):
                 try:
                     with ddgs_cls() as ddgs:
-                        ddgs_results = list(ddgs.text(q, max_results=4))
+                        ddgs_results = list(ddgs.text(q, max_results=DEFAULT_SEARCH_RESULT_LIMIT))
                     break
                 except Exception:
                     time.sleep(0.3)
@@ -198,7 +201,7 @@ def _search_qc_provas(query):
                     })
     except Exception as e:
         pass
-    return results
+    return results[:DEFAULT_SEARCH_RESULT_LIMIT]
 
 def _scrape_pci_pdfs(query, nlp_data=None):
     """
@@ -207,6 +210,8 @@ def _scrape_pci_pdfs(query, nlp_data=None):
     """
     results = []
     seen_urls = set()
+    pending_page_urls = []
+    seen_page_urls = set()
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -219,6 +224,7 @@ def _scrape_pci_pdfs(query, nlp_data=None):
     orgao_val = str(nlp_data.get('orgao', '')).strip().lower() if nlp_data else ''
     cargo_val = str(nlp_data.get('cargo', '')).strip().lower() if nlp_data else ''
     banca_val = str(nlp_data.get('banca', '')).strip().lower() if nlp_data else ''
+    target_year = str(nlp_data.get('ano', '')).strip() if nlp_data else ''
 
     queries_to_post = []
     clean_q = ' '.join([w for w in query.split() if w.lower() not in stop_words]).strip()
@@ -229,7 +235,14 @@ def _scrape_pci_pdfs(query, nlp_data=None):
     if cargo_val and cargo_val not in queries_to_post:
         queries_to_post.append(cargo_val)
 
-    def extract_pci_table(html_bytes):
+    def enqueue_page(page_url):
+        normalized_url = str(page_url or '').strip()
+        if not normalized_url or normalized_url.endswith('#') or normalized_url in seen_page_urls:
+            return
+        seen_page_urls.add(normalized_url)
+        pending_page_urls.append(normalized_url)
+
+    def extract_pci_table(html_bytes, base_url='https://www.pciconcursos.com.br/provas/'):
         try:
             text = html_bytes.decode('utf-8')
         except UnicodeDecodeError:
@@ -252,6 +265,9 @@ def _scrape_pci_pdfs(query, nlp_data=None):
             ano_val = tds[1].get_text(strip=True) if len(tds) > 1 else ''
             orgao_col = tds[2].get_text(strip=True) if len(tds) > 2 else ''
             banca_col = tds[3].get_text(strip=True) if len(tds) > 3 else ''
+
+            if target_year and ano_val != target_year:
+                continue
 
             ano_str = f" {ano_val}" if ano_val and re.match(r'^(19|20)\d{2}$', ano_val) else ''
             banca_suffix = f" ({banca_col})" if banca_col else ''
@@ -279,12 +295,33 @@ def _scrape_pci_pdfs(query, nlp_data=None):
                 "source": "pci"
             })
 
+        next_page_url = None
+        for link in soup.find_all('a', href=True):
+            label = re.sub(r'\s+', ' ', link.get_text(' ', strip=True)).strip().lower()
+            if label not in {'próxima', 'proxima'}:
+                continue
+            href = str(link.get('href') or '').strip()
+            if not href or href == '#':
+                continue
+            next_page_url = urljoin(base_url, href)
+            break
+        return next_page_url
+
     # 1. Consulta o endpoint nativo de busca do PCI via POST
     for q_post in queries_to_post[:2]:
         try:
             resp = requests.post('https://www.pciconcursos.com.br/provas/', data={'prova': q_post}, headers=headers, timeout=3.5)
             if resp.status_code == 200:
-                extract_pci_table(resp.content)
+                next_page_url = extract_pci_table(
+                    resp.content,
+                    getattr(resp, 'url', 'https://www.pciconcursos.com.br/provas/'),
+                )
+                enqueue_page(next_page_url)
+                # O primeiro termo é a busca completa. Só usa órgão/cargo como
+                # fallback quando o PCI não encontrou nada para a consulta exata;
+                # misturar os dois introduzia anos e cargos fora do filtro pedido.
+                if results:
+                    break
         except Exception:
             pass
 
@@ -292,14 +329,36 @@ def _scrape_pci_pdfs(query, nlp_data=None):
     if not results and orgao_val:
         try:
             slug = re.sub(r'[^\w\-]+', '-', orgao_val).strip('-')
-            resp = requests.get(f"https://www.pciconcursos.com.br/provas/{slug}", headers=headers, timeout=3.0)
+            slug_url = f"https://www.pciconcursos.com.br/provas/{slug}"
+            resp = requests.get(slug_url, headers=headers, timeout=3.0)
             if resp.status_code == 200:
-                extract_pci_table(resp.content)
+                next_page_url = extract_pci_table(resp.content, getattr(resp, 'url', slug_url))
+                enqueue_page(next_page_url)
         except Exception:
             pass
 
+    # O PCI entrega a busca em páginas próprias (ex.: /provas/dataprev/2).
+    # Percorremos apenas as próximas páginas necessárias para formar o conjunto
+    # de candidatos da API, preservando a paginação de 25 no frontend.
+    additional_pages_fetched = 0
+    while (
+        pending_page_urls
+        and additional_pages_fetched < PCI_MAX_ADDITIONAL_PAGES
+        and len(results) < PCI_CRAWLER_RESULT_LIMIT
+    ):
+        page_url = pending_page_urls.pop(0)
+        try:
+            resp = requests.get(page_url, headers=headers, timeout=3.0)
+            if resp.status_code != 200:
+                continue
+            next_page_url = extract_pci_table(resp.content, getattr(resp, 'url', page_url))
+            enqueue_page(next_page_url)
+            additional_pages_fetched += 1
+        except Exception:
+            continue
+
     results.sort(key=lambda x: x.get('match_score', 0), reverse=True)
-    return results[:DEFAULT_SEARCH_RESULT_LIMIT]
+    return results[:PCI_CRAWLER_RESULT_LIMIT]
 
 def _is_cloudflare_challenge(response):
     """Identifica a pagina de desafio sem tentar contornar a protecao do site."""
@@ -524,7 +583,7 @@ def _search_pdfs_web(query, nlp_data=None):
     _add_results(known)
 
     # 2. DuckDuckGo Search
-    if len(results) < 10:
+    if len(results) < DEFAULT_SEARCH_RESULT_LIMIT:
         try:
             ddgs_cls = get_ddgs_class()
             if ddgs_cls:
@@ -532,11 +591,11 @@ def _search_pdfs_web(query, nlp_data=None):
                 ddg_results = []
                 try:
                     with ddgs_cls() as ddgs:
-                        ddg_results = list(ddgs.text(ddg_query, max_results=10))
+                        ddg_results = list(ddgs.text(ddg_query, max_results=DEFAULT_SEARCH_RESULT_LIMIT))
                 except Exception:
                     try:
                         with ddgs_cls() as ddgs:
-                            ddg_results = list(ddgs.text(f"{query} prova pdf", max_results=8))
+                            ddg_results = list(ddgs.text(f"{query} prova pdf", max_results=DEFAULT_SEARCH_RESULT_LIMIT))
                     except Exception:
                         pass
 
@@ -558,7 +617,7 @@ def _search_pdfs_web(query, nlp_data=None):
         except Exception as e:
             print(f"   │  [Web Search] Aviso: {e}", flush=True)
 
-    return results
+    return results[:DEFAULT_SEARCH_RESULT_LIMIT]
 
 
 def extract_pci_page_pdfs(pci_url: str) -> tuple[str | None, str | None, str | None]:

@@ -6,6 +6,7 @@ from .layout import (
     detect_layout_and_ordered_blocks,
     detect_watermarks,
     extract_context_blocks,
+    extract_ocr_lines_three_passes,
     LayoutConfig,
 )
 from .media import (
@@ -40,6 +41,7 @@ __all__ = [
     "detect_layout_and_ordered_blocks",
     "detect_watermarks",
     "extract_context_blocks",
+    "extract_ocr_lines_three_passes",
     "LayoutConfig",
     "ExamImageExtractor",
     "extract_images_from_pdf",

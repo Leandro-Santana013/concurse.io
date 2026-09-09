@@ -141,15 +141,15 @@ def test_ready_exam_is_hidden_for_owner_and_reused_for_another_user(library_api)
 
     owner_results = client.get("/api/v1/search", params={"q": "auditor"})
     assert owner_results.status_code == 200
-    assert owner_results.json() == []
+    assert owner_results.json()["items"] == []
 
     active_user["id"] = 2
     available_results = client.get("/api/v1/search", params={"q": "auditor"})
     assert available_results.status_code == 200
-    assert len(available_results.json()) == 1
-    assert available_results.json()[0]["id"] == exam_id
-    assert available_results.json()[0]["match_score"] == 98
-    assert available_results.json()[0]["reuse_available"] is True
+    assert len(available_results.json()["items"]) == 1
+    assert available_results.json()["items"][0]["id"] == exam_id
+    assert available_results.json()["items"][0]["match_score"] == 98
+    assert available_results.json()["items"][0]["reuse_available"] is True
 
     reused = client.post("/api/v1/exams/ingest", json={
         "url": source_url,
@@ -176,7 +176,7 @@ def test_ready_exam_is_hidden_for_owner_and_reused_for_another_user(library_api)
         assert db.query(UserExam).filter_by(exam_id=exam_id).count() == 2
         assert db.get(Exam, exam_id).gabarito_url == "https://example.test/gabarito.pdf"
 
-    assert client.get("/api/v1/search", params={"q": "auditor"}).json() == []
+    assert client.get("/api/v1/search", params={"q": "auditor"}).json()["items"] == []
     folders = client.get("/api/v1/folders").json()
     assert [exam["id"] for folder in folders for exam in folder["exams"]] == [exam_id]
     assert folders[0]["exams"][0]["attempt_count"] == 1
@@ -204,6 +204,21 @@ def test_new_answer_key_url_reprocesses_existing_exam(library_api):
         refreshed = db.get(Exam, exam_id)
         assert refreshed.gabarito_url == "https://example.test/provas/dataprev-ati-contabilidade-gabarito.pdf"
         assert refreshed.status == "Processando"
+
+
+def test_idcap_ingest_does_not_assign_a_separate_answer_key(library_api):
+    client, session_factory, active_user, dispatched_exam_ids = library_api
+    response = client.post("/api/v1/exams/ingest", json={
+        "url": "https://idcap.selecao.net.br/provas/enfermeiro.pdf",
+        "title": "IDCAP - Prefeitura de Exemplo - Enfermeiro",
+        "gabarito_url": "https://idcap.selecao.net.br/provas/enfermeiro-gabarito.pdf",
+    })
+
+    assert response.status_code == 200
+    assert dispatched_exam_ids == [response.json()["exam_id"]]
+    with session_factory() as db:
+        exam = db.get(Exam, response.json()["exam_id"])
+        assert exam.gabarito_url is None
 
 
 def test_claim_processed_exam_only_creates_user_link(library_api):
@@ -234,7 +249,7 @@ def test_claim_processed_exam_only_creates_user_link(library_api):
         assert db.query(ExamCatalog).count() == 1
         assert db.query(UserExam).filter_by(exam_id=exam_id).count() == 2
 
-    assert client.get("/api/v1/search", params={"q": "auditor"}).json() == []
+    assert client.get("/api/v1/search", params={"q": "auditor"}).json()["items"] == []
 
 
 def test_repeated_and_equivalent_urls_share_exam_and_worker(library_api):
@@ -265,6 +280,28 @@ def test_repeated_and_equivalent_urls_share_exam_and_worker(library_api):
 
     assert len(client.get("/api/v1/downloads/active").json()) == 1
     active_user["id"] = 2
+    assert client.get("/api/v1/downloads/active").json() == []
+
+
+def test_failed_exam_is_removed_from_active_downloads(library_api):
+    client, session_factory, active_user, dispatched_exam_ids = library_api
+    response = client.post("/api/v1/exams/ingest", json={
+        "url": "https://example.test/provas/falha-de-extracao.pdf",
+        "title": "Prova com falha de extração",
+    })
+    assert response.status_code == 200
+    exam_id = response.json()["exam_id"]
+
+    assert len(client.get("/api/v1/downloads/active").json()) == 1
+
+    with session_factory() as db:
+        exam = db.get(Exam, exam_id)
+        exam.status = "Erro"
+        exam.progress = -1
+        exam.progress_message = "Não foi possível extrair as questões."
+        exam.error_type = "EXTRACTION_ERROR"
+        db.commit()
+
     assert client.get("/api/v1/downloads/active").json() == []
 
 

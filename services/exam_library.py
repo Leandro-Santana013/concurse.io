@@ -11,7 +11,7 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
-from models.database import Exam, ExamSource, Question, UserExam
+from models.database import Exam, ExamCatalog, ExamSource, Question, UserExam
 
 
 TRACKING_QUERY_KEYS = {
@@ -22,6 +22,12 @@ TRACKING_QUERY_KEYS = {
     "ref",
     "referrer",
 }
+
+IDCAP_SOURCE_PATTERN = re.compile(r"\b(?:id\s*cap|idecap)\b", re.IGNORECASE)
+
+
+def _is_idcap_source(title: str = "", raw_url: str = "", source: str = "") -> bool:
+    return bool(IDCAP_SOURCE_PATTERN.search(f"{title} {raw_url} {source}"))
 
 
 def normalize_source_url(raw_url: str) -> str:
@@ -171,6 +177,16 @@ def claim_exam_for_user(
 ) -> ExamClaim:
     """Obtém uma prova canônica e cria uma única associação por usuário."""
     normalized_url = normalize_source_url(raw_url)
+    catalog_entry = db.query(ExamCatalog).filter(
+        ExamCatalog.source_url.in_([str(raw_url).strip(), normalized_url]),
+    ).first()
+    is_idcap_source = _is_idcap_source(
+        title,
+        raw_url,
+        catalog_entry.source if catalog_entry else "",
+    )
+    if is_idcap_source:
+        gabarito_url = None
     key = source_key(raw_url)
 
     for attempt in range(5):
@@ -204,6 +220,9 @@ def claim_exam_for_user(
                     db.flush()
                     created_exam = True
                 _add_source_alias(db, exam.id, raw_url)
+
+            if is_idcap_source:
+                exam.gabarito_url = None
 
             library_entry = (
                 db.query(UserExam)

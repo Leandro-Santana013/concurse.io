@@ -14,7 +14,7 @@ import {
   Shuffle,
 } from 'lucide-react';
 import { api, AuthRequiredError } from '../../services/api';
-import { Folder } from '../../types/exam';
+import type { ExamSummary, Folder } from '../../types/exam';
 import { useExam } from '../../context/ExamContext';
 import { useUI } from '../../context/UIContext';
 import { useExamStore } from '../../store/useExamStore';
@@ -25,6 +25,10 @@ interface FoldersViewProps {
 }
 
 type SortMode = 'title' | 'questions' | 'score' | 'attempts';
+const IDCAP_PATTERN = /\b(?:id\s*cap|idecap)\b/i;
+
+const isIdcapExam = (exam: ExamSummary) =>
+  IDCAP_PATTERN.test(`${exam.title} ${exam.source_url || ''}`);
 
 export const FoldersView: React.FC<FoldersViewProps> = ({ onStartExam }) => {
   const navigate = useNavigate();
@@ -110,8 +114,12 @@ export const FoldersView: React.FC<FoldersViewProps> = ({ onStartExam }) => {
   };
 
   const totalExams = folders.reduce((total, folder) => total + folder.exams.length, 0);
+  const answerKeyRelevantTotal = folders.reduce(
+    (total, folder) => total + folder.exams.filter((exam) => !isIdcapExam(exam)).length,
+    0,
+  );
   const examsWithAnswerKey = folders.reduce(
-    (total, folder) => total + folder.exams.filter((exam) => exam.has_official_answers).length,
+    (total, folder) => total + folder.exams.filter((exam) => !isIdcapExam(exam) && exam.has_official_answers).length,
     0,
   );
 
@@ -144,14 +152,17 @@ export const FoldersView: React.FC<FoldersViewProps> = ({ onStartExam }) => {
       <section aria-label="Resumo da biblioteca" className="grid gap-3 sm:grid-cols-3">
         <div className="metric-card"><span>Provas salvas</span><strong>{totalExams}</strong></div>
         <div className="metric-card"><span>Grupos</span><strong>{folders.length}</strong></div>
-        <div className="metric-card"><span>Com gabarito</span><strong>{examsWithAnswerKey} de {totalExams}</strong></div>
+        <div className="metric-card">
+          <span>{answerKeyRelevantTotal > 0 ? 'Com gabarito' : 'Provas prontas'}</span>
+          <strong>{answerKeyRelevantTotal > 0 ? `${examsWithAnswerKey} de ${answerKeyRelevantTotal}` : totalExams}</strong>
+        </div>
       </section>
 
       <div className="flex flex-col gap-3 sm:flex-row">
         <label className="relative flex-1">
           <span className="sr-only">Filtrar provas por título</span>
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
-          <input className="input-control pl-10" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filtrar por título" />
+          <input className="input-control input-leading-icon" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filtrar por título" />
         </label>
         <label className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
           Ordenar por
@@ -202,9 +213,15 @@ export const FoldersView: React.FC<FoldersViewProps> = ({ onStartExam }) => {
                       {exam.last_score !== null && <span>Última: <strong className="text-[var(--text)]">{exam.last_score}%</strong></span>}
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                      <span className={exam.has_official_answers ? 'status-success' : 'status-warning'}>
-                        <CheckCircle2 aria-hidden="true" /> {exam.has_official_answers ? `Gabarito ${Math.round(exam.gabarito_coverage)}%` : 'Gabarito não confirmado'}
-                      </span>
+                      {isIdcapExam(exam) ? (
+                        <span className="status-success">
+                          <CheckCircle2 aria-hidden="true" /> Processada
+                        </span>
+                      ) : (
+                        <span className={exam.has_official_answers ? 'status-success' : 'status-warning'}>
+                          <CheckCircle2 aria-hidden="true" /> {exam.has_official_answers ? `Gabarito ${Math.round(exam.gabarito_coverage)}%` : 'Gabarito não confirmado'}
+                        </span>
+                      )}
                       <button
                         type="button"
                         className="status-neutral inline-flex items-center gap-1 cursor-pointer transition-colors hover:bg-[var(--surface-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus)]"

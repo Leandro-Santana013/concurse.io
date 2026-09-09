@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Check,
+  ChevronLeft,
+  ChevronRight,
   Clipboard,
   ExternalLink,
   FileCheck2,
@@ -10,7 +12,7 @@ import {
   Search,
 } from 'lucide-react';
 import { api } from '../../services/api';
-import { AsyncStatus, SearchResultItem } from '../../types/exam';
+import { AsyncStatus, ExamProgress, SearchResultItem, SearchResultsPage } from '../../types/exam';
 import { useUI } from '../../context/UIContext';
 
 interface SearchHubProps {
@@ -25,9 +27,36 @@ const SOURCE_OPTIONS = [
 ];
 
 const POPULAR_QUERIES = ['FGV', 'Cebraspe', 'Polícia Federal', 'Tribunais'];
+const SEARCH_PAGE_SIZE = 25;
+const IDCAP_PATTERN = /\b(?:id\s*cap|idecap)\b/i;
+const TERMINAL_IMPORT_ERRORS = new Set(['erro', 'falha']);
+const IDCAP_PROGRESS_POLL_INTERVAL_MS = 1500;
+const MAX_IDCAP_PROGRESS_POLLS = 600;
+
+const isIdcapResult = (item: SearchResultItem) =>
+  IDCAP_PATTERN.test(`${item.source || ''} ${item.title} ${item.url}`);
+
+const wait = (milliseconds: number) =>
+  new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
+
+const waitForIdcapImport = async (examId: number): Promise<ExamProgress> => {
+  for (let attempt = 0; attempt < MAX_IDCAP_PROGRESS_POLLS; attempt += 1) {
+    const snapshot = await api.getExamProgress(examId);
+    const normalizedStatus = String(snapshot.status || '').trim().toLowerCase();
+
+    if (snapshot.progress >= 100 || normalizedStatus === 'aprovada') return snapshot;
+    if (snapshot.progress < 0 || snapshot.error_type || TERMINAL_IMPORT_ERRORS.has(normalizedStatus)) {
+      throw new Error(snapshot.status || 'O processamento da prova falhou.');
+    }
+
+    await wait(IDCAP_PROGRESS_POLL_INTERVAL_MS);
+  }
+
+  throw new Error('O processamento excedeu o tempo de acompanhamento. A biblioteca continuará sendo atualizada em segundo plano.');
+};
 
 export const SearchHub: React.FC<SearchHubProps> = ({ onExamReady }) => {
-  const { openDirectIngestModal, showToast } = useUI();
+  const { openDirectIngestModal, refreshDownloads, showToast } = useUI();
   const [query, setQuery] = useState('');
   const [selectedSource, setSelectedSource] = useState('all');
   const [results, setResults] = useState<SearchResultItem[]>([]);
@@ -35,8 +64,21 @@ export const SearchHub: React.FC<SearchHubProps> = ({ onExamReady }) => {
   const [error, setError] = useState<string | null>(null);
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
   const [addingUrl, setAddingUrl] = useState<string | null>(null);
+  const [pagination, setPagination] = useState<SearchResultsPage | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isPageLoading, setIsPageLoading] = useState(false);
+  const [processingIdcapUrl, setProcessingIdcapUrl] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
+  const focusResultsRef = useRef(false);
+  const resultsHeadingRef = useRef<HTMLHeadingElement>(null);
 
-  const executeSearch = async (searchQuery = query) => {
+  useEffect(() => {
+    if (!focusResultsRef.current || status !== 'success') return;
+    focusResultsRef.current = false;
+    resultsHeadingRef.current?.focus();
+  }, [currentPage, status]);
+
+  const executeSearch = async (searchQuery = query, nextPage = 1, preserveResults = false) => {
     const cleaned = searchQuery.trim();
     if (!cleaned) {
       setError('Digite o cargo, órgão ou banca que deseja encontrar.');
@@ -44,24 +86,48 @@ export const SearchHub: React.FC<SearchHubProps> = ({ onExamReady }) => {
       return;
     }
 
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
     setQuery(cleaned);
-    setStatus('loading');
     setError(null);
+    if (preserveResults) {
+      setIsPageLoading(true);
+      focusResultsRef.current = true;
+    } else {
+      setStatus('loading');
+      setResults([]);
+      setPagination(null);
+      setCurrentPage(1);
+      setIsPageLoading(false);
+    }
+
     try {
       const source = selectedSource === 'all' ? undefined : selectedSource;
-      const data = await api.searchExams(cleaned, source);
-      setResults(data);
-      setStatus(data.length > 0 ? 'success' : 'empty');
+      const data = await api.searchExams(cleaned, source, false, nextPage, SEARCH_PAGE_SIZE);
+      if (requestId !== requestIdRef.current) return;
+      setResults(data.items);
+      setPagination(data);
+      setCurrentPage(data.page);
+      setStatus(data.items.length > 0 ? 'success' : 'empty');
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       const message = err instanceof Error ? err.message : 'Não foi possível concluir a busca.';
       setError(message);
       setStatus('error');
+      focusResultsRef.current = false;
+    } finally {
+      if (requestId === requestIdRef.current) setIsPageLoading(false);
     }
   };
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     void executeSearch();
+  };
+
+  const handlePageChange = (nextPage: number) => {
+    if (!pagination || isPageLoading || nextPage < 1 || nextPage > pagination.total_pages) return;
+    void executeSearch(query, nextPage, true);
   };
 
   const handleCopy = async (url: string) => {
@@ -74,14 +140,42 @@ export const SearchHub: React.FC<SearchHubProps> = ({ onExamReady }) => {
     }
   };
 
+  const removeResultFromCurrentPage = (url: string) => {
+    const nextResults = results.filter((result) => result.url !== url);
+    const currentPageSize = pagination?.page_size ?? SEARCH_PAGE_SIZE;
+    const totalAfterRemoval = Math.max(0, (pagination?.total ?? results.length) - 1);
+    const totalPagesAfterRemoval = totalAfterRemoval > 0
+      ? Math.ceil(totalAfterRemoval / currentPageSize)
+      : 0;
+
+    setResults(nextResults);
+    if (totalAfterRemoval === 0) {
+      setStatus('empty');
+      setPagination(null);
+      setCurrentPage(1);
+    } else if (nextResults.length === 0 && currentPage > totalPagesAfterRemoval) {
+      void executeSearch(query, totalPagesAfterRemoval, true);
+    } else {
+      setPagination((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          total: totalAfterRemoval,
+          total_pages: totalPagesAfterRemoval,
+          has_previous: current.page > 1 && totalAfterRemoval > 0,
+          has_next: current.page < totalPagesAfterRemoval,
+        };
+      });
+    }
+  };
+
   const handleUseReadyExam = async (item: SearchResultItem) => {
     setAddingUrl(item.url);
     try {
       if (!item.id) throw new Error('A prova processada não possui um identificador válido.');
       const response = await api.claimProcessedExam(item.id);
 
-      setResults((current) => current.filter((result) => result.url !== item.url));
-      if (results.length <= 1) setStatus('empty');
+      removeResultFromCurrentPage(item.url);
       showToast('success', 'Prova adicionada à biblioteca', 'Nenhum download ou nova extração foi iniciado.');
       await onExamReady?.(response.exam_id);
     } catch (err) {
@@ -95,12 +189,42 @@ export const SearchHub: React.FC<SearchHubProps> = ({ onExamReady }) => {
     }
   };
 
+  const handleIdcapImport = async (item: SearchResultItem) => {
+    if (processingIdcapUrl) return;
+
+    setProcessingIdcapUrl(item.url);
+    showToast('info', 'Processando prova IDCAP', 'A prova será adicionada à biblioteca sem abrir outra janela.');
+    try {
+      const response = await api.ingestExam(item.url, item.title);
+      if (response.progress < 100 && response.status !== 'Aprovada') {
+        await waitForIdcapImport(response.exam_id);
+      }
+
+      removeResultFromCurrentPage(item.url);
+      showToast('success', 'Prova IDCAP processada', 'A prova foi adicionada à sua biblioteca.');
+    } catch (err) {
+      showToast(
+        'error',
+        'Falha ao processar prova IDCAP',
+        err instanceof Error ? err.message : 'Tente novamente em instantes.',
+      );
+    } finally {
+      setProcessingIdcapUrl(null);
+      void refreshDownloads();
+    }
+  };
+
+  const totalResults = pagination?.total ?? results.length;
+  const pageSize = pagination?.page_size ?? SEARCH_PAGE_SIZE;
+  const firstResult = totalResults > 0 ? ((currentPage - 1) * pageSize) + 1 : 0;
+  const lastResult = totalResults > 0 ? Math.min(currentPage * pageSize, totalResults) : 0;
+
   return (
     <div className="page-shell space-y-8">
       <header className="max-w-3xl">
         <p className="eyebrow">Descobrir</p>
         <h1 className="page-title">Encontre sua próxima prova</h1>
-        <p className="page-description">Busque por cargo, órgão ou banca. Antes de importar, confira a fonte e a disponibilidade do gabarito.</p>
+        <p className="page-description">Busque por cargo, órgão ou banca. Antes de importar, confira a fonte.</p>
       </header>
 
       <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-6" aria-labelledby="search-title">
@@ -118,7 +242,7 @@ export const SearchHub: React.FC<SearchHubProps> = ({ onExamReady }) => {
                 placeholder="Ex.: FGV Auditor, TJ Técnico, Polícia Federal"
                 aria-describedby="search-help"
               />
-              <button type="submit" className="button-primary search-submit" disabled={status === 'loading'} aria-label="Buscar provas">
+              <button type="submit" className="button-primary search-submit" disabled={status === 'loading' || isPageLoading} aria-label="Buscar provas">
                 {status === 'loading' ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Search aria-hidden="true" />}
                 <span className="hidden sm:inline">Buscar</span>
               </button>
@@ -157,11 +281,22 @@ export const SearchHub: React.FC<SearchHubProps> = ({ onExamReady }) => {
         </div>
       </section>
 
-      <section aria-labelledby="results-title" aria-live="polite">
+      <section aria-labelledby="results-title" aria-live="polite" aria-busy={isPageLoading || status === 'loading'}>
         <div className="mb-4 flex items-center justify-between gap-4">
-          <h2 id="results-title" className="section-title">
-            {status === 'idle' ? 'Resultados' : status === 'success' ? `${results.length} prova${results.length === 1 ? '' : 's'} encontrada${results.length === 1 ? '' : 's'}` : 'Resultados'}
-          </h2>
+          <div>
+            <h2 id="results-title" ref={resultsHeadingRef} tabIndex={-1} className="section-title">
+              {status === 'idle' ? 'Resultados' : status === 'success' ? `${totalResults} prova${totalResults === 1 ? '' : 's'} encontrada${totalResults === 1 ? '' : 's'}` : 'Resultados'}
+            </h2>
+            {status === 'success' && pagination && (
+              <p className="mt-1 text-sm text-[var(--text-muted)]">Mostrando {firstResult}–{lastResult}</p>
+            )}
+          </div>
+          {isPageLoading && (
+            <span className="flex items-center gap-2 text-sm text-[var(--text-muted)]" role="status">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              Atualizando página…
+            </span>
+          )}
         </div>
 
         {status === 'idle' && (
@@ -185,15 +320,17 @@ export const SearchHub: React.FC<SearchHubProps> = ({ onExamReady }) => {
 
         {status === 'success' && (
           <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-            {results.map((item, index) => (
-              <article key={`${item.url}-${index}`} className="border-b border-[var(--border)] p-4 last:border-b-0 sm:p-5">
+            {results.map((item) => (
+              <article key={item.id ? `exam-${item.id}` : item.url} className="border-b border-[var(--border)] p-4 last:border-b-0 sm:p-5">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap gap-2 text-xs">
                       <span className="status-neutral">{item.source || 'Web'}</span>
-                      <span className={item.has_gabarito_link ? 'status-success' : 'status-warning'}>
-                        <FileCheck2 aria-hidden="true" /> {item.has_gabarito_link ? 'Gabarito localizado' : 'Gabarito não localizado'}
-                      </span>
+                      {!isIdcapResult(item) && (
+                        <span className={item.has_gabarito_link ? 'status-success' : 'status-warning'}>
+                          <FileCheck2 aria-hidden="true" /> {item.has_gabarito_link ? 'Gabarito localizado' : 'Gabarito não localizado'}
+                        </span>
+                      )}
                       {item.reuse_available && <span className="status-success"><Check aria-hidden="true" /> Já processada</span>}
                       {item.match_score > 0 && <span className="status-neutral">Compatibilidade {item.match_score}%</span>}
                     </div>
@@ -215,7 +352,21 @@ export const SearchHub: React.FC<SearchHubProps> = ({ onExamReady }) => {
                         {addingUrl === item.url ? 'Adicionando…' : 'Adicionar à biblioteca'}
                       </button>
                     ) : (
-                      <button className="button-primary" onClick={() => openDirectIngestModal({ examUrl: item.url, gabaritoUrl: item.gabarito_url || '', title: item.title })}>Importar</button>
+                      <button
+                        className="button-primary"
+                        disabled={processingIdcapUrl !== null}
+                        aria-busy={processingIdcapUrl === item.url}
+                        onClick={() => {
+                          if (isIdcapResult(item)) {
+                            void handleIdcapImport(item);
+                          } else {
+                            openDirectIngestModal({ examUrl: item.url, gabaritoUrl: item.gabarito_url || '', title: item.title });
+                          }
+                        }}
+                      >
+                        {processingIdcapUrl === item.url && <Loader2 className="animate-spin" aria-hidden="true" />}
+                        {processingIdcapUrl === item.url ? 'Processando…' : 'Importar'}
+                      </button>
                     )}
                     <a className="button-secondary" href={item.url} target="_blank" rel="noreferrer"><ExternalLink aria-hidden="true" /> Ver origem</a>
                     <button className="button-ghost" onClick={() => void handleCopy(item.url)}>
@@ -227,6 +378,34 @@ export const SearchHub: React.FC<SearchHubProps> = ({ onExamReady }) => {
               </article>
             ))}
           </div>
+        )}
+
+        {status === 'success' && pagination && pagination.total_pages > 1 && (
+          <nav className="mt-5 flex items-center justify-between gap-4" aria-label="Paginação dos resultados" aria-busy={isPageLoading}>
+            <button
+              type="button"
+              className="button-secondary"
+              onClick={() => handlePageChange(pagination.page - 1)}
+              disabled={isPageLoading || !pagination.has_previous}
+              aria-label="Página anterior"
+            >
+              <ChevronLeft aria-hidden="true" />
+              <span>Anterior</span>
+            </button>
+            <span className="text-sm font-semibold text-[var(--text-muted)]" aria-live="polite">
+              Página {pagination.page} de {pagination.total_pages}
+            </span>
+            <button
+              type="button"
+              className="button-secondary"
+              onClick={() => handlePageChange(pagination.page + 1)}
+              disabled={isPageLoading || !pagination.has_next}
+              aria-label="Próxima página"
+            >
+              <span>Próxima</span>
+              <ChevronRight aria-hidden="true" />
+            </button>
+          </nav>
         )}
       </section>
     </div>

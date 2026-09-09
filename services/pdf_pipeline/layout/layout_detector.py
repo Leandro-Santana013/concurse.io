@@ -1,6 +1,8 @@
 import fitz
 import re
+import unicodedata
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 from typing import List, Dict, Set, Tuple, Any, Optional
 
 @dataclass
@@ -86,6 +88,12 @@ CONTEXT_TEXT_HEADER_REGEX = re.compile(
 
 _OCR_ENGINE = None
 
+
+def _ocr_normalise_compact(value: str) -> str:
+    value = unicodedata.normalize("NFKD", str(value or ""))
+    value = "".join(char for char in value if not unicodedata.combining(char))
+    return re.sub(r"[^a-z0-9]", "", value.casefold())
+
 def _get_ocr_engine():
     global _OCR_ENGINE
     if _OCR_ENGINE is None:
@@ -96,41 +104,363 @@ def _get_ocr_engine():
             _OCR_ENGINE = False
     return _OCR_ENGINE
 
-def extract_ocr_lines_from_page(page: fitz.Page, dpi: int = 150) -> List[Dict[str, Any]]:
+def extract_ocr_lines_from_page(
+    page: fitz.Page,
+    dpi: int = 150,
+    *,
+    clip: Optional[fitz.Rect] = None,
+    min_score: float = 0.4,
+    preprocess: bool = False,
+) -> List[Dict[str, Any]]:
+    """Extrai linhas OCR e as devolve nas coordenadas do PDF.
+
+    ``clip`` permite uma segunda leitura de uma faixa pequena da página. Isso
+    é importante em scans degradados: a renderização da página inteira pode
+    perder um cabeçalho curto, enquanto a mesma linha fica legível quando o
+    OCR recebe somente a região relevante em resolução maior. As coordenadas
+    retornadas continuam absolutas, portanto o consumidor pode misturar a
+    leitura com as linhas nativas e com o OCR da página inteira.
+    """
     engine = _get_ocr_engine()
     if not engine:
         return []
     try:
-        pix = page.get_pixmap(dpi=dpi)
-        img_bytes = pix.tobytes("png")
-        result, _ = engine(img_bytes)
-        if not result:
+        render_clip = fitz.Rect(clip) if clip is not None else fitz.Rect(page.rect)
+        render_clip &= page.rect
+        if render_clip.width <= 0 or render_clip.height <= 0:
             return []
-        
+
         scale = 72.0 / dpi
-        lines_extracted = []
-        
-        for r in result:
-            bbox_img, text, score = r
-            text_clean = text.strip()
-            if not text_clean or score < 0.4:
+        pix = page.get_pixmap(dpi=dpi, clip=render_clip, alpha=False)
+
+        def decode_lines(result: Any, source: str = "ocr") -> List[Dict[str, Any]]:
+            decoded: List[Dict[str, Any]] = []
+            for item in result or []:
+                bbox_img, text, score = item
+                text_clean = str(text or "").strip()
+                if not text_clean or float(score) < float(min_score):
+                    continue
+
+                # O RapidOCR mede a caixa a partir do bitmap recortado;
+                # devolva as coordenadas no sistema original da página.
+                lx0 = render_clip.x0 + bbox_img[0][0] * scale
+                ly0 = render_clip.y0 + bbox_img[0][1] * scale
+                lx1 = render_clip.x0 + bbox_img[2][0] * scale
+                ly1 = render_clip.y0 + bbox_img[2][1] * scale
+                decoded.append(
+                    {
+                        "page": page.number,
+                        "x0": lx0,
+                        "y0": ly0,
+                        "x1": lx1,
+                        "y1": ly1,
+                        "mid_x": (lx0 + lx1) / 2.0,
+                        "width": lx1 - lx0,
+                        "text": text_clean,
+                        "source": source,
+                    }
+                )
+            return decoded
+
+        original_result, _ = engine(pix.tobytes("png"))
+        original_lines = decode_lines(original_result)
+        if not preprocess:
+            return original_lines
+
+        # Scans muito lavados perdem linhas inteiras no detector original.
+        # Uma variante local de contraste/binarização recupera essas caixas;
+        # ela é usada apenas nas releituras de blocos suspeitos, não em todos
+        # os PDFs textuais.
+        try:
+            import cv2
+            import numpy as np
+
+            image = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
+                pix.height,
+                pix.width,
+                pix.n,
+            )
+            gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+            enhanced_gray = cv2.createCLAHE(
+                clipLimit=2.0,
+                tileGridSize=(8, 8),
+            ).apply(gray)
+            enhanced = cv2.adaptiveThreshold(
+                enhanced_gray,
+                255,
+                cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                cv2.THRESH_BINARY,
+                31,
+                11,
+            )
+            enhanced_result, _ = engine(enhanced)
+            # A binarização adaptativa recupera áreas com iluminação
+            # irregular, mas em scans muito claros ela também pode inverter ou
+            # embaralhar uma linha inteira. A leitura global de Otsu fornece
+            # uma segunda variante de alto contraste; a reconciliação abaixo
+            # escolhe a que preserva mais palavras/espaços na mesma caixa.
+            otsu = cv2.threshold(
+                enhanced_gray,
+                0,
+                255,
+                cv2.THRESH_BINARY + cv2.THRESH_OTSU,
+            )[1]
+            otsu_result, _ = engine(otsu)
+        except Exception:
+            return original_lines
+
+        enhanced_lines = decode_lines(enhanced_result, source="ocr_preprocessed")
+        enhanced_lines.extend(decode_lines(otsu_result, source="ocr_otsu"))
+        merged = [dict(line) for line in original_lines]
+        for candidate in enhanced_lines:
+            candidate_text = str(candidate.get("text") or "")
+            candidate_compact = _ocr_normalise_compact(candidate_text)
+            best_index: Optional[int] = None
+            best_distance = float("inf")
+            for index, existing in enumerate(merged):
+                if existing.get("page") != candidate.get("page"):
+                    continue
+                y_distance = abs(
+                    float(existing.get("y0", 0)) - float(candidate.get("y0", 0))
+                )
+                if y_distance > 6.0:
+                    continue
+                x_distance = abs(
+                    float(existing.get("x0", 0)) - float(candidate.get("x0", 0))
+                )
+                if x_distance > 80.0 and y_distance > 3.5:
+                    continue
+                distance = y_distance + (x_distance / 30.0)
+                if distance < best_distance:
+                    best_distance = distance
+                    best_index = index
+
+            if best_index is None:
+                merged.append(candidate)
                 continue
-            
-            lx0 = bbox_img[0][0] * scale
-            ly0 = bbox_img[0][1] * scale
-            lx1 = bbox_img[2][0] * scale
-            ly1 = bbox_img[2][1] * scale
-            
-            lines_extracted.append({
-                'page': page.number,
-                'x0': lx0, 'y0': ly0, 'x1': lx1, 'y1': ly1,
-                'mid_x': (lx0 + lx1) / 2.0,
-                'width': lx1 - lx0,
-                'text': text_clean
-            })
-        return lines_extracted
+
+            existing = merged[best_index]
+            existing_text = str(existing.get("text") or "")
+            existing_compact = _ocr_normalise_compact(existing_text)
+            candidate_spaces = len(re.findall(r"\s+", candidate_text))
+            existing_spaces = len(re.findall(r"\s+", existing_text))
+            if (
+                len(candidate_compact) > max(3, int(len(existing_compact) * 1.08))
+                or (
+                    len(candidate_compact) >= max(3, int(len(existing_compact) * 0.75))
+                    and candidate_spaces > existing_spaces
+                )
+            ):
+                merged[best_index] = candidate
+
+        return sorted(merged, key=lambda line: (line.get("y0", 0), line.get("x0", 0)))
     except Exception:
         return []
+
+
+def refine_ocr_lines_at_high_resolution(
+    page: fitz.Page,
+    lines: List[Dict[str, Any]],
+    dpi: int = 500,
+    force_all: bool = False,
+    clip: Optional[fitz.Rect] = None,
+) -> List[Dict[str, Any]]:
+    """Refina linhas suspeitas usando reconhecimento sem nova detecção.
+
+    O detector do RapidOCR costuma devolver a linha inteira como uma única
+    caixa e o reconhecedor, nessa etapa, pode omitir os espaços entre palavras.
+    Reutilizar a caixa e chamar apenas ``text_rec`` em um recorte de alta
+    resolução preserva a geometria e recupera a separação lexical. Linhas
+    normais não entram nesta passada para manter o custo da ingestão baixo.
+    """
+
+    engine = _get_ocr_engine()
+    if not engine or not lines or int(dpi) <= 0:
+        return [dict(line) for line in lines]
+
+    try:
+        import numpy as np
+    except Exception:
+        return [dict(line) for line in lines]
+
+    def needs_refinement(text: str) -> bool:
+        value = str(text or "").strip()
+        if not value:
+            return False
+        if "\ufffd" in value or re.search(
+            r"(?:Ã[\x80-\xbf]|Â[\x80-\xbf]|â(?:[\x80-\xbf]|[€™œ]))",
+            value,
+        ):
+            return True
+        letter_runs = re.findall(r"[A-Za-zÀ-ÿ]{8,}", value)
+        if not letter_runs:
+            return False
+        # Runs de dez ou mais letras também capturam a forma parcialmente
+        # aglutinada (``Segundo pesquisa`` -> ``Segundopesquisa``), que ainda
+        # contém espaços no restante da linha e por isso passaria despercebida
+        # por um teste que exigisse uma linha totalmente compacta. Linhas
+        # normais entram na segunda leitura, mas só são substituídas se o
+        # resultado tiver score alto e uma estrutura de espaços melhor.
+        return max(map(len, letter_runs), default=0) >= 10
+
+    candidates: List[Tuple[int, Dict[str, Any], Any]] = []
+    try:
+        # Uma única rasterização por página é muito mais barata que abrir um
+        # pixmap separado para cada linha suspeita. Os recortes abaixo são
+        # apenas views do bitmap e continuam independentes para o text_rec.
+        render_clip = fitz.Rect(clip) if clip is not None else fitz.Rect(page.rect)
+        render_clip &= page.rect
+        if render_clip.width <= 0 or render_clip.height <= 0:
+            return [dict(line) for line in lines]
+        page_pixmap = page.get_pixmap(dpi=int(dpi), clip=render_clip, alpha=False)
+        page_image = np.frombuffer(page_pixmap.samples, dtype=np.uint8).reshape(
+            page_pixmap.height,
+            page_pixmap.width,
+            page_pixmap.n,
+        )
+        page_scale = float(dpi) / 72.0
+        render_x0 = float(render_clip.x0)
+        render_y0 = float(render_clip.y0)
+        margin_x = max(2, int(round(3.0 * page_scale)))
+        margin_y = max(2, int(round(2.5 * page_scale)))
+    except Exception:
+        return [dict(line) for line in lines]
+
+    for index, line in enumerate(lines):
+        text = str(line.get("text") or "").strip()
+        if force_all:
+            if len(_ocr_normalise_compact(text)) < 3:
+                continue
+        elif not needs_refinement(text):
+            continue
+        try:
+            px0 = max(
+                0,
+                int(round((float(line.get("x0", 0)) - render_x0) * page_scale))
+                - margin_x,
+            )
+            py0 = max(
+                0,
+                int(round((float(line.get("y0", 0)) - render_y0) * page_scale))
+                - margin_y,
+            )
+            px1 = min(
+                page_pixmap.width,
+                int(round((float(line.get("x1", 0)) - render_x0) * page_scale))
+                + margin_x,
+            )
+            py1 = min(
+                page_pixmap.height,
+                int(round((float(line.get("y1", 0)) - render_y0) * page_scale))
+                + margin_y,
+            )
+            if px1 - px0 < 8 or py1 - py0 < 3:
+                continue
+            image = page_image[py0:py1, px0:px1]
+            candidates.append((index, line, image))
+        except Exception:
+            continue
+
+    if not candidates:
+        return [dict(line) for line in lines]
+
+    refined = [dict(line) for line in lines]
+    # O recognizador aceita lotes, reduzindo o custo em relação a uma chamada
+    # por palavra/linha sem misturar caixas de páginas diferentes.
+    batch_size = 24
+    for start in range(0, len(candidates), batch_size):
+        batch = candidates[start : start + batch_size]
+        try:
+            recognized, _elapsed = engine.text_rec([item[2] for item in batch])
+        except Exception:
+            continue
+        if not recognized:
+            continue
+        for (line_index, original_line, _image), result in zip(batch, recognized):
+            if not result or len(result) < 2:
+                continue
+            refined_text, score = result[0], float(result[1])
+            refined_text = str(refined_text or "").strip()
+            if not refined_text or score < 0.42:
+                continue
+            original_text = str(original_line.get("text") or "").strip()
+            original_compact = _ocr_normalise_compact(original_text)
+            refined_compact = _ocr_normalise_compact(refined_text)
+            if len(refined_compact) < max(8, int(len(original_compact) * 0.68)):
+                continue
+            if (
+                original_compact
+                and refined_compact
+                and SequenceMatcher(
+                    None,
+                    original_compact,
+                    refined_compact,
+                    autojunk=False,
+                ).ratio()
+                < 0.78
+            ):
+                continue
+            original_spaces = len(re.findall(r"\s+", original_text))
+            refined_spaces = len(re.findall(r"\s+", refined_text))
+            if refined_spaces <= original_spaces and "\ufffd" not in original_text:
+                continue
+            item = refined[line_index]
+            item["text"] = refined_text
+            item["source"] = "ocr_refined"
+            item["ocr_refined_score"] = score
+            item["ocr_original_text"] = original_text
+
+    return refined
+
+
+def extract_ocr_lines_three_passes(
+    page: fitz.Page,
+    dpi: int = 300,
+    *,
+    clip: Optional[fitz.Rect] = None,
+    min_score: float = 0.25,
+    refine_dpi: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """Lê uma página três vezes e reconcilia as linhas por coordenada.
+
+    As três leituras têm papéis diferentes:
+
+    1. detecção OCR da imagem original;
+    2. detecção OCR da mesma imagem após contraste/binarização adaptativa;
+    3. reconhecimento em alta resolução das caixas já encontradas.
+
+    A terceira leitura reutiliza as caixas da primeira e da segunda para não
+    perder a geometria das alternativas. O resultado é uma lista única, pronta
+    para os consumidores antigos do pipeline, com ``ocr_readings=3`` em cada
+    linha reconhecida.
+    """
+
+    base_lines = extract_ocr_lines_from_page(
+        page,
+        dpi=int(dpi),
+        clip=clip,
+        min_score=float(min_score),
+        preprocess=True,
+    )
+    if not base_lines:
+        return []
+
+    target_dpi = int(refine_dpi or max(500, min(700, int(dpi) + 300)))
+    lines = refine_ocr_lines_at_high_resolution(
+        page,
+        base_lines,
+        dpi=target_dpi,
+        # A terceira leitura continua existindo, mas deve concentrar o custo
+        # nas linhas suspeitas. Reprocessar cada linha de cada página em alta
+        # resolução torna scans longos excessivamente lentos e não melhora a
+        # detecção de cabeçalhos curtos; as rotas de recuperação fazem essas
+        # faixas específicas quando necessário.
+        force_all=False,
+        clip=clip,
+    )
+    for line in lines:
+        line.setdefault("ocr_readings", 3)
+    return lines
 
 def detect_watermarks(doc: fitz.Document) -> Set[Tuple[int, int, int, int]]:
     """
@@ -484,7 +814,8 @@ def detect_layout_and_ordered_blocks(
     page: fitz.Page,
     watermarks: Set[Tuple[int, int, int, int]],
     force_ocr: bool = False,
-    config: Optional[LayoutConfig] = None
+    config: Optional[LayoutConfig] = None,
+    allow_ocr_fallback: bool = True,
 ) -> List[Dict[str, Any]]:
     """
     Algoritmo adaptativo multi-coluna (PyMuPDF Layout-Aware em nível de linha).
@@ -497,7 +828,7 @@ def detect_layout_and_ordered_blocks(
     mid_x_page = width * 0.5
 
     if force_ocr:
-        ocr_lines = extract_ocr_lines_from_page(page, dpi=150)
+        ocr_lines = extract_ocr_lines_three_passes(page, dpi=300)
         if ocr_lines:
             lines_extracted = ocr_lines
         else:
@@ -581,8 +912,8 @@ def detect_layout_and_ordered_blocks(
             })
 
         # 2.1 Fallback para OCR caso a página seja scan ou tenha pouquíssimo texto nativo
-        if len(lines_extracted) < 4:
-            ocr_lines = extract_ocr_lines_from_page(page, dpi=150)
+        if allow_ocr_fallback and len(lines_extracted) < 4:
+            ocr_lines = extract_ocr_lines_three_passes(page, dpi=300)
             if ocr_lines:
                 lines_extracted = ocr_lines
 

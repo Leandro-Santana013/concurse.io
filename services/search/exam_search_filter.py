@@ -12,7 +12,7 @@ import re
 from typing import List, Dict, Tuple, Optional, Any
 
 
-DEFAULT_SEARCH_RESULT_LIMIT = 15
+DEFAULT_SEARCH_RESULT_LIMIT = 25
 
 
 # =============================================================================

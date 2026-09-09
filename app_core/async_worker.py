@@ -61,6 +61,14 @@ def merge_structural_questions(legacy_questions, structural_questions):
     return _merge_structural_questions(legacy_questions, structural_questions)
 
 
+IDCAP_SOURCE_PATTERN = re.compile(r"\b(?:id\s*cap|idecap)\b", re.IGNORECASE)
+
+
+def _is_idcap_exam(title: str = "", source_url: str = "", source: str = "") -> bool:
+    """Identifica IDCAP pelo título, URL ou origem catalogada."""
+    return bool(IDCAP_SOURCE_PATTERN.search(f"{title} {source_url} {source}"))
+
+
 def set_exam_progress(exam_id: int, status_msg: str, pct: int, error_type: Optional[str] = None):
     """Atualiza o progresso do exame no banco de dados de forma thread-safe com retentativas e garantias de integridade."""
     safe_msg = (status_msg[:285] + '...') if len(status_msg) > 290 else status_msg
@@ -197,7 +205,21 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
 
             user_id = exam.user_id or 1
             source_url = exam.source_url or ""
-            gabarito_url = exam.gabarito_url
+            catalog_entry = session.query(ExamCatalog).filter(
+                ExamCatalog.source_url == source_url,
+            ).first()
+            is_idcap_exam = _is_idcap_exam(
+                exam.title or "",
+                source_url,
+                catalog_entry.source if catalog_entry else "",
+            )
+            # IDCAP segue a ingestão normal, mas não usa nem persiste uma
+            # referência de gabarito separado. Respostas embutidas na prova
+            # continuam podendo ser reconhecidas pelo pipeline.
+            gabarito_url = None if is_idcap_exam else exam.gabarito_url
+            if is_idcap_exam:
+                exam.gabarito_url = None
+                gabarito_override = None
             clean_title = standardize_card_title(exam.title, url=source_url)
             exam.title = clean_title
             session.commit()
@@ -220,7 +242,7 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
             pci_prova, pci_gab, pci_title = extract_pci_page_pdfs(source_url)
             if pci_prova:
                 source_url = pci_prova
-            if pci_gab and not gabarito_url:
+            if pci_gab and not gabarito_url and not is_idcap_exam:
                 gabarito_url = pci_gab
             if pci_title and (not exam.title or exam.title.startswith("Nova Prova") or exam.title.startswith("PCI -")):
                 with Session() as session:
@@ -235,7 +257,7 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
                 exam_source = source_session.query(Exam).filter_by(id=exam_id).first()
                 if exam_source:
                     exam_source.source_url = source_url[:500]
-                    if gabarito_url and not exam_source.gabarito_url:
+                    if gabarito_url and not is_idcap_exam and not exam_source.gabarito_url:
                         exam_source.gabarito_url = gabarito_url[:500]
                     source_session.commit()
                     register_exam_source_alias(source_session, exam_id, source_url)
@@ -324,7 +346,7 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
                     source_relation="manual",
                 )
             )
-        elif gabarito_url or find_local_answer_key_pdf(exam_id):
+        elif not is_idcap_exam and (gabarito_url or find_local_answer_key_pdf(exam_id)):
             # O gabarito extraído localmente pertence ao exame pelo prefixo do
             # arquivo. Ele tem precedência sobre a rede e continua disponível
             # mesmo quando o registro perdeu a URL original.
@@ -410,7 +432,14 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
 
         set_exam_progress(exam_id, "Salvando prova e questões no banco de dados...", 88)
 
-        if not has_complete_official_answer_key(match_result, stats, answer_source):
+        has_verified_answer_key = has_complete_official_answer_key(
+            match_result,
+            stats,
+            answer_source,
+        )
+        allow_idcap_without_answer_key = is_idcap_exam and not has_verified_answer_key
+
+        if not has_verified_answer_key and not allow_idcap_without_answer_key:
             # Nunca transforme respostas ausentes/parciais no valor padrão A
             # nem marque o exame como aprovado.
             with Session() as session:
@@ -437,6 +466,17 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
                     ))
                     session.commit()
             return
+
+        if allow_idcap_without_answer_key:
+            # A IDCAP pode não publicar um gabarito dedicado. As questões ainda
+            # são úteis para estudo, mas respostas não confirmadas não podem
+            # virar um gabarito falso.
+            for question in updated_questions:
+                if (
+                    question.get("has_official_answer") is not True
+                    and question.get("has_embedded_answer") is not True
+                ):
+                    question["resposta"] = ""
 
         # Structural rollout is strictly downstream of the official-answer
         # gate. It is observational by default and can only replace the
@@ -590,11 +630,14 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
             set_exam_progress(exam_id, "Falha ao gravar questões no banco de dados.", -1, "DATABASE_ERROR")
             return
 
-        set_exam_progress(
-            exam_id,
-            f"Prova concluída com sucesso! ({len(updated_questions)} questões, {stats['coverage_pct']}% gabarito)",
-            100
-        )
+        if allow_idcap_without_answer_key:
+            completion_message = f"Prova concluída com sucesso! ({len(updated_questions)} questões)"
+        else:
+            completion_message = (
+                f"Prova concluída com sucesso! ({len(updated_questions)} questões, "
+                f"{stats['coverage_pct']}% gabarito)"
+            )
+        set_exam_progress(exam_id, completion_message, 100)
     except Exception as unexpected_err:
         import traceback
         traceback.print_exc()

@@ -277,8 +277,10 @@ fn process_exam_text(py: Python, full_text: &str) -> PyResult<PyObject> {
         }
         dict.set_item("opcoes", opts_dict)?;
 
+        let has_embedded_answer = parsed.embedded_answer.is_some();
         let fallback_ans = if parsed.is_certo_errado { "C" } else { "A" };
         dict.set_item("resposta", parsed.embedded_answer.unwrap_or_else(|| fallback_ans.to_string()))?;
+        dict.set_item("has_embedded_answer", has_embedded_answer)?;
         dict.set_item("disciplina", active_subject)?;
         dict.set_item("is_certo_errado", parsed.is_certo_errado)?;
         dict.set_item("start_char", byte_to_char_index(full_text, start_byte))?;

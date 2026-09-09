@@ -4,7 +4,7 @@ from typing import List, Dict, Any, Tuple, Optional, Set
 import fitz
 
 from services.pdf_pipeline.layout.layout_detector import (
-    extract_ocr_lines_from_page,
+    extract_ocr_lines_three_passes,
     is_instruction_or_cover_page,
     detect_watermarks
 )
@@ -183,7 +183,10 @@ def segment_portuguese_word(s: str) -> str:
     
     return prefix + " ".join(words) + suffix
 
-def segment_ocr_text(text: str) -> str:
+def segment_ocr_text(
+    text: str,
+    vocabulary: Optional[Dict[str, Tuple[str, float]]] = None,
+) -> str:
     """
     Higieniza o texto do OCR sem fatiar palavras normais em sílabas.
     Apenas repara junções coladas comuns e restaura pontuações.
@@ -206,7 +209,102 @@ def segment_ocr_text(text: str) -> str:
     res = re.sub(r'\bpasteis\b', 'pastéis', res, flags=re.IGNORECASE)
     res = re.sub(r'\bpropensao\b', 'propensão', res, flags=re.IGNORECASE)
     res = re.sub(r'\bpedacos\b', 'pedaços', res, flags=re.IGNORECASE)
-    return res
+    return restore_ocr_lexical_spacing(res, vocabulary=vocabulary)
+
+
+def _build_document_spacing_vocabulary(
+    doc: fitz.Document,
+) -> Optional[Dict[str, Tuple[str, float]]]:
+    """Extrai palavras nativas do PDF para orientar a separação do OCR visual."""
+
+    try:
+        from services.pdf_pipeline.media.scan_pipeline import _build_spacing_vocabulary
+
+        native_lines = []
+        for page in doc:
+            native_text = page.get_text("text")
+            if native_text and native_text.strip():
+                native_lines.append({"text": native_text})
+        return _build_spacing_vocabulary(native_lines)
+    except Exception:
+        return None
+
+def _supplement_native_question_headers(
+    page: fitz.Page,
+    lines: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Reinsere cabeçalhos que o OCR visual pode perder no scan.
+
+    Alguns scans preservam o texto do cabeçalho em uma camada nativa ruim,
+    enquanto o OCR visual reconhece apenas o corpo. A coordenada nativa ainda
+    é útil para delimitar o bloco sem substituir o texto OCR das alternativas.
+    """
+    header_re = re.compile(r'^\s*0*(\d{1,2})\s*[\.,\-–—\)]\s*(.*)$')
+    damaged_header_re = re.compile(
+        r'^\s*(?:\ufffd|í|I|!|\|)\s*(\d)\s*[\.,\-–—\)]\s*(.*)$',
+        re.IGNORECASE,
+    )
+    damaged_thirty_re = re.compile(
+        r'^\s*3\s*[üuU]\s*[\.,\-–—\)]\s*(.*)$',
+        re.IGNORECASE,
+    )
+    existing_numbers = set()
+    for line in lines:
+        match = header_re.match(str(line.get('text') or ''))
+        if match:
+            existing_numbers.add(int(match.group(1)))
+
+    try:
+        native_dict = page.get_text('dict')
+    except Exception:
+        return lines
+
+    for block in native_dict.get('blocks', []):
+        if block.get('type') != 0:
+            continue
+        for native_line in block.get('lines', []):
+            text = ' '.join(
+                str(span.get('text') or '').strip()
+                for span in native_line.get('spans', [])
+                if str(span.get('text') or '').strip()
+            ).strip()
+            match = header_re.match(text)
+            damaged_match = damaged_header_re.match(text) if not match else None
+            thirty_match = damaged_thirty_re.match(text) if not match and not damaged_match else None
+            if damaged_match:
+                # A camada nativa deste scan perdeu o primeiro dígito de 10 e
+                # 14, deixando apenas ``�0.``/``�4.``.
+                suffix = int(damaged_match.group(1))
+                q_num = 10 + suffix
+                normalized_text = f'{q_num}. {damaged_match.group(2).strip()}'.strip()
+            elif thirty_match:
+                q_num = 30
+                normalized_text = f'30. {thirty_match.group(1).strip()}'.strip()
+            else:
+                normalized_text = text
+            if not match:
+                if not damaged_match and not thirty_match:
+                    continue
+                match = damaged_match or thirty_match
+            if not damaged_match and not thirty_match:
+                q_num = int(match.group(1))
+            x0, y0, x1, y1 = native_line.get('bbox', (0, 0, 0, 0))
+            if q_num in existing_numbers or x0 >= 72:
+                continue
+            lines.append({
+                'page': page.number,
+                'x0': x0,
+                'y0': y0,
+                'x1': x1,
+                'y1': y1,
+                'mid_x': (x0 + x1) / 2.0,
+                'width': x1 - x0,
+                'text': normalized_text,
+            })
+            existing_numbers.add(q_num)
+
+    return lines
+
 
 def extract_exam_via_vision_ocr(
     doc: fitz.Document,
@@ -225,18 +323,29 @@ def extract_exam_via_vision_ocr(
     if watermarks is None:
         watermarks = detect_watermarks(doc)
 
-    scale = 72.0 / float(dpi)
+    # A camada nativa costuma conter a grafia correta mesmo quando o OCR
+    # visual perde os espaços. Ela vira um léxico específico da prova, sem
+    # permitir que o segmentador invente palavras fora do documento.
+    spacing_vocabulary = _build_document_spacing_vocabulary(doc)
+
     all_pages_stitched = []
     
     for p_idx in range(len(doc)):
         page = doc[p_idx]
+        # Todo OCR visual passa pela mesma exigência: imagem original,
+        # contraste/binarização e reconhecimento em alta resolução.
         lines = load_page_ocr_cache(
             document_sha256,
             dpi=dpi,
             page_index=p_idx,
         )
         if lines is None:
-            lines = extract_ocr_lines_from_page(page, dpi=dpi)
+            lines = extract_ocr_lines_three_passes(
+                page,
+                dpi=max(300, int(dpi)),
+                min_score=0.25,
+            )
+            lines = _supplement_native_question_headers(page, lines)
             if lines:
                 save_page_ocr_cache(
                     document_sha256,
@@ -246,6 +355,35 @@ def extract_exam_via_vision_ocr(
                 )
         if not lines:
             continue
+
+        # Listas curtas de algarismos romanos são um ponto frágil do OCR em
+        # scans degradados: em 200 dpi ``III``/``VIII`` frequentemente vira
+        # ``II``/``VII`` ou mistura l/I. Quando a própria saída denuncia esse
+        # padrão, repete somente esta página em alta resolução. Isso mantém o
+        # custo normal para documentos comuns e melhora as alternativas sem
+        # letras explícitas.
+        roman_confusion_re = re.compile(
+            r"(?i)(?<![A-Za-z0-9])(?:i1|il|ill|ivl?|vll|vlll|lx)(?![A-Za-z0-9])"
+        )
+        if int(dpi) < 400 and any(
+            roman_confusion_re.search(str(line.get('text') or ''))
+            for line in lines
+        ):
+            precision_lines = extract_ocr_lines_three_passes(
+                page,
+                dpi=400,
+                min_score=0.25,
+                refine_dpi=650,
+            )
+            precision_lines = _supplement_native_question_headers(page, precision_lines)
+            if precision_lines:
+                lines = precision_lines
+                save_page_ocr_cache(
+                    document_sha256,
+                    dpi=dpi,
+                    page_index=p_idx,
+                    lines=lines,
+                )
             
         page_raw = ' '.join(l['text'] for l in lines)
         has_q1 = any(re.match(r'^\s*0*1\s*[\.\-\–\—\)]', l['text']) for l in lines)
@@ -265,12 +403,13 @@ def extract_exam_via_vision_ocr(
             if re.match(r'(?i)^\s*Oficial\s+de\s+Administra[çc][aã]o\s*$', txt):
                 continue
                 
-            clean_txt = segment_ocr_text(txt)
+            clean_txt = segment_ocr_text(txt, vocabulary=spacing_vocabulary)
             clean_txt = re.sub(r'(\d)\s+(\d)', r'\1\2', clean_txt)
             clean_txt = re.sub(r'(\d)\s+([\.\-\–\—\)])', r'\1\2', clean_txt)
             
             clean_lines.append({
                 'x0': l['x0'], 'y0': l['y0'], 'x1': l['x1'], 'y1': l['y1'],
+                'width': l['x1'] - l['x0'],
                 'text': clean_txt
             })
 
@@ -281,16 +420,46 @@ def extract_exam_via_vision_ocr(
         page_w = page.rect.width
         mid_x = page_w / 2.0
         
-        left_lines = [l for l in clean_lines if (l['x0'] + l['x1']) / 2.0 < mid_x]
-        right_lines = [l for l in clean_lines if (l['x0'] + l['x1']) / 2.0 >= mid_x]
+        # Linhas que ocupam quase toda a largura (cabeçalhos e enunciados)
+        # não podem ser confundidas com uma coluna direita só porque o centro
+        # geométrico ultrapassa a metade da página.
+        narrow_lines = [l for l in clean_lines if l['width'] < page_w * 0.6]
+        left_lines = [l for l in narrow_lines if (l['x0'] + l['x1']) / 2.0 < mid_x]
+        right_lines = [l for l in narrow_lines if (l['x0'] + l['x1']) / 2.0 >= mid_x]
         
-        # Confirma 2 colunas se houver conteúdo em ambos os lados
-        is_two_col = len(left_lines) >= 3 and len(right_lines) >= 3
+        # Confirma 2 colunas somente quando há cabeçalhos de questões nos dois
+        # lados. Figuras, poemas e balões de quadrinhos também geram linhas no
+        # lado direito, mas não representam uma segunda coluna de questões; se
+        # forem tratados como tal, acabam sendo anexados ao último bloco e
+        # substituem as alternativas reais no fallback.
+        q_probe_re = re.compile(
+            r'^\s*0*(?:[1-9]|[1-4][0-9]|50)\s*[\.,\-–—\)](?:\s|$)',
+            re.IGNORECASE,
+        )
+        left_question_headers = [
+            line for line in left_lines if q_probe_re.match(str(line.get('text') or ''))
+        ]
+        right_question_headers = [
+            line for line in right_lines if q_probe_re.match(str(line.get('text') or ''))
+        ]
+        is_two_col = (
+            len(left_lines) >= 3
+            and len(right_lines) >= 3
+            and bool(left_question_headers)
+            and bool(right_question_headers)
+        )
         
         def stitch_line_group(group):
             group.sort(key=lambda b: (round(b['y0'] / 6.0) * 6.0, b['x0']))
             stitched = []
             skip = set()
+
+            def is_marker_fragment(text: str) -> bool:
+                return bool(re.fullmatch(
+                    r'\s*[\(\[\{]?\s*[A-Ea-e]\s*[\)\]\}\.\-]?\s*',
+                    text or '',
+                ))
+
             for i in range(len(group)):
                 if i in skip:
                     continue
@@ -299,7 +468,15 @@ def extract_exam_via_vision_ocr(
                     if j in skip:
                         continue
                     nxt = group[j]
-                    if abs(cur['y0'] - nxt['y0']) < 7 and (nxt['x0'] - cur['x1']) < 30:
+                    # Marcadores isolados ficam alguns pixels à esquerda do
+                    # texto da alternativa. Juntá-los aqui produz ``a I,...``
+                    # e impede o parser de reconhecer a lista real.
+                    if (
+                        abs(cur['y0'] - nxt['y0']) < 7
+                        and (nxt['x0'] - cur['x1']) < 30
+                        and not is_marker_fragment(cur['text'])
+                        and not is_marker_fragment(nxt['text'])
+                    ):
                         cur['text'] = cur['text'].strip() + ' ' + nxt['text'].strip()
                         cur['x1'] = max(cur['x1'], nxt['x1'])
                         skip.add(j)
@@ -314,7 +491,7 @@ def extract_exam_via_vision_ocr(
         all_pages_stitched.append((p_idx + 1, stitched_page))
 
     # Identifica divisões de questões por cabeçalho explícito
-    q_header_re = re.compile(r'^\s*0*([1-9]|[1-4][0-9]|50)\s*[\.\-\–\—\)]\s*(.*)$')
+    q_header_re = re.compile(r'^\s*0*([1-9]|[1-4][0-9]|50)\s*[\.,\-\–\—\)]\s*(.*)$')
     
     raw_blocks = []
     current_block = {'type': 'header', 'num': 0, 'lines': []}
@@ -333,11 +510,17 @@ def extract_exam_via_vision_ocr(
                 passed_q1 = True
                 if current_block['lines']:
                     raw_blocks.append(current_block)
-                current_block = {'type': 'explicit', 'num': q_num, 'lines': [rest] if rest else []}
+                header_body = dict(l)
+                header_body['text'] = rest
+                current_block = {
+                    'type': 'explicit',
+                    'num': q_num,
+                    'lines': [header_body] if rest else [],
+                }
             elif not passed_q1:
                 pre_q1_lines.append(txt)
             else:
-                current_block['lines'].append(txt)
+                current_block['lines'].append(l)
                 
     if current_block['lines']:
         raw_blocks.append(current_block)
@@ -367,43 +550,164 @@ def extract_exam_via_vision_ocr(
         lines = final_questions[q_num]
         options = {}
         stmt_lines = []
+
+        def line_text(line: Any) -> str:
+            return (
+                str(line.get('text') or '').strip()
+                if isinstance(line, dict)
+                else str(line or '').strip()
+            )
+
+        def line_x0(line: Any) -> float:
+            return float(line.get('x0', 0.0)) if isinstance(line, dict) else 0.0
+
+        def is_standalone_option_marker(text: str) -> bool:
+            if re.fullmatch(
+                r'\s*[\(\[\{]?\s*[A-Ea-e]\s*[\)\]\}\.\-]?\s*',
+                text or '',
+            ):
+                return True
+            return bool(re.fullmatch(
+                r'\s*[\(\[\{]\s*[A-Za-z]\s*[\)\]\}]?\s*',
+                text or '',
+            ))
+
+        def clean_fallback_option_text(line: Any) -> str:
+            text = line_text(line)
+            text = re.sub(
+                r'^\s*\(?[A-Ea-e]\s*[\)\.]\s*',
+                '',
+                text,
+            ).strip()
+            if not is_two_col and line_x0(line) <= page_w * 0.14:
+                # Alguns círculos são lidos como @, G ou � e acabam colados
+                # ao início da alternativa.
+                text = re.sub(
+                    r'^\s*(?:[@§©®•*#{}�]+|[Gg])\s*["\'0-9]*\s*'
+                    r'(?=[A-Za-zÀ-ÿ])',
+                    '',
+                    text,
+                ).strip()
+            return text
+
+        def select_fallback_options(candidate_lines: List[Any]) -> List[Any]:
+            """Remove letras soltas e rótulos de figuras antes da cauda de opções.
+
+            Em scans de uma coluna, o OCR também enxerga letras dentro de
+            diagramas (por exemplo, A/B/C/D de uma figura). Essas letras ficam
+            entre as alternativas reais e faziam o fallback deslocar a cauda,
+            descartando a primeira opção.
+            """
+            usable = []
+            for line in candidate_lines:
+                text = line_text(line)
+                if not text or is_standalone_option_marker(text):
+                    continue
+                if (
+                    not is_two_col
+                    and len(re.sub(r'[^\wÀ-ÿ]', '', text)) <= 2
+                    and not re.search(r'\d', text)
+                ):
+                    continue
+                usable.append(line)
+            return usable
+
+        def collapse_indented_option_lines(candidate_lines: List[Any]) -> List[Any]:
+            """Junta linhas continuadas de alternativas reconhecidas pelo OCR."""
+            if is_two_col:
+                return candidate_lines
+            # O círculo fica por volta de x=70, mas o texto da alternativa
+            # começa perto de x=100. O limite anterior descartava as quatro
+            # opções reais deste scan por tratá-las como continuações.
+            start_threshold = page_w * 0.22
+            starts = sum(1 for line in candidate_lines if line_x0(line) <= start_threshold)
+            if starts < 4:
+                return candidate_lines
+
+            grouped: List[Any] = []
+            for line in candidate_lines:
+                if line_x0(line) <= start_threshold or not grouped:
+                    grouped.append(dict(line) if isinstance(line, dict) else line)
+                    continue
+                previous = grouped[-1]
+                if isinstance(previous, dict):
+                    previous['text'] = f"{line_text(previous)} {line_text(line)}".strip()
+                    previous['x1'] = max(
+                        float(previous.get('x1', 0.0)),
+                        float(line.get('x1', previous.get('x1', 0.0)))
+                        if isinstance(line, dict)
+                        else float(previous.get('x1', 0.0)),
+                    )
+                else:
+                    grouped[-1] = f"{line_text(previous)} {line_text(line)}".strip()
+            return grouped
         
         # 1. Procura opções com letras explícitas a), b), c), d)
         for l in lines:
-            m_opt = re.match(r'^[ \t]*([a-eA-E])\s*[\)\.\-–—:\s]\s*(.*)', l)
+            txt = line_text(l)
+            # O OCR de círculos, diagramas e balões costuma retornar apenas a
+            # letra em uma linha própria. Isso não é um marcador confiável de
+            # alternativa; deixar essas letras no mapa impede o fallback de
+            # selecionar o texto real que vem logo depois.
+            if is_standalone_option_marker(txt):
+                continue
+            m_opt = re.match(r'^[ \t]*([a-eA-E])\s*[\)\.\-–—:\s]\s*(.*)', txt)
             if m_opt and m_opt.group(1).upper() not in options:
                 options[m_opt.group(1).upper()] = m_opt.group(2).strip()
             elif not options:
-                stmt_lines.append(l)
+                stmt_lines.append(txt)
             else:
                 last_k = list(options.keys())[-1]
-                options[last_k] += " " + l.strip()
+                options[last_k] += " " + txt
                 
         # 2. Se não encontrou opções com letras, pega as 4 opções logo após o comando
         if len(options) < 4 and len(lines) >= 4:
             # Encontra onde termina o comando do enunciado (ex: linha com '?' ou ':' ou palavras de comando)
             cmd_idx = -1
             for idx_l, l in enumerate(lines):
-                if re.search(r'[\?\:]\s*$', l) or re.search(r'(?:qual\s+alternativa|assinale|correto|incorreto|podemos\s+afirmar|é\:|são\:|dizer\:)', l, re.I):
+                txt = line_text(l)
+                if re.search(r'[\?\:]\s*$', txt) or re.search(r'(?:qual\s+alternativa|assinale|correto|incorreto|podemos\s+afirmar|é\:|são\:|dizer\:)', txt, re.I):
                     cmd_idx = idx_l
                     break
             
             if cmd_idx != -1 and len(lines) >= cmd_idx + 5:
                 stmt_lines = lines[:cmd_idx + 1]
+                option_lines = select_fallback_options(lines[cmd_idx + 1:])
+                option_lines = collapse_indented_option_lines(option_lines)
+                if len(option_lines) < 4:
+                    option_lines = lines[cmd_idx + 1:]
+                option_lines = option_lines[-4:]
                 options = {
-                    'A': lines[cmd_idx + 1],
-                    'B': lines[cmd_idx + 2],
-                    'C': lines[cmd_idx + 3],
-                    'D': lines[cmd_idx + 4]
+                    letter: clean_fallback_option_text(option_lines[idx])
+                    for idx, letter in enumerate(('A', 'B', 'C', 'D'))
+                    if idx < len(option_lines)
                 }
             elif len(lines) >= 5:
                 stmt_lines = lines[:-4]
-                options = {'A': lines[-4], 'B': lines[-3], 'C': lines[-2], 'D': lines[-1]}
+                option_lines = select_fallback_options(lines)
+                option_lines = collapse_indented_option_lines(option_lines)
+                if len(option_lines) >= 4:
+                    option_lines = option_lines[-4:]
+                else:
+                    option_lines = lines[-4:]
+                options = {
+                    letter: clean_fallback_option_text(option_lines[idx])
+                    for idx, letter in enumerate(('A', 'B', 'C', 'D'))
+                    if idx < len(option_lines)
+                }
             else:
                 stmt_lines = [lines[0]]
-                options = {'A': lines[1] if len(lines) > 1 else '', 'B': lines[2] if len(lines) > 2 else '', 'C': lines[3] if len(lines) > 3 else '', 'D': lines[4] if len(lines) > 4 else ''}
+                option_lines = select_fallback_options(lines[1:])
+                option_lines = collapse_indented_option_lines(option_lines)
+                if len(option_lines) < 4:
+                    option_lines = lines[1:]
+                options = {
+                    letter: clean_fallback_option_text(option_lines[idx])
+                    for idx, letter in enumerate(('A', 'B', 'C', 'D'))
+                    if idx < len(option_lines)
+                }
                 
-        stmt_text = "\n\n".join(stmt_lines)
+        stmt_text = "\n\n".join(line_text(line) for line in stmt_lines)
         if q_num == 1 and support_poem:
             stmt_text = f"📖 **Texto de Apoio (Questões 1 a 3):**\n\n{support_poem}\n\n---\n\n{stmt_text}"
             

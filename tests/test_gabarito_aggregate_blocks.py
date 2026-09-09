@@ -20,6 +20,13 @@ def _add_block(doc, cargo, tipo, answers):
     page.insert_text((50, 30), "\n".join(lines), fontsize=4)
 
 
+def _add_plain_block(doc, cargo, answers):
+    page = doc.new_page()
+    lines = [cargo]
+    lines.extend(f"{number} {answers[number]}" for number in range(1, 71))
+    page.insert_text((50, 30), "\n".join(lines), fontsize=4)
+
+
 def _profile(title="Analista de Tecnologia da Informacao - Comunicacao Social", tipo="1"):
     questions = [
         {
@@ -99,4 +106,22 @@ def test_unknown_cargo_fails_closed_when_aggregate_has_many_blocks():
     assert result.accepted is False
     assert result.answers == {}
     assert result.status in {"rejected", "not_found"}
+    doc.close()
+
+
+def test_plain_cargo_blocks_select_the_matching_cargo_without_tipo_header():
+    doc = fitz.open()
+    _add_plain_block(doc, "AGENTE CULTURAL", RIGHT_TYPE_1)
+    _add_plain_block(doc, "ATI - COMUNICACAO SOCIAL", RIGHT_TYPE_2)
+
+    result = match_gabarito_from_pdf(
+        doc,
+        _profile(),
+        source_relation="paired",
+    )
+
+    assert result.accepted is True
+    assert result.method == "plain_cargo_block"
+    assert result.candidate["cargo_text"] == "ATI - COMUNICACAO SOCIAL"
+    assert result.answers == RIGHT_TYPE_2
     doc.close()

@@ -434,6 +434,7 @@
     /* Nomes semânticos compartilhados pelas telas e componentes de prova. */
     --background: var(--canvas);
     --primary-contrast: var(--on-primary);
+    --text-placeholder: color-mix(in srgb, var(--text) 72%, var(--surface) 28%);
     --success-subtle: var(--success-surface);
     --warning-subtle: var(--warning-surface);
     --danger-subtle: var(--danger-surface);
@@ -1364,8 +1365,15 @@
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
-.input-control::placeholder {
-  color: var(--text-subtle);
+.input-control::placeholder,
+.ui-input::placeholder,
+.glass-input::placeholder {
+  color: var(--text-placeholder);
+  opacity: 1;
+}
+
+.input-leading-icon {
+  padding-left: 2.5rem;
 }
 
 .input-control:focus {
@@ -1708,11 +1716,6 @@ progress::-moz-progress-bar { background: var(--primary); }
   box-shadow: none;
   padding: 0.65rem 0.8rem;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-}
-
-.ui-input::placeholder,
-.glass-input::placeholder {
-  color: var(--text-subtle);
 }
 
 .ui-input:focus,
@@ -2227,6 +2230,15 @@ progress::-moz-progress-bar { background: var(--primary); }
   animation: ui-spin 1s linear infinite;
 }
 
+.ingest-progress-loader {
+  display: block;
+  flex: 0 0 auto;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ui-spin 700ms linear infinite;
+  will-change: transform;
+}
+
 @keyframes ui-spin {
   to {
     transform: rotate(360deg);
@@ -2490,5 +2502,10 @@ progress::-moz-progress-bar { background: var(--primary); }
 
   .ui-loader {
     animation: none;
+  }
+
+  /* Este indicador comunica que o processamento ainda está ativo. */
+  .ingest-progress-loader {
+    animation: ui-spin 1.6s linear infinite !important;
   }
 }

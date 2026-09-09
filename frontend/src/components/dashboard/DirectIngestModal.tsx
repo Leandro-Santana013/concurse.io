@@ -23,7 +23,7 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
   initialGabaritoUrl = '',
   initialTitle = '',
 }) => {
-  const { showToast } = useUI();
+  const { refreshDownloads, showToast } = useUI();
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -101,10 +101,12 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
     setStatusMessage(nextStatus);
     if (nextProgress >= 100 || nextStatus === 'Aprovada') {
       stopWatching();
+      void refreshDownloads();
       setReadyExamId(examId);
       setStage('ready');
     } else if (nextProgress < 0 || data.error_type || TERMINAL_ERRORS.has(nextStatus)) {
       stopWatching();
+      void refreshDownloads();
       setStage('error');
       setErrorMessage(nextStatus || 'O processamento da prova falhou.');
     }
@@ -169,6 +171,7 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
       if (response.status === 'Aprovada') {
         setProgress(100);
         setStatusMessage(response.reused ? response.message : 'Prova pronta para começar.');
+        void refreshDownloads();
         setReadyExamId(response.exam_id);
         setStage('ready');
         return;
@@ -177,6 +180,7 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
       setStatusMessage(response.reused ? response.message : 'Baixando e organizando as questões...');
       watchProgress(response.exam_id);
     } catch (error) {
+      void refreshDownloads();
       setStage('error');
       setErrorMessage(error instanceof Error ? error.message : 'Não foi possível iniciar a importação.');
     }
@@ -225,7 +229,7 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
 
           {(stage === 'submitting' || stage === 'processing') && (
             <section className="rounded-lg border border-[var(--border)] bg-[var(--surface-subtle)] p-4" aria-live="polite" aria-busy="true">
-              <div className="flex items-center justify-between gap-4 text-sm"><span className="flex items-center gap-2 font-medium text-[var(--text)]"><Loader2 className="animate-spin" aria-hidden="true" />{statusMessage}</span><span className="font-mono">{progress}%</span></div>
+              <div className="flex items-center justify-between gap-4 text-sm"><span className="flex items-center gap-2 font-medium text-[var(--text)]"><Loader2 className="ingest-progress-loader" aria-hidden="true" />{statusMessage}</span><span className="font-mono">{progress}%</span></div>
               <progress className="mt-3 h-2 w-full" max="100" value={Math.max(5, progress)}>{progress}%</progress>
               <p className="mt-2 text-xs text-[var(--text-muted)]">Você pode fechar esta janela; o processamento continuará em segundo plano.</p>
             </section>
@@ -251,7 +255,7 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
               {stage === 'ready' && readyExamId ? (
                 <button type="button" className="button-primary" onClick={() => { onClose(); onExamReady?.(readyExamId); }}><FileText aria-hidden="true" /> Iniciar simulado</button>
               ) : (
-                <button type="submit" className="button-primary" disabled={isBusy || !examUrl.trim()}>{isBusy ? <Loader2 className="animate-spin" aria-hidden="true" /> : <FileText aria-hidden="true" />} Processar prova</button>
+                <button type="submit" className="button-primary" disabled={isBusy || !examUrl.trim()}>{isBusy ? <Loader2 className="ingest-progress-loader" aria-hidden="true" /> : <FileText aria-hidden="true" />} Processar prova</button>
               )}
             </div>
           </footer>

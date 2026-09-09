@@ -9,6 +9,7 @@ export interface Question {
   statement: string;
   options: Record<string, string>;
   correct_answer: string;
+  is_annulled?: boolean;
   subject: string;
   images?: string[] | null;
   has_official_answer: boolean;
@@ -61,6 +62,16 @@ export interface SearchResultItem {
   source: string;
   status?: string;
   reuse_available?: boolean;
+}
+
+export interface SearchResultsPage {
+  items: SearchResultItem[];
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
+  has_previous: boolean;
+  has_next: boolean;
 }
 
 export interface ExamIngestResult {

@@ -237,6 +237,11 @@ def get_error_notebook(
             statement=q.statement,
             options=options_dict,
             correct_answer=q.correct_answer,
+            is_annulled=bool(re.search(
+                r"^\s*\(?\s*quest(?:ão|ao)\s+anulada\b",
+                q.statement or "",
+                re.IGNORECASE,
+            )),
             subject=q.subject or "Geral",
             images=secure_exam_image_urls(exam.id, images_list),
             has_official_answer=True,

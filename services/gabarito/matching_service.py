@@ -24,6 +24,7 @@ from .gabarito_service import (
     _cargo_identity_tokens,
     extract_all_matrix_gabaritos,
     extract_answer_key_blocks,
+    extract_plain_cargo_answer_key_blocks,
     extract_code_ranges_from_text,
     extract_exam_code_ranges_from_pdf,
     parse_fgv_vertical_gabarito,
@@ -522,6 +523,29 @@ def _extract_candidates(
                 },
                 page=page_number,
                 method="structured_block",
+                metadata=metadata,
+                has_header=True,
+                cargo_text=str(block.get("cargo") or ""),
+                block_index=int(block.get("block_index") or 0) or None,
+                raw_text=block_text,
+            )
+        )
+
+    plain_cargo_blocks = [] if structured_blocks else extract_plain_cargo_answer_key_blocks(doc)
+    for block in plain_cargo_blocks:
+        page_number = int(block["page"])
+        block_text = str(block.get("text") or "")
+        metadata = _extract_identity_metadata(
+            f"{document_hint}\n{block_text}"
+        )
+        candidates.append(
+            AnswerKeyCandidate(
+                answers={
+                    int(number): str(answer).upper()
+                    for number, answer in block["gabarito"].items()
+                },
+                page=page_number,
+                method="plain_cargo_block",
                 metadata=metadata,
                 has_header=True,
                 cargo_text=str(block.get("cargo") or ""),

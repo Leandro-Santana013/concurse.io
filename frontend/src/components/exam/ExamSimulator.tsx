@@ -24,6 +24,7 @@ import {
   RotateCcw,
   Scissors,
   Settings2,
+  Target,
   X,
   XCircle,
 } from 'lucide-react';
@@ -92,6 +93,29 @@ const FOCUSABLE_SELECTOR = [
   'textarea:not([disabled])',
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
+
+const ANNULLED_NOTICE_PATTERN = /^\s*\(?\s*quest(?:ão|ao)\s+anulada\s*:?\s*\)?\s*/i;
+
+const isAnnulledQuestion = (question: Question) =>
+  Boolean(question.is_annulled || ANNULLED_NOTICE_PATTERN.test(question.statement || ''));
+
+const questionStatementWithoutAnnulledNotice = (question: Question) =>
+  (question.statement || '').replace(ANNULLED_NOTICE_PATTERN, '').trim();
+
+const AnnulledQuestionNotice: React.FC<{ className?: string }> = ({ className }) => (
+  <div
+    role="note"
+    aria-label="Questão anulada"
+    className={clsx(
+      'inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold',
+      'border-[var(--danger)] bg-[var(--danger-subtle)] text-[var(--danger)]',
+      className,
+    )}
+  >
+    <Target aria-hidden="true" className="h-4 w-4 shrink-0" />
+    <span>Questão anulada</span>
+  </div>
+);
 
 const AccessibleDialog: React.FC<AccessibleDialogProps> = ({
   open,
@@ -452,6 +476,7 @@ const ExamResults: React.FC<ExamResultsProps> = ({
                     (question.numero_questao || String(question.id)) === questionNumber,
                 ) || exam.questions.find((question) => question.id === data.question_id);
               if (!originalQuestion) return null;
+              const questionIsAnnulled = isAnnulledQuestion(originalQuestion);
 
               return (
                 <details
@@ -466,7 +491,9 @@ const ExamResults: React.FC<ExamResultsProps> = ({
                     )}
                   >
                     <span className="flex min-w-0 items-center gap-3">
-                      {data.is_correct ? (
+                      {questionIsAnnulled ? (
+                        <Target aria-hidden="true" className="h-5 w-5 shrink-0 text-[var(--danger)]" />
+                      ) : data.is_correct ? (
                         <CheckCircle2 aria-hidden="true" className="h-5 w-5 shrink-0 text-[var(--success)]" />
                       ) : (
                         <XCircle aria-hidden="true" className="h-5 w-5 shrink-0 text-[var(--danger)]" />
@@ -475,7 +502,11 @@ const ExamResults: React.FC<ExamResultsProps> = ({
                         <span className="block font-semibold">Questão {questionNumber}</span>
                         <span className="block truncate text-xs text-[var(--text-muted)]">
                           {data.subject || originalQuestion.subject} ·{' '}
-                          {data.is_correct ? 'Resposta correta' : 'Resposta incorreta'}
+                          {questionIsAnnulled
+                            ? 'Questão anulada'
+                            : data.is_correct
+                              ? 'Resposta correta'
+                              : 'Resposta incorreta'}
                         </span>
                       </span>
                     </span>
@@ -488,6 +519,7 @@ const ExamResults: React.FC<ExamResultsProps> = ({
                   </summary>
 
                   <div className="border-t border-[var(--border)] px-4 py-5 sm:px-6">
+                    {questionIsAnnulled && <AnnulledQuestionNotice className="mb-5" />}
                     <div className="mb-5 flex flex-wrap gap-x-5 gap-y-2 text-sm">
                       <span>
                         <span className="text-[var(--text-muted)]">Sua resposta: </span>
@@ -495,7 +527,7 @@ const ExamResults: React.FC<ExamResultsProps> = ({
                       </span>
                       <span>
                         <span className="text-[var(--text-muted)]">Gabarito: </span>
-                        <strong>{data.correct_answer}</strong>
+                        <strong>{questionIsAnnulled ? 'Não se aplica' : data.correct_answer}</strong>
                       </span>
                     </div>
 
@@ -511,7 +543,7 @@ const ExamResults: React.FC<ExamResultsProps> = ({
                     )}
 
                     <div className="font-reading leading-[1.7]">
-                      <MathRenderer content={originalQuestion.statement} />
+                      <MathRenderer content={questionStatementWithoutAnnulledNotice(originalQuestion)} />
                     </div>
 
                     {originalQuestion.images && originalQuestion.images.length > 0 && (
@@ -543,8 +575,8 @@ const ExamResults: React.FC<ExamResultsProps> = ({
 
                     <div className="mt-6 space-y-2">
                       {Object.entries(originalQuestion.options).map(([key, text]) => {
-                        const isCorrect = data.correct_answer === key;
-                        const isUserAnswer = data.user_answer === key;
+                        const isCorrect = !questionIsAnnulled && data.correct_answer === key;
+                        const isUserAnswer = !questionIsAnnulled && data.user_answer === key;
                         return (
                           <div
                             key={key}
@@ -653,6 +685,10 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
   const questions = activeExam?.questions || [];
   const currentQ = questions[currentIdx] || currentQuestion;
   const qNum = currentQ?.numero_questao || String(currentIdx + 1);
+  const currentQuestionIsAnnulled = currentQ ? isAnnulledQuestion(currentQ) : false;
+  const currentQuestionStatement = currentQ
+    ? questionStatementWithoutAnnulledNotice(currentQ)
+    : '';
   const qEliminated = eliminatedOptions[qNum] || {};
   const answeredCount = questions.reduce((count, question, idx) => {
     const number = question.numero_questao || String(idx + 1);
@@ -1182,6 +1218,8 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             </button>
           </div>
 
+          {currentQuestionIsAnnulled && <AnnulledQuestionNotice className="mt-6" />}
+
           {currentQ.context_text && (
             <aside
               aria-label="Texto de apoio"
@@ -1224,7 +1262,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
           )}
 
           <div className={clsx('mt-7 font-reading', fontSizeClass)}>
-            <MathRenderer content={currentQ.statement} />
+            <MathRenderer content={currentQuestionStatement} />
           </div>
 
           <fieldset className="mt-8 min-w-0">

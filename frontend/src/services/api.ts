@@ -10,6 +10,7 @@ import {
   ExamProgress,
   ExamIngestResult,
   ActiveDownload,
+  SearchResultsPage,
 } from '../types/exam';
 import { AuthConfig, AuthUser } from '../types/auth';
 
@@ -89,13 +90,36 @@ export const api = {
     return res.json();
   },
 
-  async searchExams(query: string, sources?: string, refresh: boolean = false): Promise<SearchResultItem[]> {
-    const params = new URLSearchParams({ q: query });
+  async searchExams(
+    query: string,
+    sources?: string,
+    refresh: boolean = false,
+    page: number = 1,
+    pageSize: number = 25,
+  ): Promise<SearchResultsPage> {
+    const params = new URLSearchParams({
+      q: query,
+      page: String(page),
+      page_size: String(pageSize),
+    });
     if (sources) params.append('sources', sources);
     if (refresh) params.append('refresh', 'true');
     const res = await apiFetch(`${API_BASE}/search?${params.toString()}`);
     if (!res.ok) throw new Error('Falha ao realizar busca de provas');
-    return res.json();
+    const data: unknown = await res.json();
+    if (Array.isArray(data)) {
+      const items = data as SearchResultItem[];
+      return {
+        items,
+        page,
+        page_size: pageSize,
+        total: items.length,
+        total_pages: items.length > 0 ? Math.ceil(items.length / pageSize) : 0,
+        has_previous: page > 1,
+        has_next: items.length === pageSize,
+      };
+    }
+    return data as SearchResultsPage;
   },
 
   async ingestExam(url: string, title: string, gabaritoUrl?: string): Promise<ExamIngestResult> {

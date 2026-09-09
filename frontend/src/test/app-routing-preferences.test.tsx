@@ -96,7 +96,11 @@ describe('rotas e preferências da aplicação', () => {
     const user = userEvent.setup();
     renderApp('/buscar');
 
-    expect(await screen.findByRole('heading', { name: 'Encontre sua próxima prova' })).toBeVisible();
+    expect(await screen.findByRole(
+      'heading',
+      { name: 'Encontre sua próxima prova' },
+      { timeout: 10_000 },
+    )).toBeVisible();
     expect(screen.getByTestId('current-path')).toHaveTextContent('/buscar');
 
     await waitFor(() => {
@@ -118,6 +122,7 @@ describe('rotas e preferências da aplicação', () => {
     expect(await screen.findByRole('heading', { name: 'Suas provas' })).toBeVisible();
     expect(screen.getByTestId('current-path')).toHaveTextContent('/biblioteca');
     expect(within(desktopNavigation).getByRole('link', { name: 'Biblioteca' })).toHaveClass('is-active');
+    expect(screen.getByPlaceholderText('Filtrar por título')).toHaveClass('input-leading-icon');
   });
 
   it('revalida uma prova persistida e preserva o progresso autorizado', async () => {

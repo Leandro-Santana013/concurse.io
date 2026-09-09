@@ -393,6 +393,73 @@ def extract_answer_key_blocks(gab_doc) -> List[Dict[str, Any]]:
             )
     return results
 
+
+_PLAIN_CARGO_ANSWER_LINE_REGEX = re.compile(
+    r"^\s*(?P<number>\d{1,3})\s+(?P<answer>[A-Ea-eXNxn*])\s*$"
+)
+_PLAIN_CARGO_EXCLUDED_HEADERS = {
+    "SECRETARIA DE GESTAO",
+    "GABARITOS",
+    "EDITAL DE DIVULGACAO DOS GABARITOS",
+}
+
+
+def _looks_like_plain_cargo_header(lines: List[str], index: int) -> bool:
+    """Identifica um título de cargo em gabaritos agregados sem ``PROVA TIPO``."""
+    raw = str(lines[index] or "").strip()
+    if not raw or any(char.isdigit() for char in raw):
+        return False
+    normalized = _normalize_code_text(raw).strip()
+    if normalized in _PLAIN_CARGO_EXCLUDED_HEADERS:
+        return False
+    if len(normalized) < 3 or not any(char.isalpha() for char in normalized):
+        return False
+    if raw != raw.upper():
+        return False
+    for following in lines[index + 1 : index + 9]:
+        if _PLAIN_CARGO_ANSWER_LINE_REGEX.match(str(following or "")):
+            return True
+    return False
+
+
+def extract_plain_cargo_answer_key_blocks(gab_doc) -> List[Dict[str, Any]]:
+    """Extrai blocos ``CARGO`` + linhas ``1 A`` de gabaritos sem tipo explícito."""
+    results: List[Dict[str, Any]] = []
+    for page_number, page in enumerate(gab_doc, start=1):
+        lines = [str(line or "").strip() for line in page.get_text().splitlines()]
+        headers = [
+            index
+            for index in range(len(lines))
+            if _looks_like_plain_cargo_header(lines, index)
+        ]
+        for block_index, header_index in enumerate(headers, start=1):
+            end_index = headers[block_index] if block_index < len(headers) else len(lines)
+            cargo = lines[header_index].strip()
+            answers: Dict[int, str] = {}
+            for line in lines[header_index + 1 : end_index]:
+                match = _PLAIN_CARGO_ANSWER_LINE_REGEX.match(line)
+                if not match:
+                    continue
+                number = int(match.group("number"))
+                if not 1 <= number <= 200:
+                    continue
+                answer = match.group("answer").upper()
+                answers[number] = "X" if answer in {"*", "N"} else answer
+            if len(answers) < 5:
+                continue
+            results.append(
+                {
+                    "page": page_number,
+                    "block_index": block_index,
+                    "cargo": cargo,
+                    "tipo": "",
+                    "total_q": len(answers),
+                    "gabarito": answers,
+                    "text": "\n".join(lines[header_index:end_index]),
+                }
+            )
+    return results
+
 def _compute_cargo_match_score(exam_title: str, candidate_cargo: str, target_tipo: Optional[str], candidate_tipo: Optional[str]) -> float:
     if not candidate_cargo:
         return 0.0
@@ -608,6 +675,24 @@ def parse_gabarito_from_pdf(
                 return {}
             if len(answer_key_blocks) == 1:
                 return answer_key_blocks[0]["gabarito"]
+            return {}
+
+        plain_cargo_blocks = extract_plain_cargo_answer_key_blocks(doc)
+        if plain_cargo_blocks:
+            if cargo_or_title:
+                scored_plain = [
+                    (
+                        _cargo_match_score(cargo_or_title, block["cargo"]),
+                        block,
+                    )
+                    for block in plain_cargo_blocks
+                ]
+                scored_plain.sort(key=lambda item: item[0], reverse=True)
+                if scored_plain and scored_plain[0][0] > 0:
+                    return scored_plain[0][1]["gabarito"]
+                return {}
+            if len(plain_cargo_blocks) == 1:
+                return plain_cargo_blocks[0]["gabarito"]
             return {}
 
         # 1. Extração de Gabaritos Matriciais Multi-Cargo (Padrão IBAM / VUNESP / Quadrix)
