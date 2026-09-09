@@ -20,6 +20,18 @@ from .layout import (
     ZoneConfig,
     ZoneDetection,
 )
+from .candidates import (
+    Candidate,
+    CandidateDetection,
+    CandidateDetector,
+    CandidateDetectorConfig,
+    CandidateScoreWeights,
+    FEATURE_SCHEMA,
+    FEATURE_SCHEMA_VERSION,
+    FeatureSchemaV1,
+    FeatureVector,
+    LegacyEvidenceProvider,
+)
 
 __all__ = [
     "BBox", "DocumentModel", "PageModel", "PhysicalElement", "PhysicalExtractor",
@@ -27,4 +39,7 @@ __all__ = [
     "DBSCANConfig", "ZoneConfig", "DocumentProfile", "LayoutAnalysis",
     "PageLayout", "ColumnModel", "GutterCandidate", "GutterEvidence",
     "ElementLayout", "ReadingOrder", "ClusterSummary", "ZoneDetection",
+    "Candidate", "CandidateDetection", "CandidateDetector",
+    "CandidateDetectorConfig", "CandidateScoreWeights", "LegacyEvidenceProvider",
+    "FEATURE_SCHEMA", "FEATURE_SCHEMA_VERSION", "FeatureSchemaV1", "FeatureVector",
 ]
