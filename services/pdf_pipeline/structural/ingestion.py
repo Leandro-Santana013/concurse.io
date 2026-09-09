@@ -53,6 +53,8 @@ class StructuralRolloutOutcome:
     def promoted(self) -> bool:
         decision = self.result.arbitration if self.result is not None else None
         return bool(
+            self.mode in {PipelineMode.STRUCTURAL_PREFERRED, PipelineMode.STRUCTURAL_ONLY}
+            and
             decision is not None
             and decision.status is ArbitrationStatus.STRUCTURAL
             and self.result.structural_result

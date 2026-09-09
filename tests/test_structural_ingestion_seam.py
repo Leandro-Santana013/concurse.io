@@ -110,6 +110,19 @@ def test_quarantine_preserves_legacy_and_cannot_be_promoted():
     assert result.user_result == LEGACY
 
 
+def test_high_confidence_without_diff_still_requires_concordance():
+    structural = [{**LEGACY[0], "numero_questao": "2"}]
+
+    decision = ResultArbiter().arbitrate(
+        legacy_result=LEGACY,
+        structural_result=structural,
+        structural_confidence=0.99,
+    )
+
+    assert decision.status is ArbitrationStatus.QUARANTINE
+    assert decision.selected_result == LEGACY
+
+
 def test_merge_never_turns_missing_answer_into_a_default():
     structural = [{
         "numero_questao": "1",

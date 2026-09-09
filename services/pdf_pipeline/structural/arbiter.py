@@ -87,7 +87,7 @@ class ResultArbiter:
         differs = _diff_has_differences(diff)
 
         if structural and not structural_failed and structural_score >= self.config.structural_high:
-            if differs:
+            if differs or not concordant:
                 return ArbitrationDecision(
                     status=ArbitrationStatus.QUARANTINE,
                     result=legacy,
@@ -96,7 +96,11 @@ class ResultArbiter:
                     reason="structural_high_legacy_divergent",
                     concordant=concordant,
                     quarantined=True,
-                    warnings=["manual_review_required", "structural_diff_requires_gate"],
+                    warnings=[
+                        "manual_review_required",
+                        "structural_concordance_required",
+                        *(["structural_diff_requires_gate"] if differs else []),
+                    ],
                     metadata={"legacy_confidence": legacy_score, "diff": _diff_value(diff)},
                 )
             return ArbitrationDecision(
