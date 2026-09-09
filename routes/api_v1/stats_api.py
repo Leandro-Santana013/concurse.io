@@ -153,7 +153,7 @@ def get_notebook_subject_stats(
 
             for idx_str, given_ans in answers.items():
                 q = _find_question(exam_q_list, idx_str, is_generated_session)
-                if q and given_ans.strip().upper() != q.correct_answer.strip().upper():
+                if q and q.correct_answer and given_ans.strip().upper() != q.correct_answer.strip().upper():
                     subject = q.subject or 'Geral'
                     wrong_q_ids_by_subject.setdefault(subject, set()).add(q.id)
         except Exception:
@@ -196,7 +196,7 @@ def get_error_notebook(
 
             for idx_str, given_ans in answers.items():
                 q = _find_question(exam_q_list, idx_str, is_generated_session)
-                if q and given_ans.strip().upper() != q.correct_answer.strip().upper():
+                if q and q.correct_answer and given_ans.strip().upper() != q.correct_answer.strip().upper():
                     wrong_question_ids.add(q.id)
         except Exception:
             pass

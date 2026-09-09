@@ -299,9 +299,9 @@ def submit_attempt(
             or ""
         )
         user_ans = str(raw_user_ans).strip().upper()
-        correct_ans = q.correct_answer.strip().upper() if q.correct_answer else "A"
+        correct_ans = q.correct_answer.strip().upper() if q.correct_answer else ""
         
-        is_correct = (user_ans == correct_ans) or (correct_ans == 'X')
+        is_correct = bool(correct_ans) and ((user_ans == correct_ans) or (correct_ans == 'X'))
         if is_correct:
             score += 1
 

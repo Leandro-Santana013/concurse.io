@@ -17,7 +17,11 @@ from .media.diagram_cropper import (
 )
 from .formatters.formula_formatter import format_latex_formulas
 from .fallbacks.subject_classifier import SUBJECT_REGEX, format_subject_title, _format_subject_title, rust_classify_subject
-from services.gabarito.gabarito_service import extract_gabarito_from_doc, _extract_gabarito_from_doc
+from services.gabarito.gabarito_service import (
+    extract_gabarito_from_doc,
+    _extract_gabarito_from_doc,
+    normalize_answer_or_empty,
+)
 from services.crawlers.html_exam_parser import clean_text_artifacts
 from .native.rust_bridge import rust_scan_question_headers, rust_process_exam_text, is_rust_available
 from .fallbacks.typography_restorer import restore_exam_typography, format_markdown_tables_in_text
@@ -354,7 +358,7 @@ def parse_exam_document(
                         'numero_questao': str(h_num),
                         'enunciado': missing_stmt_clean,
                         'opcoes': missing_opts,
-                        'resposta': master_gabarito.get(h_num, 'A'),
+                        'resposta': normalize_answer_or_empty(master_gabarito.get(h_num)),
                         'disciplina': 'Geral'
                     })
                     existing_q_nums.add(h_num)
@@ -450,7 +454,9 @@ def parse_exam_document(
                 opt_formatted, _ = format_latex_formulas(opt_clean)
                 options[let] = opt_formatted
 
-            final_answer = master_gabarito.get(q_num) or rq.get('resposta', 'A')
+            final_answer = normalize_answer_or_empty(
+                master_gabarito.get(q_num) or rq.get('resposta')
+            )
             approx_page, q_x, q_y = q_spatial_map.get(q_num, (start_page, 0.0, 0.0))
             
             questions.append({
@@ -761,9 +767,9 @@ def parse_exam_document(
         formatted_enunciado = format_markdown_tables_in_text(formatted_enunciado)
 
         # Determinação da Resposta Oficial
-        final_answer = master_gabarito.get(q_num) or embedded_ans
-        if not final_answer:
-            final_answer = 'C' if is_certo_errado else 'A'
+        final_answer = normalize_answer_or_empty(
+            master_gabarito.get(q_num) or embedded_ans
+        )
 
         # Recupera as coordenadas espaciais da questão
         approx_page, q_x, q_y = q_spatial_map.get(q_num, (start_page, 0.0, 0.0))

@@ -131,14 +131,14 @@ def parse_html_exam(html_content: str, source_url: str = "") -> List[Dict[str, A
                         opt_text = re.sub(rf'^{re.escape(letra)}\s*[\.\-\)]?\s*', '', opt_text, flags=re.IGNORECASE).strip()
                         options[letra.upper()] = clean_text_artifacts(opt_text)
 
-            # Extrair gabarito oficial real
-            correct_ans = 'A'
+            # Extrair gabarito oficial real. Sem uma fonte explícita, a
+            # resposta permanece desconhecida; nunca inferir A/C pela
+            # existência da alternativa.
+            correct_ans = ''
             if idx < len(gabaritos_list):
-                correct_ans = str(gabaritos_list[idx]).upper()
-            elif 'A' in options:
-                correct_ans = 'A'
-            elif 'C' in options:
-                correct_ans = 'C'
+                raw_answer = str(gabaritos_list[idx] or '').strip().upper()
+                if raw_answer:
+                    correct_ans = raw_answer[:10]
 
             # Extrair imagens da questão se presentes
             q_images = []

@@ -28,6 +28,7 @@ from services.gabarito import (
     has_complete_official_answer_key,
     match_gabarito_from_pdf,
     merge_exam_with_gabarito,
+    normalize_answer_or_empty,
     parse_gabarito_from_text,
 )
 from services.search import standardize_card_title, interpret_search_query_deterministic
@@ -468,10 +469,7 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
                             statement_clean = f"Questão {idx}"
 
                         raw_resposta = q_data.get('resposta')
-                        if not raw_resposta or not str(raw_resposta).strip():
-                            correct_ans = 'A'
-                        else:
-                            correct_ans = str(raw_resposta).replace('\x00', '').strip().upper()[:10]
+                        correct_ans = normalize_answer_or_empty(raw_resposta)
 
                         raw_opcoes = q_data.get('opcoes')
                         if isinstance(raw_opcoes, (dict, list)):

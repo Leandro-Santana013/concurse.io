@@ -125,6 +125,27 @@ def test_owner_can_read_and_explicit_claim_grants_access(secured_exam_app):
     assert client.get("/api/v1/exams/41").status_code == 200
 
 
+def test_attempt_does_not_grade_unknown_answer_as_a(secured_exam_app):
+    client, _active_user, TestingSession, _app = secured_exam_app
+
+    with TestingSession() as db:
+        question = db.query(Question).filter_by(exam_id=41, numero_questao="1").one()
+        question.correct_answer = ""
+        db.commit()
+
+    response = client.post("/api/v1/exams/attempt", json={
+        "exam_id": 41,
+        "answers": {str(number): "A" for number in range(1, 6)},
+        "elapsed_seconds": 10,
+    })
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["score"] == 4
+    assert payload["detailed_answers"]["1"]["correct_answer"] == ""
+    assert payload["detailed_answers"]["1"]["is_correct"] is False
+
+
 def test_exam_media_requires_login_ownership_and_question_reference(secured_exam_app):
     client, active_user, _session, app = secured_exam_app
 

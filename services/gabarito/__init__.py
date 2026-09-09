@@ -11,6 +11,7 @@ from .gabarito_service import (
     extract_exam_code_ranges_from_pdf,
     extract_answer_key_blocks,
     _extract_gabarito_from_doc,
+    normalize_answer_or_empty,
 )
 from .matching_service import (
     AnswerKeyMatchResult,
@@ -30,6 +31,7 @@ __all__ = [
     "extract_exam_code_ranges_from_pdf",
     "extract_answer_key_blocks",
     "_extract_gabarito_from_doc",
+    "normalize_answer_or_empty",
     "AnswerKeyMatchResult",
     "ExamAnswerKeyProfile",
     "build_exam_answer_key_profile",

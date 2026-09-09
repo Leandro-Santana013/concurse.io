@@ -8,6 +8,19 @@ import fitz
 GABARITO_HEADER_REGEX = re.compile(r'\b(gabarito|folha\s+de\s+respostas?|quadro\s+de\s+respostas?|respostas?\s+das?\s+quest[õo]es|gabarito\s+oficial|gabarito\s+preliminar|gabarito\s+definitivo)\b', re.IGNORECASE)
 
 
+def normalize_answer_or_empty(raw_answer: Any) -> str:
+    """Normaliza uma resposta explícita; ausência permanece desconhecida.
+
+    O parser e a camada de persistência usam ``\"\"`` como representação
+    compatível com o schema legado para uma resposta que não foi encontrada.
+    Esse valor não deve ser confundido com a alternativa A.
+    """
+    if raw_answer is None:
+        return ""
+    normalized = str(raw_answer).replace("\x00", "").strip().upper()
+    return normalized[:10] if normalized else ""
+
+
 def _normalize_code_text(raw_text: str) -> str:
     """Normaliza acentos e artefatos comuns de extração antes de ler códigos."""
     text = str(raw_text or "")
@@ -819,8 +832,7 @@ def merge_exam_with_gabarito(questions, gabarito_dict, *, strict: bool = False):
             matched_count += 1
         else:
             q_copy['has_official_answer'] = False
-            if not q_copy.get('resposta'):
-                q_copy['resposta'] = 'A'
+            q_copy['resposta'] = normalize_answer_or_empty(q_copy.get('resposta'))
 
         updated_questions.append(q_copy)
 

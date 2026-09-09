@@ -239,6 +239,30 @@ def test_strict_merge_never_applies_partial_or_shifted_key():
     assert all(question["has_official_answer"] is False for question in updated)
 
 
+def test_merge_represents_missing_answers_as_unknown_instead_of_a():
+    questions = _questions(count=2)
+
+    updated, stats = merge_exam_with_gabarito(questions, {}, strict=True)
+
+    assert stats["matched_answers"] == 0
+    assert stats["coverage_pct"] == 0.0
+    assert stats["has_official_answers"] is False
+    assert [question["resposta"] for question in updated] == ["", ""]
+    assert all(question["has_official_answer"] is False for question in updated)
+
+
+def test_merge_preserves_explicit_embedded_answer_without_promoting_it_to_official():
+    questions = _questions(count=2)
+    questions[0]["resposta"] = "b"
+
+    updated, stats = merge_exam_with_gabarito(questions, {}, strict=True)
+
+    assert updated[0]["resposta"] == "B"
+    assert updated[0]["has_official_answer"] is False
+    assert updated[1]["resposta"] == ""
+    assert stats["has_official_answers"] is False
+
+
 def test_match_decision_serializes_all_audit_factors():
     profile = build_exam_answer_key_profile(None, _questions(), title="COVEIRO")
     answer_doc = fitz.open()

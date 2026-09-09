@@ -193,6 +193,7 @@ class Question(Base):
     exam_id = Column(Integer, ForeignKey('exams.id'), index=True)
     statement = Column(Text, nullable=False)
     options = Column(Text, nullable=True)
+    # String vazia representa resposta desconhecida; nunca usar A como default.
     correct_answer = Column(String(10), nullable=False)
     subject = Column(String(100), nullable=True, default='Geral', index=True)
     images = Column(Text, nullable=True)
