@@ -1,6 +1,8 @@
 import os
 import re
 import io
+import json
+import time
 import fitz
 from typing import List, Dict, Any, Optional, Tuple, Set
 
@@ -25,6 +27,216 @@ from services.gabarito.gabarito_service import (
 from services.crawlers.html_exam_parser import clean_text_artifacts
 from .native.rust_bridge import rust_scan_question_headers, rust_process_exam_text, is_rust_available
 from .fallbacks.typography_restorer import restore_exam_typography, format_markdown_tables_in_text
+from .parse_cache import load_parse_cache, prepare_parse_source, save_parse_cache
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    """Lê flags de rollout sem permitir valores arbitrários no pipeline."""
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() not in {"0", "false", "off", "no"}
+
+
+class _PipelineTiming:
+    """Medição opcional, sem registrar texto da prova ou dados do usuário."""
+
+    def __init__(self) -> None:
+        self.enabled = _env_flag("PDF_PIPELINE_TIMING", default=False)
+        self.started_at = time.perf_counter()
+        self.last_mark = self.started_at
+        self.stages: Dict[str, float] = {}
+
+    def mark(self, name: str) -> None:
+        now = time.perf_counter()
+        self.stages[name] = round(now - self.last_mark, 4)
+        self.last_mark = now
+
+    def finish(self, *, pages: int, questions: Optional[int] = None) -> None:
+        if not self.enabled:
+            return
+        payload = {
+            "event": "pdf_pipeline_timing",
+            "pages": pages,
+            "questions": questions,
+            "stages_seconds": self.stages,
+            "total_seconds": round(time.perf_counter() - self.started_at, 4),
+        }
+        print(json.dumps(payload, ensure_ascii=False, sort_keys=True), flush=True)
+
+
+def _build_question_spatial_map_legacy(
+    doc: fitz.Document,
+    start_page: int,
+    total_pages: int,
+) -> Tuple[Dict[int, Tuple[int, float, float]], Dict[int, List[Any]]]:
+    """Implementação anterior, mantida como fallback operacional imediato."""
+    q_spatial_map: Dict[int, Tuple[int, float, float]] = {}
+    page_text_blocks: Dict[int, List[Any]] = {}
+
+    for p_idx in range(start_page, total_pages):
+        page = doc[p_idx]
+        blocks = page.get_text('blocks')
+        page_text_blocks[p_idx] = blocks
+        for q_num in range(1, 201):
+            if q_num in q_spatial_map:
+                continue
+            queries = [
+                f"Questão {q_num:02d}",
+                f"Questão {q_num}",
+                f"QUESTÃO {q_num:02d}",
+                f"QUESTÃO {q_num}",
+                f"ITEM {q_num:02d}",
+                f"ITEM {q_num}",
+                f"Questão\n{q_num:02d}",
+                f"Questão\n{q_num}",
+            ]
+            for q_str in queries:
+                rects = page.search_for(q_str)
+                if rects:
+                    rects.sort(key=lambda r: r.y0)
+                    r = rects[0]
+                    q_spatial_map[q_num] = (p_idx, r.x0, r.y0)
+                    break
+
+    for p_idx in range(start_page, total_pages):
+        for b in page_text_blocks[p_idx]:
+            bx0, by0, bx1, by1, b_text = b[:5]
+            for hm in re.finditer(
+                r'(?:^|\n)\s*(0*\d{1,3})\s*[\.\-\–\—\)]\s+(?=[A-Z\u00C0-\u00DC"\'\(])',
+                b_text,
+            ):
+                try:
+                    num_val = int(hm.group(1))
+                    if 1 <= num_val <= 200 and num_val not in q_spatial_map:
+                        q_spatial_map[num_val] = (p_idx, bx0, by0)
+                except ValueError:
+                    pass
+
+    for p_idx in range(start_page, total_pages):
+        for b in page_text_blocks[p_idx]:
+            bx0, by0, bx1, by1, b_text = b[:5]
+            clean_bt = b_text.strip()
+            if clean_bt.isdigit():
+                try:
+                    num_val = int(clean_bt)
+                    if 1 <= num_val <= 200 and num_val not in q_spatial_map:
+                        q_spatial_map[num_val] = (p_idx, bx0, by0)
+                except ValueError:
+                    pass
+            else:
+                for hm in re.finditer(
+                    r'(?:^|\n)\s*(0*\d{1,3})\s*(?:\n|\s{2,})(?=[A-Z\u00C0-\u00DC"\'\(\«\“\‘]|$)',
+                    b_text,
+                ):
+                    try:
+                        num_val = int(hm.group(1))
+                        if 1 <= num_val <= 200 and num_val not in q_spatial_map:
+                            q_spatial_map[num_val] = (p_idx, bx0, by0)
+                    except ValueError:
+                        pass
+
+    return q_spatial_map, page_text_blocks
+
+
+def _build_question_spatial_map_fast(
+    doc: fitz.Document,
+    start_page: int,
+    total_pages: int,
+) -> Tuple[Dict[int, Tuple[int, float, float]], Dict[int, List[Any]]]:
+    """Mapeia cabeçalhos em uma passagem e usa busca física só nos candidatos reais.
+
+    O comportamento semântico continua igual: quando um cabeçalho textual existe,
+    a coordenada precisa do ``search_for`` tem precedência; coordenadas de bloco
+    são o fallback para numeração quebrada, OCR e cabeçalhos pontuados.
+    """
+    explicit_re = re.compile(
+        r'(?:^|\n)\s*(?:(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+)|ITEM\s+)(0*\d{1,3})\b',
+        re.IGNORECASE,
+    )
+    punctuated_re = re.compile(
+        r'(?:^|\n)\s*(0*\d{1,3})\s*[\.\-\–\—\)]\s+(?=[A-Z\u00C0-\u00DC"\'\(])',
+    )
+    separated_re = re.compile(
+        r'(?:^|\n)\s*(0*\d{1,3})\s*(?:\n|\s{2,})(?=[A-Z\u00C0-\u00DC"\'\(\«\“\‘]|$)',
+    )
+
+    q_spatial_map: Dict[int, Tuple[int, float, float]] = {}
+    page_text_blocks: Dict[int, List[Any]] = {}
+    explicit_candidates: Dict[int, List[Tuple[int, float, float, str]]] = {}
+
+    for p_idx in range(start_page, total_pages):
+        page = doc[p_idx]
+        blocks = page.get_text('blocks')
+        page_text_blocks[p_idx] = blocks
+
+        for b in blocks:
+            bx0, by0, _bx1, _by1, b_text = b[:5]
+            block_text = str(b_text or '')
+
+            for match in explicit_re.finditer(block_text):
+                try:
+                    q_num = int(match.group(1))
+                except ValueError:
+                    continue
+                if 1 <= q_num <= 200:
+                    prefix = block_text[match.start():match.end()].upper()
+                    kind = 'ITEM' if prefix.lstrip().startswith('ITEM') else 'QUESTAO'
+                    explicit_candidates.setdefault(q_num, []).append((p_idx, bx0, by0, kind))
+
+            for pattern in (punctuated_re, separated_re):
+                for match in pattern.finditer(block_text):
+                    try:
+                        q_num = int(match.group(1))
+                    except ValueError:
+                        continue
+                    if 1 <= q_num <= 200 and q_num not in q_spatial_map:
+                        q_spatial_map[q_num] = (p_idx, bx0, by0)
+
+            if block_text.strip().isdigit():
+                try:
+                    q_num = int(block_text.strip())
+                except ValueError:
+                    q_num = 0
+                if 1 <= q_num <= 200 and q_num not in q_spatial_map:
+                    q_spatial_map[q_num] = (p_idx, bx0, by0)
+
+    for q_num, candidates in explicit_candidates.items():
+        candidates.sort(key=lambda item: (item[0], item[2], item[1]))
+        for p_idx, bx0, by0, kind in candidates:
+            label = 'ITEM' if kind == 'ITEM' else 'Questão'
+            queries = [
+                f'{label} {q_num:02d}',
+                f'{label} {q_num}',
+                f'{label.upper()} {q_num:02d}',
+                f'{label.upper()} {q_num}',
+            ]
+            page = doc[p_idx]
+            found = None
+            for query in queries:
+                rects = page.search_for(query)
+                if rects:
+                    rects.sort(key=lambda r: r.y0)
+                    found = rects[0]
+                    break
+            if found is not None:
+                q_spatial_map[q_num] = (p_idx, found.x0, found.y0)
+            else:
+                q_spatial_map[q_num] = (p_idx, bx0, by0)
+            break
+
+    return q_spatial_map, page_text_blocks
+
+
+def _build_question_spatial_map(
+    doc: fitz.Document,
+    start_page: int,
+    total_pages: int,
+) -> Tuple[Dict[int, Tuple[int, float, float]], Dict[int, List[Any]]]:
+    """Seleciona o mapa rápido; ``PDF_PIPELINE_FAST_SPATIAL_MAP=0`` faz rollback."""
+    if not _env_flag("PDF_PIPELINE_FAST_SPATIAL_MAP", default=True):
+        return _build_question_spatial_map_legacy(doc, start_page, total_pages)
+    return _build_question_spatial_map_fast(doc, start_page, total_pages)
 
 def extract_options_from_chunk(chunk: str) -> Tuple[Dict[str, str], Optional[str]]:
     """
@@ -171,13 +383,32 @@ def parse_exam_document(
     5. Recorte e vinculação em 2 fases de figuras/diagramas espaciais (Trigger Word + Gap Visual Scan).
     6. Formatação KaTeX e pareamento com gabarito oficial.
     """
-    if isinstance(pdf_bytes_or_path, (bytes, bytearray)):
-        doc = fitz.open(stream=pdf_bytes_or_path, filetype='pdf')
+    timing = _PipelineTiming()
+    parse_source, cache_key = prepare_parse_source(
+        pdf_bytes_or_path,
+        exam_id=exam_id,
+        extract_images=extract_images,
+        gabarito_override=gabarito_override,
+        force_ocr=force_ocr,
+        layout_config=layout_config,
+    )
+    cached_result = load_parse_cache(cache_key)
+    timing.mark("parse_cache_lookup")
+    if cached_result is not None:
+        cached_questions, cached_pages = cached_result
+        timing.finish(pages=cached_pages, questions=len(cached_questions))
+        return cached_questions
+
+    if isinstance(parse_source, (bytes, bytearray)):
+        doc = fitz.open(stream=parse_source, filetype='pdf')
     else:
-        doc = fitz.open(pdf_bytes_or_path)
+        doc = fitz.open(parse_source)
+    timing.mark("open_document")
 
     total_pages = len(doc)
     if total_pages == 0:
+        timing.finish(pages=0, questions=0)
+        doc.close()
         return []
 
     # 1. Identificação de marcas d'água e inicialização do extrator de imagens
@@ -200,6 +431,7 @@ def parse_exam_document(
         master_gabarito = parse_gabarito_from_text(gabarito_override)
     if not master_gabarito:
         master_gabarito = _extract_gabarito_from_doc(doc)
+    timing.mark("watermarks_and_embedded_key")
 
     # 3. Localização do início real do caderno
     start_page = 0
@@ -211,71 +443,17 @@ def parse_exam_document(
             start_page = p_idx
             break
     start_page = min(start_page, max(0, total_pages - 1))
+    timing.mark("locate_exam_start")
 
     # 4. Extração dos blocos ordenados por coluna e clusters de diagramas
     raw_blocks = []
     page_diagrams = {}
-    q_spatial_map: Dict[int, Tuple[int, float, float]] = {}
-
-    # Mapeia coordenadas físicas dos cabeçalhos na página para anexamento espacial exato
-    # Passo 1: Busca física exata com search_for (coordenada pontual precisa do texto)
-    for p_idx in range(start_page, total_pages):
-        page = doc[p_idx]
-        for q_num in range(1, 201):
-            if q_num in q_spatial_map:
-                continue
-            queries = [
-                f"Questão {q_num:02d}",
-                f"Questão {q_num}",
-                f"QUESTÃO {q_num:02d}",
-                f"QUESTÃO {q_num}",
-                f"ITEM {q_num:02d}",
-                f"ITEM {q_num}",
-                f"Questão\n{q_num:02d}",
-                f"Questão\n{q_num}",
-            ]
-            for q_str in queries:
-                rects = page.search_for(q_str)
-                if rects:
-                    rects.sort(key=lambda r: r.y0)
-                    r = rects[0]
-                    q_spatial_map[q_num] = (p_idx, r.x0, r.y0)
-                    break
-
-    # Passo 2: Cabeçalhos com pontuação (ex: "10. ", "10) ", "10 - ") no início de bloco ou linha
-    for p_idx in range(start_page, total_pages):
-        page = doc[p_idx]
-        for b in page.get_text('blocks'):
-            bx0, by0, bx1, by1, b_text = b[:5]
-            for hm in re.finditer(r'(?:^|\n)\s*(0*\d{1,3})\s*[\.\-\–\—\)]\s+(?=[A-Z\u00C0-\u00DC"\'\(])', b_text):
-                try:
-                    num_val = int(hm.group(1))
-                    if 1 <= num_val <= 200 and num_val not in q_spatial_map:
-                        q_spatial_map[num_val] = (p_idx, bx0, by0)
-                except ValueError:
-                    pass
-
-    # Passo 3: Padrão FGV e bancas com bloco numérico isolado (ex: b_text == "29") ou número isolado seguido de quebra de linha
-    for p_idx in range(start_page, total_pages):
-        page = doc[p_idx]
-        for b in page.get_text('blocks'):
-            bx0, by0, bx1, by1, b_text = b[:5]
-            clean_bt = b_text.strip()
-            if clean_bt.isdigit():
-                try:
-                    num_val = int(clean_bt)
-                    if 1 <= num_val <= 200 and num_val not in q_spatial_map:
-                        q_spatial_map[num_val] = (p_idx, bx0, by0)
-                except ValueError:
-                    pass
-            else:
-                for hm in re.finditer(r'(?:^|\n)\s*(0*\d{1,3})\s*(?:\n|\s{2,})(?=[A-Z\u00C0-\u00DC"\'\(\«\“\‘]|$)', b_text):
-                    try:
-                        num_val = int(hm.group(1))
-                        if 1 <= num_val <= 200 and num_val not in q_spatial_map:
-                            q_spatial_map[num_val] = (p_idx, bx0, by0)
-                    except ValueError:
-                        pass
+    q_spatial_map, page_text_blocks = _build_question_spatial_map(
+        doc,
+        start_page,
+        total_pages,
+    )
+    timing.mark("question_spatial_map")
 
     doc_topology = infer_document_topology(doc, watermarks)
     effective_layout_config = layout_config or LayoutConfig(topology=doc_topology)
@@ -291,7 +469,9 @@ def parse_exam_document(
             if not re.search(r'\b[A-E]\)\s+[A-Z\u00C0-\u00DC]', p_text):
                 continue
 
-        page_raw_blocks = page.get_text('blocks')
+        page_raw_blocks = page_text_blocks.get(p_idx)
+        if page_raw_blocks is None:
+            page_raw_blocks = page.get_text('blocks')
 
         ordered_blocks = detect_layout_and_ordered_blocks(page, watermarks, force_ocr=force_ocr, config=effective_layout_config)
         for b in ordered_blocks:
@@ -301,6 +481,8 @@ def parse_exam_document(
             clusters = image_extractor.find_diagram_clusters(page, watermarks, text_blocks=page_raw_blocks)
             if clusters:
                 page_diagrams[p_idx] = clusters
+
+    timing.mark("layout_and_diagrams")
 
     full_text = '\n\n'.join(raw_blocks)
     
@@ -319,8 +501,12 @@ def parse_exam_document(
         ocr_text = extract_exam_via_vision_ocr(doc, dpi=200, watermarks=watermarks)
         if len(ocr_text.strip()) > 50:
             full_text = ocr_text
+        timing.mark("vision_ocr")
+    else:
+        timing.mark("vision_ocr_skipped")
 
     if len(full_text.strip()) < 50:
+        timing.finish(pages=total_pages, questions=0)
         doc.close()
         return []
 
@@ -488,6 +674,10 @@ def parse_exam_document(
             q.pop('_x', None)
             q.pop('_y', None)
 
+        timing.mark("question_structuring_and_image_linking")
+        save_parse_cache(cache_key, questions, pages=total_pages)
+        timing.mark("parse_cache_store")
+        timing.finish(pages=total_pages, questions=len(questions))
         doc.close()
         return questions
 
@@ -837,5 +1027,9 @@ def parse_exam_document(
     
     questions.sort(key=_q_sort_key)
 
+    timing.mark("question_structuring_and_image_linking")
+    save_parse_cache(cache_key, questions, pages=total_pages)
+    timing.mark("parse_cache_store")
+    timing.finish(pages=total_pages, questions=len(questions))
     doc.close()
     return questions
