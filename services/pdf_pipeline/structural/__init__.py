@@ -81,6 +81,54 @@ from .question_ast import (
     build_question_ast,
 )
 from .renderer import render_legacy_document, render_legacy_question_dict
+from .diagnostics import export_page_model_debug
+from .pipeline import (
+    StructuralSemanticResult,
+    analyze_and_render_structure,
+    analyze_layout,
+    analyze_structure as analyze_document_structure,
+    extract_and_analyze_layout,
+    extract_and_analyze_structure,
+    extract_and_render_structure,
+    extract_physical_document,
+    run_shadow_pipeline,
+    solve_structure,
+)
+from .arbiter import (
+    ArbitrationDecision,
+    ArbitrationStatus,
+    ArbiterConfig,
+    ResultArbiter,
+    StructuralResultArbiter,
+)
+from .shadow import (
+    LegacyParserContext,
+    StructuralDiff,
+    StructuralMetric,
+    StructuralShadowResult,
+    StructuralShadowRunner,
+    compare_legacy_structural,
+    parse_exam_document_with_mode,
+    run_pipeline_with_mode,
+    run_structural_shadow,
+)
+from .config import PipelineMode, get_pipeline_mode
+from .rollout import (
+    MLRuntimeConfig,
+    RolloutConfig,
+    STRUCTURAL_ML_ENABLED_ENV,
+    STRUCTURAL_ML_MODEL_REGISTRY_ENV,
+    STRUCTURAL_ROLLOUT_PERCENT_ENV,
+    rollout_bucket,
+    should_sample_structural,
+    structural_ml_enabled,
+)
+from .ingestion import (
+    STRUCTURAL_TRACE_DIR_ENV,
+    StructuralRolloutOutcome,
+    merge_structural_questions,
+    run_structural_rollout,
+)
 
 __all__ = [
     "BBox", "DocumentModel", "PageModel", "PhysicalElement", "PhysicalExtractor",
@@ -103,4 +151,18 @@ __all__ = [
     "FigureNode", "OptionGroupNode", "OptionNode", "QuestionAST", "QuestionASTBuilder",
     "QuestionHeaderNode", "QuestionNode", "StatementNode", "TableNode", "build_question_ast",
     "render_legacy_document", "render_legacy_question_dict",
+    "PipelineMode", "get_pipeline_mode", "MLRuntimeConfig", "RolloutConfig",
+    "STRUCTURAL_ML_ENABLED_ENV", "STRUCTURAL_ML_MODEL_REGISTRY_ENV",
+    "STRUCTURAL_ROLLOUT_PERCENT_ENV", "rollout_bucket", "should_sample_structural",
+    "structural_ml_enabled",
+    "STRUCTURAL_TRACE_DIR_ENV", "StructuralRolloutOutcome", "run_structural_rollout",
+    "merge_structural_questions",
+    "export_page_model_debug", "StructuralSemanticResult", "analyze_layout",
+    "analyze_document_structure", "extract_physical_document", "extract_and_analyze_layout",
+    "extract_and_analyze_structure", "analyze_and_render_structure", "extract_and_render_structure",
+    "solve_structure", "run_shadow_pipeline", "ArbitrationStatus", "ArbitrationDecision",
+    "ArbiterConfig", "ResultArbiter", "StructuralResultArbiter", "LegacyParserContext",
+    "StructuralMetric", "StructuralDiff", "StructuralShadowResult", "StructuralShadowRunner",
+    "compare_legacy_structural", "parse_exam_document_with_mode", "run_pipeline_with_mode",
+    "run_structural_shadow",
 ]

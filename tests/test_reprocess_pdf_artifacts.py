@@ -126,10 +126,15 @@ class ReprocessPdfArtifactsTests(unittest.TestCase):
                     "integrity_conflicts": [],
                 },
             ),
-        ):
+        ), patch(
+            "app_core.async_worker.run_structural_rollout",
+            side_effect=RuntimeError("structural must not stop legacy"),
+        ) as structural_rollout:
             from app_core.async_worker import process_exam_async
 
             process_exam_async(42)
+
+        structural_rollout.assert_called_once()
 
         with self.session_factory() as session:
             exam = session.get(Exam, 42)

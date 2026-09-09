@@ -42,6 +42,25 @@ from services.exam_files import (
     is_pdf_file,
 )
 
+
+def run_structural_rollout(pdf_path, **kwargs):
+    """Lazy adapter that keeps the legacy worker import path lightweight."""
+    from services.pdf_pipeline.structural.ingestion import (
+        run_structural_rollout as _run_structural_rollout,
+    )
+
+    return _run_structural_rollout(pdf_path, **kwargs)
+
+
+def merge_structural_questions(legacy_questions, structural_questions):
+    """Adopt structural questions only through the explicit rollout seam."""
+    from services.pdf_pipeline.structural.ingestion import (
+        merge_structural_questions as _merge_structural_questions,
+    )
+
+    return _merge_structural_questions(legacy_questions, structural_questions)
+
+
 def set_exam_progress(exam_id: int, status_msg: str, pct: int, error_type: Optional[str] = None):
     """Atualiza o progresso do exame no banco de dados de forma thread-safe com retentativas e garantias de integridade."""
     safe_msg = (status_msg[:285] + '...') if len(status_msg) > 290 else status_msg
@@ -418,6 +437,34 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
                     ))
                     session.commit()
             return
+
+        # Structural rollout is strictly downstream of the official-answer
+        # gate. It is observational by default and can only replace the
+        # legacy payload after arbitration explicitly promotes it. Any
+        # structural failure or trace problem leaves the approved legacy
+        # result untouched and never changes the user's status to Error.
+        structural_pdf = pdf_path if not is_html_source and os.path.exists(pdf_path) else None
+        try:
+            structural_outcome = run_structural_rollout(
+                structural_pdf,
+                legacy_questions=updated_questions,
+                answer_key=gabarito_dict,
+                exam_id=exam_id,
+                source=source_url,
+                extract_images=True,
+            )
+            if structural_outcome.promoted and structural_outcome.selected_result:
+                updated_questions = merge_structural_questions(
+                    updated_questions,
+                    structural_outcome.selected_result,
+                )
+        except Exception as structural_err:
+            # The experimental path is fail-open to the already validated
+            # legacy payload. Keep only the exception type out of diagnostics.
+            print(
+                f"[Structural Rollout] preservando legado ({type(structural_err).__name__})",
+                flush=True,
+            )
 
         db_save_success = False
         max_save_retries = 5
