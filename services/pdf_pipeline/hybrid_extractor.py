@@ -1,6 +1,7 @@
 import os
 import re
 import io
+import hashlib
 import json
 import time
 import fitz
@@ -399,6 +400,10 @@ def parse_exam_document(
         timing.finish(pages=cached_pages, questions=len(cached_questions))
         return cached_questions
 
+    document_sha256 = None
+    if isinstance(parse_source, (bytes, bytearray)):
+        document_sha256 = hashlib.sha256(bytes(parse_source)).hexdigest()
+
     if isinstance(parse_source, (bytes, bytearray)):
         doc = fitz.open(stream=parse_source, filetype='pdf')
     else:
@@ -498,7 +503,12 @@ def parse_exam_document(
 
     if needs_vision_ocr:
         from .media.vision_pipeline import extract_exam_via_vision_ocr
-        ocr_text = extract_exam_via_vision_ocr(doc, dpi=200, watermarks=watermarks)
+        ocr_text = extract_exam_via_vision_ocr(
+            doc,
+            dpi=200,
+            watermarks=watermarks,
+            document_sha256=document_sha256,
+        )
         if len(ocr_text.strip()) > 50:
             full_text = ocr_text
         timing.mark("vision_ocr")

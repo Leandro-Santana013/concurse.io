@@ -37,6 +37,11 @@ def _cache_dir() -> Path:
     return Path(tempfile.gettempdir()) / "concurseio_pdf_pipeline"
 
 
+def cache_directory() -> Path:
+    """Diretório comum para caches derivados do mesmo PDF."""
+    return _cache_dir()
+
+
 def _read_source_bytes(source: Any) -> Optional[bytes]:
     if isinstance(source, (bytes, bytearray)):
         return bytes(source)

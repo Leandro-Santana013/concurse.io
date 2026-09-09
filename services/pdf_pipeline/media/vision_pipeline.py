@@ -10,6 +10,7 @@ from services.pdf_pipeline.layout.layout_detector import (
 )
 from services.pdf_pipeline.fallbacks.typography_restorer import restore_exam_typography, restore_ocr_lexical_spacing
 from services.pdf_pipeline.formatters.formula_formatter import format_latex_formulas
+from services.pdf_pipeline.vision_cache import load_page_ocr_cache, save_page_ocr_cache
 
 # Vocabulário e frequências fundamentais da Língua Portuguesa para segmentação de OCR
 PORTUGUESE_CORE_WORDS = {
@@ -210,7 +211,8 @@ def segment_ocr_text(text: str) -> str:
 def extract_exam_via_vision_ocr(
     doc: fitz.Document,
     dpi: int = 200,
-    watermarks: Optional[set] = None
+    watermarks: Optional[set] = None,
+    document_sha256: Optional[str] = None,
 ) -> str:
     """
     Pipeline especializado de Vision OCR:
@@ -228,7 +230,20 @@ def extract_exam_via_vision_ocr(
     
     for p_idx in range(len(doc)):
         page = doc[p_idx]
-        lines = extract_ocr_lines_from_page(page, dpi=dpi)
+        lines = load_page_ocr_cache(
+            document_sha256,
+            dpi=dpi,
+            page_index=p_idx,
+        )
+        if lines is None:
+            lines = extract_ocr_lines_from_page(page, dpi=dpi)
+            if lines:
+                save_page_ocr_cache(
+                    document_sha256,
+                    dpi=dpi,
+                    page_index=p_idx,
+                    lines=lines,
+                )
         if not lines:
             continue
             
