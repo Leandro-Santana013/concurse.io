@@ -49,6 +49,38 @@ from .candidates import (
     StructuralAnalyzerConfig,
     analyze_structure,
 )
+from .solver import (
+    AnswerKeyEvidence,
+    ConfidenceThresholds,
+    ConfidenceWeights,
+    ConstraintSolveResult,
+    ConstraintSolver,
+    ConstraintSolverConfig,
+    ConstraintViolation,
+    DocumentParseConfidence,
+    RecoveryPass,
+    SequenceSolution,
+    SolverConfig,
+    solve_constraints,
+)
+from .question_ast import (
+    ASTNode,
+    AST_SCHEMA_VERSION,
+    AST_VERSION,
+    ContextNode,
+    ExamDocumentNode,
+    FigureNode,
+    OptionGroupNode,
+    OptionNode,
+    QuestionAST,
+    QuestionASTBuilder,
+    QuestionHeaderNode,
+    QuestionNode,
+    StatementNode,
+    TableNode,
+    build_question_ast,
+)
+from .renderer import render_legacy_document, render_legacy_question_dict
 
 __all__ = [
     "BBox", "DocumentModel", "PageModel", "PhysicalElement", "PhysicalExtractor",
@@ -63,4 +95,12 @@ __all__ = [
     "DocumentGraph", "DocumentGraphBuilder", "EdgeType", "GraphEdge", "GraphNode",
     "QuestionRegionBuilder", "StructuralAnalysis", "ContextBlock", "ImageOwnership",
     "PageSegment", "QuestionRegion", "analyze_structure",
+    "SolverConfig", "ConstraintSolverConfig", "ConfidenceWeights",
+    "ConfidenceThresholds", "ConstraintSolver", "ConstraintSolveResult",
+    "SequenceSolution", "ConstraintViolation", "RecoveryPass", "AnswerKeyEvidence",
+    "DocumentParseConfidence", "solve_constraints",
+    "AST_SCHEMA_VERSION", "AST_VERSION", "ASTNode", "ContextNode", "ExamDocumentNode",
+    "FigureNode", "OptionGroupNode", "OptionNode", "QuestionAST", "QuestionASTBuilder",
+    "QuestionHeaderNode", "QuestionNode", "StatementNode", "TableNode", "build_question_ast",
+    "render_legacy_document", "render_legacy_question_dict",
 ]
