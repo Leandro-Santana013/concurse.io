@@ -1,5 +1,6 @@
 import unicodedata
 import re
+import os
 from typing import Dict, List, Optional, Any, Tuple
 
 import fitz
@@ -67,8 +68,8 @@ def extract_exam_code_ranges_from_pdf(
     elif isinstance(pdf_input, (bytes, bytearray)):
         doc = fitz.open(stream=pdf_input, filetype="pdf")
         should_close = True
-    elif isinstance(pdf_input, str):
-        doc = fitz.open(pdf_input)
+    elif isinstance(pdf_input, (str, os.PathLike)):
+        doc = fitz.open(os.fspath(pdf_input))
         should_close = True
     else:
         return []
@@ -550,8 +551,8 @@ def parse_gabarito_from_pdf(
     elif isinstance(pdf_input, (bytes, bytearray)):
         doc = fitz.open(stream=pdf_input, filetype="pdf")
         should_close = True
-    elif isinstance(pdf_input, str):
-        doc = fitz.open(pdf_input)
+    elif isinstance(pdf_input, (str, os.PathLike)):
+        doc = fitz.open(os.fspath(pdf_input))
         should_close = True
     else:
         return {}

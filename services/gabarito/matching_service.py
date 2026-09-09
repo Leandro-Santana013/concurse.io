@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import re
 import unicodedata
+import os
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
@@ -422,8 +423,8 @@ def build_exam_answer_key_profile(
         elif isinstance(pdf_input, (bytes, bytearray)):
             doc = fitz.open(stream=pdf_input, filetype="pdf")
             should_close = True
-        elif isinstance(pdf_input, str) and pdf_input:
-            doc = fitz.open(pdf_input)
+        elif isinstance(pdf_input, (str, os.PathLike)) and pdf_input:
+            doc = fitz.open(os.fspath(pdf_input))
             should_close = True
         if doc is not None:
             header_text = "\n".join(
@@ -945,8 +946,8 @@ def match_gabarito_from_pdf(
         elif isinstance(pdf_input, (bytes, bytearray)):
             doc = fitz.open(stream=pdf_input, filetype="pdf")
             should_close = True
-        elif isinstance(pdf_input, str):
-            doc = fitz.open(pdf_input)
+        elif isinstance(pdf_input, (str, os.PathLike)):
+            doc = fitz.open(os.fspath(pdf_input))
             should_close = True
         else:
             return AnswerKeyMatchResult(

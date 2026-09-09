@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import fitz
 
 from services.gabarito import (
@@ -72,6 +74,32 @@ def test_gabarito_code_mismatch_fails_closed():
     gab_doc.close()
 
 
+def test_uberaba_page_positions_keep_the_133_to_139_block(tmp_path):
+    gab_doc = fitz.open()
+    for _ in range(35):
+        gab_doc.new_page()
+    _add_gabarito_page(gab_doc, "129 a 132", WRONG_129_TO_132)
+    for _ in range(52):
+        gab_doc.new_page()
+    _add_gabarito_page(gab_doc, "133 a 139", RIGHT_133_TO_139)
+
+    assert len(gab_doc) == 89
+    fixture_path = tmp_path / "uberaba_coveiro_2016.pdf"
+    gab_doc.save(fixture_path)
+    gab_doc.close()
+    result = parse_gabarito_from_pdf(
+        Path(fixture_path),
+        cargo_or_title=(
+            "AGENTE DE DESENVOLVIMENTO URBANO E RURAL II - COVEIRO - "
+            "PREF. UBERABA/MG 2016"
+        ),
+        exam_code_ranges=[(133, 139)],
+    )
+
+    assert result == {
+        number: answer
+        for number, answer in enumerate(RIGHT_133_TO_139, start=1)
+    }
 def test_legacy_matching_remains_available_without_indexed_code_pages():
     gab_doc = fitz.open()
     cover = gab_doc.new_page()
