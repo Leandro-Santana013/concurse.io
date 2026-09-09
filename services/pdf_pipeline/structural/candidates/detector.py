@@ -219,7 +219,7 @@ class CandidateDetector:
                     "geometry.y0": float(line.bbox.ny0),
                     "geometry.width": float(line.bbox.width / max(index.page_width(line.page_index), 1e-9)),
                     "geometry.height": float(line.bbox.height / max(index.page_height(line.page_index), 1e-9)),
-                    "geometry.column": float(column),
+                    "geometry.column": float(column if column is not None else -1),
                     "style.font_size_body_ratio": float((line.font_size or 0.0) / max(median_font, 1e-9)),
                     "style.bold": float(line.bold),
                     "style.italic": float(line.italic),

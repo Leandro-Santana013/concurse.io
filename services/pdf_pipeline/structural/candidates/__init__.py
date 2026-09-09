@@ -1,13 +1,34 @@
-"""Opt-in structural candidate and alternative detection."""
+"""Opt-in structural candidate, graph and region components."""
 
-from .config import CandidateDetectorConfig, CandidateScoreWeights
+from .analyzer import CandidateGraphAnalyzer, StructuralAnalyzer, analyze_structure
+from .config import (
+    CandidateDetectorConfig,
+    CandidateScoreWeights,
+    GraphConfig,
+    RegionConfig,
+    StructuralAnalyzerConfig,
+)
 from .detector import CandidateDetector
 from .features import FEATURE_SCHEMA, FEATURE_SCHEMA_VERSION, FeatureSchemaV1, FeatureVector
+from .graph import DocumentGraph, DocumentGraphBuilder, EdgeType, GraphEdge, GraphNode
 from .legacy import LegacyEvidenceProvider
-from .models import Candidate, CandidateDetection
+from .models import (
+    Candidate,
+    CandidateDetection,
+    ContextBlock,
+    ImageOwnership,
+    PageSegment,
+    QuestionRegion,
+    StructuralAnalysis,
+)
+from .regions import QuestionRegionBuilder
 
 __all__ = [
-    "CandidateDetector", "CandidateDetectorConfig", "CandidateScoreWeights",
-    "LegacyEvidenceProvider", "FEATURE_SCHEMA", "FEATURE_SCHEMA_VERSION",
-    "FeatureSchemaV1", "FeatureVector", "Candidate", "CandidateDetection",
+    "StructuralAnalyzer", "CandidateGraphAnalyzer", "analyze_structure",
+    "StructuralAnalyzerConfig", "CandidateDetectorConfig", "CandidateScoreWeights",
+    "GraphConfig", "RegionConfig", "CandidateDetector", "LegacyEvidenceProvider",
+    "FEATURE_SCHEMA_VERSION", "FEATURE_SCHEMA", "FeatureSchemaV1", "FeatureVector",
+    "Candidate", "CandidateDetection", "ContextBlock", "ImageOwnership",
+    "PageSegment", "QuestionRegion", "StructuralAnalysis", "DocumentGraph",
+    "DocumentGraphBuilder", "GraphNode", "GraphEdge", "EdgeType", "QuestionRegionBuilder",
 ]
