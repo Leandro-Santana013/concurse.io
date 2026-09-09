@@ -275,6 +275,30 @@ class ExamImageExtractor:
         if not useful_rects:
             return []
 
+        # Legendas pertencem ao diagrama quando estão imediatamente abaixo,
+        # alinhadas horizontalmente e usam o vocabulário explícito de legenda.
+        # Não agregamos texto genérico do enunciado: isso evita que o crop
+        # estrutural vaze conteúdo da questão para a imagem.
+        if text_blocks:
+            for index, rect in enumerate(useful_rects):
+                expanded = fitz.Rect(rect)
+                for block in text_blocks:
+                    if len(block) < 5 or not str(block[4] or "").strip():
+                        continue
+                    bx0, by0, bx1, by1 = map(float, block[:4])
+                    block_text = str(block[4]).strip()
+                    horizontal_overlap = not (
+                        bx1 < rect.x0 - 15 or bx0 > rect.x1 + 15
+                    )
+                    vertical_gap = by0 - rect.y1
+                    if (
+                        CAPTION_REGEX.search(block_text)
+                        and horizontal_overlap
+                        and -2 <= vertical_gap <= 45
+                    ):
+                        expanded.include_rect(fitz.Rect(bx0, by0, bx1, by1))
+                useful_rects[index] = expanded
+
         # 4. Agrupamento Geométrico Estrito por Proximidade (sem misturar colunas)
         clusters: List[fitz.Rect] = []
         for r in useful_rects:
