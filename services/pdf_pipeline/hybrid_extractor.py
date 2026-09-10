@@ -68,10 +68,18 @@ class _PipelineTiming:
         print(json.dumps(payload, ensure_ascii=False, sort_keys=True), flush=True)
 
 
+# A camada textual de PDFs reais usa três famílias de cabeçalho:
+# ``05.``, ``05`` (isolado) e ``Questão 05``/``ITEM 05``.  O padrão numérico
+# continua exigindo pontuação ou uma linha/rotulo isolado para não transformar
+# anos, páginas e números no corpo do enunciado em questões.
 _NATIVE_QUESTION_HEADER_RE = re.compile(
-    r"(?im)^\s*(?:(?:quest(?:[ãa]o|ao)|item)\s*)?"
+    r"(?im)^[ \t]*0*(\d{1,3})"
     # Scans antigos às vezes convertem o ponto de ``19.`` em aspas.
-    r"0*(\d{1,3})\s*[\.\)\-–—,:\"'](?=\s|$)"
+    r"(?:[ \t]*[\.\)\-–—,:\"'](?=[ \t]|$)|(?=[ \t]*(?:\(|$)))"
+)
+_NATIVE_NAMED_QUESTION_HEADER_RE = re.compile(
+    r"(?im)^[ \t]*(?:quest(?:[ãa]o|ao)|item)[ \t]+0*(\d{1,3})"
+    r"(?=$|[ \t\.\)\-–—,:\"'])"
 )
 _NATIVE_OPTION_MARKER_RE = re.compile(
     r"(?im)^\s*(?:\(?[A-Ea-e]\s*\)|[A-Ea-e]\s*[\.\-:])\s+"
@@ -87,12 +95,25 @@ _DECLARED_QUESTION_COUNT_PATTERNS = (
 
 def _native_question_numbers(text: str) -> List[int]:
     """Retorna os rótulos numéricos que parecem cabeçalhos de questões."""
+    source = str(text or "")
     numbers = {
         int(match.group(1))
-        for match in _NATIVE_QUESTION_HEADER_RE.finditer(str(text or ""))
+        for header_re in (
+            _NATIVE_NAMED_QUESTION_HEADER_RE,
+            _NATIVE_QUESTION_HEADER_RE,
+        )
+        for match in header_re.finditer(source)
         if 1 <= int(match.group(1)) <= 250
     }
     return sorted(numbers)
+
+
+def _native_question_header_match(text: str):
+    """Encontra um cabeçalho nativo nomeado ou numérico em uma linha."""
+    return (
+        _NATIVE_NAMED_QUESTION_HEADER_RE.match(text)
+        or _NATIVE_QUESTION_HEADER_RE.match(text)
+    )
 
 
 def _declared_question_count(text: str) -> Optional[int]:
@@ -217,7 +238,7 @@ def _extract_native_question_chunks(doc: fitz.Document) -> Dict[int, str]:
             page_lines,
             key=lambda item: (round(item[0] / 3.0) * 3.0, item[1]),
         ):
-                match = _NATIVE_QUESTION_HEADER_RE.match(text)
+                match = _native_question_header_match(text)
                 damaged_match = damaged_header_re.match(text) if not match else None
                 thirty_match = damaged_thirty_re.match(text) if not match and not damaged_match else None
                 if (match or damaged_match or thirty_match) and x0 < 75:

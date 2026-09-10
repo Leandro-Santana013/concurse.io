@@ -8,6 +8,7 @@ if hasattr(sys.stdout, 'reconfigure'):
 from services.pdf_pipeline import parse_exam_document, format_latex_formulas
 from services.pdf_pipeline.hybrid_extractor import (
     _assess_native_text_quality,
+    _native_question_numbers,
     _precision_recovery_targets,
     _should_run_precision_recovery,
     extract_heuristic_options,
@@ -163,6 +164,21 @@ def test_native_text_quality_does_not_force_ocr_for_structured_text_pdf():
         total_image_count=0,
     )
     assert result["needs_vision_ocr"] is False
+
+
+def test_native_question_headers_support_named_and_unpunctuated_forms():
+    sample = "\n".join(
+        [
+            "01. Enunciado numerado.",
+            "02",
+            "Questão 03",
+            "Questão 04 (Correta: A)",
+            "QUESTAO 05:",
+            "ITEM 06",
+        ]
+    )
+
+    assert _native_question_numbers(sample) == [1, 2, 3, 4, 5, 6]
 
 
 def test_precision_recovery_does_not_target_valid_five_option_questions():
