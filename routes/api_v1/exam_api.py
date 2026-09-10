@@ -30,7 +30,7 @@ from routes.api_v1.user_context import (
     get_current_user,
     require_admin_user,
 )
-from routes.api_v1.exam_media import secure_exam_image_urls
+from routes.api_v1.exam_media import secure_exam_image_urls, secure_exam_option_image_urls
 from services.exam_library import claim_exam_for_user, get_user_exam_ids, link_ready_exam_to_user
 
 router = APIRouter()
@@ -181,6 +181,13 @@ def get_exam_detail(
         except Exception:
             images_list = []
 
+        try:
+            option_images_dict = json.loads(q.option_images) if q.option_images else {}
+            if not isinstance(option_images_dict, dict):
+                option_images_dict = {}
+        except Exception:
+            option_images_dict = {}
+
         is_latex = bool(q.latex_support) or ('$$' in q.statement or '\\frac' in q.statement or '\\sqrt' in q.statement)
 
         questions_list.append(QuestionSchema(
@@ -191,6 +198,7 @@ def get_exam_detail(
             correct_answer=q.correct_answer,
             subject=q.subject or "Geral",
             images=secure_exam_image_urls(exam.id, images_list),
+            option_images=secure_exam_option_image_urls(exam.id, option_images_dict),
             has_official_answer=bool(exam.has_official_answers),
             latex_support=is_latex
         ))
@@ -393,6 +401,13 @@ def generate_custom_exam(
         except Exception:
             images_list = []
 
+        try:
+            option_images_dict = json.loads(q.option_images) if q.option_images else {}
+            if not isinstance(option_images_dict, dict):
+                option_images_dict = {}
+        except Exception:
+            option_images_dict = {}
+
         is_latex = bool(q.latex_support) or ('$$' in q.statement or '\\frac' in q.statement)
 
         questions_list.append(QuestionSchema(
@@ -403,6 +418,7 @@ def generate_custom_exam(
             correct_answer=q.correct_answer,
             subject=q.subject or "Geral",
             images=secure_exam_image_urls(exam.id, images_list),
+            option_images=secure_exam_option_image_urls(exam.id, option_images_dict),
             has_official_answer=True,
             latex_support=is_latex
         ))

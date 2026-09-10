@@ -11,9 +11,11 @@ from services.pdf_pipeline.hybrid_extractor import (
     _native_question_numbers,
     _precision_recovery_targets,
     _should_run_precision_recovery,
+    _repair_image_only_option_question,
     extract_heuristic_options,
     _normalize_roman_list_option,
     _score_option_map,
+    strip_embedded_answer_marker,
 )
 from services.gabarito import (
     parse_gabarito_from_pdf,
@@ -34,6 +36,7 @@ from services.pdf_pipeline.media.scan_pipeline import (
 )
 from services.pdf_pipeline.media.vision_pipeline import segment_ocr_text
 from services.pdf_pipeline.fallbacks.typography_restorer import restore_ocr_lexical_spacing
+from app_core.async_worker import _pdf_contains_idcap
 
 def test_latex_formatter():
     print("Testing LaTeX Formatter...")
@@ -166,6 +169,10 @@ def test_native_text_quality_does_not_force_ocr_for_structured_text_pdf():
     assert result["needs_vision_ocr"] is False
 
 
+def test_idcap_is_detected_from_local_pdf_when_source_url_was_normalized():
+    assert _pdf_contains_idcap("pdfs/2_prova.pdf") is True
+
+
 def test_native_question_headers_support_named_and_unpunctuated_forms():
     sample = "\n".join(
         [
@@ -179,6 +186,39 @@ def test_native_question_headers_support_named_and_unpunctuated_forms():
     )
 
     assert _native_question_numbers(sample) == [1, 2, 3, 4, 5, 6]
+
+
+def test_idcap_embedded_answer_marker_is_removed_without_losing_answer():
+    samples = [
+        "(Correta: C)\nNo segundo quadro...",
+        "(Correta\n\nC.\nNo segundo quadro...",
+        "(CorretaC. No segundo quadro...",
+    ]
+    for sample in samples:
+        cleaned = strip_embedded_answer_marker(sample)
+        assert "correta" not in cleaned.casefold()
+        assert "No segundo quadro" in cleaned
+
+
+def test_idcap_image_only_options_return_text_to_statement():
+    question = {
+        "enunciado": "A manilha é uma conexão resistente. Dentre as imagens apresentadas abaixo, assinale a alternativa.",
+        "opcoes": {
+            "A": "facilmente desmontáveis,",
+            "B": "utilizado na movimentação de cargas,",
+            "C": "usualmente empregada para a ligação de dois olhais",
+            "D": "ou para a fixação de cabos e aparelhos de laborar,",
+            "E": "consistindo em uma conexão muito simples e resistente.",
+        },
+        "option_images": {letter: f"/static/{letter}.png" for letter in "ABCDE"},
+    }
+
+    _repair_image_only_option_question(question)
+
+    assert all(value == "" for value in question["opcoes"].values())
+    assert all(letter in question["option_images"] for letter in "ABCDE")
+    assert "facilmente desmontáveis" in question["enunciado"]
+    assert "conexão muito simples e resistente" in question["enunciado"]
 
 
 def test_precision_recovery_does_not_target_valid_five_option_questions():

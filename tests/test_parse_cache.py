@@ -1,5 +1,6 @@
 from services.pdf_pipeline.parse_cache import (
     PARSE_CACHE_VERSION,
+    _image_payload_is_available,
     load_parse_cache,
     prepare_parse_source,
     save_parse_cache,
@@ -52,6 +53,19 @@ def test_cache_key_changes_with_parser_inputs(tmp_path, monkeypatch):
     _, second = prepare_parse_source(b"same-pdf-changed", **kwargs)
     _, third = prepare_parse_source(b"same-pdf", **{**kwargs, "force_ocr": True})
 
-    assert PARSE_CACHE_VERSION == "legacy-parse-cache-v1"
+    assert PARSE_CACHE_VERSION == "legacy-parse-cache-v2"
     assert first != second
     assert first != third
+
+
+def test_cache_validates_option_image_files(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    image_path = tmp_path / "static" / "images" / "questions"
+    image_path.mkdir(parents=True)
+    image_file = image_path / "option.png"
+    image_file.write_bytes(b"png")
+    question = [{"images": None, "option_images": {"A": "/static/images/questions/option.png"}}]
+
+    assert _image_payload_is_available(question) is True
+    image_file.unlink()
+    assert _image_payload_is_available(question) is False

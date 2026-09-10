@@ -12,6 +12,7 @@ export interface Question {
   is_annulled?: boolean;
   subject: string;
   images?: string[] | null;
+  option_images?: Record<string, string[]> | null;
   has_official_answer: boolean;
   latex_support: boolean;
   context_text?: string | null;

@@ -593,6 +593,31 @@ const ExamResults: React.FC<ExamResultsProps> = ({
                               {key}
                             </span>
                             <div className="min-w-0 flex-1 font-reading text-sm leading-[1.65]">
+                              {originalQuestion.option_images?.[key]?.length ? (
+                                <div className="mb-3 grid gap-2 sm:grid-cols-2">
+                                  {originalQuestion.option_images[key].map((src, imageIdx) => (
+                                    <button
+                                      key={src + imageIdx}
+                                      type="button"
+                                      onClick={() => onOpenImage(src)}
+                                      className={clsx(
+                                        'overflow-hidden rounded-lg border border-[var(--border)]',
+                                        'bg-[var(--surface-subtle)] p-2 text-center',
+                                        focusRing,
+                                      )}
+                                    >
+                                      <img
+                                        src={src}
+                                        alt={'Imagem da alternativa ' + key + ' da questão ' + questionNumber}
+                                        className="mx-auto max-h-56 object-contain"
+                                      />
+                                      <span className="mt-1 block text-xs text-[var(--text-muted)]">
+                                        Ampliar imagem
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : null}
                               <MathRenderer content={text} />
                               {(isCorrect || isUserAnswer) && (
                                 <p
@@ -1294,56 +1319,83 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
                       focusRing,
                     )}
                   >
-                    <label className="flex min-h-14 min-w-0 flex-1 cursor-pointer items-start gap-3 px-4 py-4">
-                      <input
-                        type="radio"
-                        name={'question-' + currentIdx}
-                        value={optionKey}
-                        checked={isSelected}
-                        aria-describedby={
-                          isEliminated || showCorrectFeedback || showWrongFeedback
-                            ? statusId
-                            : undefined
-                        }
-                        onChange={() => selectAnswer(qNum, optionKey)}
-                        className="mt-1 h-5 w-5 shrink-0 accent-[var(--primary)]"
-                      />
-                      <span
-                        aria-hidden="true"
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[var(--border)] font-mono text-xs font-semibold"
-                      >
-                        {optionKey}
-                      </span>
-                      <span
-                        className={clsx(
-                          'min-w-0 flex-1 font-reading',
-                          fontSizeClass,
-                          isEliminated && 'line-through',
-                        )}
-                      >
-                        <MathRenderer content={optionText} />
-                        {(isEliminated || showCorrectFeedback || showWrongFeedback) && (
-                          <span
-                            id={statusId}
-                            className={clsx(
-                              'mt-2 block text-xs font-semibold no-underline',
-                              showCorrectFeedback && 'text-[var(--success)]',
-                              showWrongFeedback && 'text-[var(--danger)]',
-                              isEliminated &&
-                                !showCorrectFeedback &&
-                                !showWrongFeedback &&
-                                'text-[var(--text-muted)]',
-                            )}
-                          >
-                            {showCorrectFeedback
-                              ? 'Resposta correta'
-                              : showWrongFeedback
-                                ? 'Resposta incorreta'
-                                : 'Alternativa eliminada'}
-                          </span>
-                        )}
-                      </span>
-                    </label>
+                    <div className="min-w-0 flex-1">
+                      {currentQ.option_images?.[optionKey]?.length ? (
+                        <div className="grid gap-2 px-4 pt-3 sm:grid-cols-2">
+                          {currentQ.option_images[optionKey].map((src, imageIdx) => (
+                            <button
+                              key={src + imageIdx}
+                              type="button"
+                              onClick={() => setSelectedImageZoom(src)}
+                              className={clsx(
+                                'overflow-hidden rounded-lg border border-[var(--border)]',
+                                'bg-[var(--surface-subtle)] p-2 text-center',
+                                focusRing,
+                              )}
+                            >
+                              <img
+                                src={src}
+                                alt={'Imagem da alternativa ' + optionKey + ' da questão ' + qNum}
+                                className="mx-auto max-h-56 max-w-full object-contain"
+                              />
+                              <span className="mt-1 block text-xs text-[var(--text-muted)]">
+                                Ampliar imagem
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                      <label className="flex min-h-14 min-w-0 cursor-pointer items-start gap-3 px-4 py-4">
+                        <input
+                          type="radio"
+                          name={'question-' + currentIdx}
+                          value={optionKey}
+                          checked={isSelected}
+                          aria-describedby={
+                            isEliminated || showCorrectFeedback || showWrongFeedback
+                              ? statusId
+                              : undefined
+                          }
+                          onChange={() => selectAnswer(qNum, optionKey)}
+                          className="mt-1 h-5 w-5 shrink-0 accent-[var(--primary)]"
+                        />
+                        <span
+                          aria-hidden="true"
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[var(--border)] font-mono text-xs font-semibold"
+                        >
+                          {optionKey}
+                        </span>
+                        <span
+                          className={clsx(
+                            'min-w-0 flex-1 font-reading',
+                            fontSizeClass,
+                            isEliminated && 'line-through',
+                          )}
+                        >
+                          <MathRenderer content={optionText} />
+                          {(isEliminated || showCorrectFeedback || showWrongFeedback) && (
+                            <span
+                              id={statusId}
+                              className={clsx(
+                                'mt-2 block text-xs font-semibold no-underline',
+                                showCorrectFeedback && 'text-[var(--success)]',
+                                showWrongFeedback && 'text-[var(--danger)]',
+                                isEliminated &&
+                                  !showCorrectFeedback &&
+                                  !showWrongFeedback &&
+                                  'text-[var(--text-muted)]',
+                              )}
+                            >
+                              {showCorrectFeedback
+                                ? 'Resposta correta'
+                                : showWrongFeedback
+                                  ? 'Resposta incorreta'
+                                  : 'Alternativa eliminada'}
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                    </div>
 
                     {enableEliminationMode && (
                       <button

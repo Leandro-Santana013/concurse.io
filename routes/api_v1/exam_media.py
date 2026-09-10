@@ -49,6 +49,29 @@ def secure_exam_image_urls(exam_id: int, images: list[str] | None) -> list[str] 
     return secured or None
 
 
+def secure_exam_option_image_urls(
+    exam_id: int,
+    option_images: dict[str, list[str]] | None,
+) -> dict[str, list[str]] | None:
+    """Aplica a mesma autorização de mídia às imagens por alternativa."""
+
+    if not isinstance(option_images, dict):
+        return None
+    secured: dict[str, list[str]] = {}
+    for label, images in option_images.items():
+        key = str(label or '').strip().upper()
+        if not key:
+            continue
+        values = images if isinstance(images, list) else [images]
+        secured_values = secure_exam_image_urls(
+            exam_id,
+            [str(value) for value in values if value not in (None, '')],
+        )
+        if secured_values:
+            secured[key] = secured_values
+    return secured or None
+
+
 def resolve_question_media_path(filename: str) -> Path | None:
     normalized = unquote(str(filename or "").strip())
     if not normalized or Path(normalized).name != normalized or normalized in {".", ".."}:
@@ -75,12 +98,32 @@ def _question_image_values(raw_images: object) -> list[str]:
     return []
 
 
+def _question_option_image_values(raw_option_images: object) -> list[str]:
+    if raw_option_images in (None, ""):
+        return []
+    decoded = raw_option_images
+    if isinstance(raw_option_images, str):
+        try:
+            decoded = json.loads(raw_option_images)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return []
+    if not isinstance(decoded, dict):
+        return []
+    values: list[str] = []
+    for images in decoded.values():
+        values.extend(_question_image_values(images))
+    return values
+
+
 def exam_references_question_media(db: Session, exam: Exam, filename: str) -> bool:
     questions, _is_generated_session = resolve_exam_questions(db, exam)
     return any(
         question_media_filename(image) == filename
         for question in questions
-        for image in _question_image_values(question.images)
+        for image in [
+            *_question_image_values(question.images),
+            *_question_option_image_values(getattr(question, 'option_images', None)),
+        ]
     )
 
 

@@ -736,6 +736,83 @@ _ROMAN_CONFUSION_RE = re.compile(
     r"(?i)(?<![A-Za-z0-9])(?:i1|il|ill|ivl?|vll|vlll|lx)(?![A-Za-z0-9])"
 )
 
+# IDCAP imprime o gabarito no próprio caderno. Dependendo da camada de texto,
+# ``(Correta: C)`` chega inteiro ou quebrado em linhas como
+# ``(Correta\n\nC.``. O gabarito já é guardado separadamente em ``resposta``;
+# esse marcador nunca deve aparecer no enunciado entregue ao aluno.
+_EMBEDDED_ANSWER_MARKER_RE = re.compile(
+    r"(?im)(^|\n)[ \t]*\(?\s*correta\s*(?::\s*|\n+\s*)?"
+    r"([A-E])\s*[\)\.]?[ \t]*(?=\n|$|[A-ZÁ-Úa-zá-ú])"
+)
+
+
+def strip_embedded_answer_marker(text: Any) -> str:
+    """Remove somente o marcador visual de resposta embutida do enunciado."""
+
+    value = str(text or "")
+    cleaned = _EMBEDDED_ANSWER_MARKER_RE.sub(
+        lambda match: match.group(1),
+        value,
+    )
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
+
+
+def _repair_image_only_option_question(question: Dict[str, Any]) -> None:
+    """Reconstrói uma questão cujo texto foi confundido com opções visuais.
+
+    Em provas como a IDCAP 3/2024, o PDF contém os rótulos A--E e somente
+    desenhos abaixo deles. O parser textual pode então tratar o restante do
+    enunciado como cinco alternativas. Quando o vínculo espacial encontrou
+    pelo menos quatro imagens rotuladas, os fragmentos textuais são devolvidos
+    ao enunciado e as opções ficam vazias, preservando as chaves e o gabarito.
+    """
+
+    raw_option_images = question.get("option_images") or {}
+    if not isinstance(raw_option_images, dict) or len(raw_option_images) < 4:
+        return
+
+    statement = strip_embedded_answer_marker(question.get("enunciado", ""))
+    raw_options = question.get("opcoes") or {}
+    if not isinstance(raw_options, dict):
+        return
+    labels = sorted(
+        {str(label).strip().upper() for label in raw_option_images if str(label).strip()},
+        key=lambda label: (label not in "ABCDE", label),
+    )
+    values = [str(raw_options.get(label, "") or "").strip() for label in labels]
+    nonempty_values = [value for value in values if value]
+    if len(nonempty_values) < 4:
+        return
+
+    option_context = f"{statement} {' '.join(nonempty_values)}"
+    if not re.search(
+        r"(?i)\b(?:imagens?|figuras?|desenhos?)\b.*\b(?:alternativa|abaixo|a\s+seguir|apresentad)",
+        option_context,
+    ):
+        return
+
+    # Fragmentos deslocados do enunciado normalmente começam em minúscula ou
+    # são conectores curtos (``de``, ``e``, ``consistindo``). Exigir maioria
+    # evita apagar alternativas textuais legítimas acompanhadas de uma figura.
+    continuation_like = sum(
+        bool(re.match(r"(?i)^(?:[a-zá-úà-ÿ]|e\b|de\b|do\b|da\b|em\b|para\b|com\b)", value))
+        for value in nonempty_values
+    )
+    if continuation_like < max(3, len(nonempty_values) - 1):
+        return
+
+    tail = " ".join(nonempty_values).strip()
+    if tail and tail.casefold() not in statement.casefold():
+        statement = f"{statement.rstrip()} {tail}".strip()
+    question["enunciado"] = statement
+    question["opcoes"] = {label: "" for label in labels}
+    question["option_images"] = {
+        label: str(raw_option_images[label])
+        for label in labels
+        if raw_option_images.get(label)
+    }
+
 
 def _dominant_option_count(questions: List[Dict[str, Any]]) -> Optional[int]:
     """Detecta o tamanho dominante do mapa de alternativas da prova.
@@ -1363,6 +1440,8 @@ def parse_exam_document(
                 if inferred_subject:
                     q["disciplina"] = inferred_subject
                 q["enunciado"] = format_markdown_tables_in_text(q.get("enunciado", ""))
+                q["enunciado"] = strip_embedded_answer_marker(q.get("enunciado", ""))
+                _repair_image_only_option_question(q)
                 q.pop("_page", None)
                 q.pop("_x", None)
                 q.pop("_y", None)
@@ -1716,6 +1795,11 @@ def parse_exam_document(
                 page_diagrams=page_diagrams,
                 exam_id=exam_id or 0
             )
+        for question in questions:
+            question["enunciado"] = strip_embedded_answer_marker(
+                question.get("enunciado", "")
+            )
+            _repair_image_only_option_question(question)
 
         if quality_gate_required:
             from .media.scan_pipeline import assess_question_text_integrity
@@ -2095,6 +2179,11 @@ def parse_exam_document(
             page_diagrams=page_diagrams,
             exam_id=exam_id or 0
         )
+    for question in questions:
+        question["enunciado"] = strip_embedded_answer_marker(
+            question.get("enunciado", "")
+        )
+        _repair_image_only_option_question(question)
 
     # 9. Propagação de imagens de textos de apoio para todas as questões do bloco compartilhado
     for q_min, q_max, _, _ in context_blocks:

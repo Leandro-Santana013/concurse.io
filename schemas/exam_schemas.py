@@ -15,6 +15,7 @@ class QuestionSchema(BaseModel):
     is_annulled: bool = False
     subject: str = "Geral"
     images: Optional[List[str]] = None
+    option_images: Optional[Dict[str, List[str]]] = None
     has_official_answer: bool = True
     latex_support: bool = False
     context_text: Optional[str] = None

@@ -50,12 +50,18 @@ def secured_exam_app(monkeypatch, tmp_path):
                 correct_answer="A",
                 subject="Geral",
                 images=json.dumps(["/static/images/questions/private.png"]) if number == 1 else None,
+                option_images=(
+                    json.dumps({"A": ["/static/images/questions/option.png"]})
+                    if number == 2
+                    else None
+                ),
             ))
         db.commit()
 
     media_dir = tmp_path / "questions"
     media_dir.mkdir()
     (media_dir / "private.png").write_bytes(b"\x89PNG\r\n\x1a\nprivate-image")
+    (media_dir / "option.png").write_bytes(b"\x89PNG\r\n\x1a\noption-image")
     (media_dir / "unreferenced.png").write_bytes(b"\x89PNG\r\n\x1a\nnot-linked")
     monkeypatch.setattr(exam_media, "QUESTION_MEDIA_DIR", media_dir.resolve())
 
@@ -118,6 +124,9 @@ def test_owner_can_read_and_explicit_claim_grants_access(secured_exam_app):
     assert owner_response.json()["questions"][0]["images"] == [
         "/api/v1/exams/41/media/private.png"
     ]
+    assert owner_response.json()["questions"][1]["option_images"] == {
+        "A": ["/api/v1/exams/41/media/option.png"]
+    }
 
     active_user["id"] = 2
     claimed = client.post("/api/v1/exams/41/claim")
@@ -153,6 +162,9 @@ def test_exam_media_requires_login_ownership_and_question_reference(secured_exam
     assert allowed.status_code == 200
     assert allowed.content.endswith(b"private-image")
     assert allowed.headers["cache-control"] == "private, no-store"
+    option_allowed = client.get("/api/v1/exams/41/media/option.png")
+    assert option_allowed.status_code == 200
+    assert option_allowed.content.endswith(b"option-image")
     assert client.get("/api/v1/exams/41/media/unreferenced.png").status_code == 404
 
     active_user["id"] = 2

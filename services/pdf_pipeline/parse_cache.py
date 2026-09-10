@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 
-PARSE_CACHE_VERSION = "legacy-parse-cache-v1"
+PARSE_CACHE_VERSION = "legacy-parse-cache-v2"
 
 
 def _env_flag(name: str, default: bool) -> bool:
@@ -102,19 +102,31 @@ def _cache_path(cache_key: str) -> Path:
 def _image_payload_is_available(questions: List[Dict[str, Any]]) -> bool:
     """Não aceita cache se algum recorte persistido foi removido."""
     root = Path.cwd()
-    for question in questions:
-        images = question.get("images")
-        if not images:
-            continue
-        if not isinstance(images, list):
-            return False
-        for image in images:
+
+    def image_values_are_available(values: Any) -> bool:
+        if values in (None, ""):
+            return True
+        normalized = values if isinstance(values, list) else [values]
+        for image in normalized:
             if not isinstance(image, str):
                 return False
             if image.startswith(("http://", "https://")):
                 continue
             relative = image.split("?", 1)[0].lstrip("/\\")
             if not relative or not (root / Path(relative)).is_file():
+                return False
+        return True
+
+    for question in questions:
+        if not image_values_are_available(question.get("images")):
+            return False
+        option_images = question.get("option_images")
+        if option_images in (None, ""):
+            continue
+        if not isinstance(option_images, dict):
+            return False
+        for images in option_images.values():
+            if not image_values_are_available(images):
                 return False
     return True
 

@@ -14,6 +14,11 @@ from services.pdf_pipeline.media import (
     IMAGE_TRIGGER_REGEX,
     CAPTION_REGEX,
 )
+from services.pdf_pipeline.media.scan_pipeline import (
+    _dedupe_question_headers,
+    _detect_visual_rects,
+    extract_native_page_lines,
+)
 from services.pdf_pipeline import parse_exam_document
 
 def test_image_trigger_regex():
@@ -43,6 +48,32 @@ def test_caption_regex():
         matched = bool(CAPTION_REGEX.search(text))
         assert matched == expected, f"Failed for '{text}': got {matched}, expected {expected}"
     print("  -> OK: CAPTION_REGEX validado!")
+
+
+def test_ibam_scan_visual_is_not_duplicated_into_next_question():
+    """A figura da Q15 do IBAM 2020 fica dentro de uma página com Q16 logo abaixo."""
+
+    pdf_path = os.path.join("pdfs", "5_prova.pdf")
+    if not os.path.exists(pdf_path):
+        return
+
+    with fitz.open(pdf_path) as doc:
+        page = doc[4]
+        lines = extract_native_page_lines(page)
+        headers = _dedupe_question_headers(lines)
+        windows = []
+        for index, (number, _line_index, header) in enumerate(headers):
+            next_y = (
+                float(headers[index + 1][2].get("y0", page.rect.height - 40))
+                if index + 1 < len(headers)
+                else page.rect.height - 40
+            )
+            windows.append((number, float(header.get("y0", 0)), next_y, True))
+
+        visual_rects = _detect_visual_rects(page, lines, windows)
+
+    assert 15 in visual_rects
+    assert 16 not in visual_rects
 
 def test_synthetic_pdf_extraction_and_2phase_linking():
     print("Testing ExamImageExtractor on synthetic PDF...")

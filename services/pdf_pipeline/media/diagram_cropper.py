@@ -67,6 +67,13 @@ CAPTION_PATTERN = (
 
 CAPTION_REGEX = re.compile(CAPTION_PATTERN, re.IGNORECASE)
 
+# Algumas bancas usam figuras como alternativas. Nesses casos o rótulo fica
+# isolado imediatamente acima/à esquerda do desenho e não há texto para o
+# parser de alternativas capturar.
+OPTION_IMAGE_LABEL_REGEX = re.compile(
+    r"^\s*(?:\(\s*([A-Ea-e])\s*\)|([A-Ea-e]))\s*$"
+)
+
 MULTI_FIGURE_REGEX = re.compile(
     r'(?:figura|quadro|gr[áa]fico|tabela|imagem)\s*(?:2|II|III|IV|3|4)',
     re.IGNORECASE
@@ -446,11 +453,25 @@ class ExamImageExtractor:
         # Mapeia triggers nas questões
         for q in questions:
             enunciado = q.get('enunciado', q.get('statement', ''))
+            raw_options = q.get('opcoes', q.get('options', {})) or {}
+            option_text = (
+                " ".join(str(value or '') for value in raw_options.values())
+                if isinstance(raw_options, dict)
+                else ""
+            )
+            trigger_text = f"{enunciado} {option_text}"
             rust_res = rust_match_image_triggers(enunciado)
             if rust_res is not None:
-                q['_has_trigger'] = rust_res.get('has_trigger', False)
+                # O vocabulário Rust pode ficar atrás da expressão Python em
+                # variações como ``imagens apresentadas abaixo``. A decisão
+                # espacial deve manter a evidência mais permissiva, sem criar
+                # conteúdo: ambos os caminhos só marcam o gatilho textual.
+                q['_has_trigger'] = bool(
+                    rust_res.get('has_trigger', False)
+                    or IMAGE_TRIGGER_REGEX.search(trigger_text)
+                )
             else:
-                q['_has_trigger'] = bool(IMAGE_TRIGGER_REGEX.search(enunciado))
+                q['_has_trigger'] = bool(IMAGE_TRIGGER_REGEX.search(trigger_text))
 
         used_diagrams: Set[Tuple[int, int]] = set()
 
@@ -460,6 +481,15 @@ class ExamImageExtractor:
             page_obj = doc[p_idx]
             page_w = page_obj.rect.width
             page_h = page_obj.rect.height
+
+            try:
+                page_text_blocks = [
+                    (fitz.Rect(block[:4]), str(block[4] or ""))
+                    for block in page_obj.get_text("blocks")
+                    if len(block) >= 5 and str(block[4] or "").strip()
+                ]
+            except Exception:
+                page_text_blocks = []
 
             # Candidatos na página
             page_qs = [(i, q) for i, q in enumerate(questions) if q.get('_page') == p_idx]
@@ -483,6 +513,8 @@ class ExamImageExtractor:
                 aspect = cluster.width / cluster.height if cluster.height > 0 else 999
                 if aspect < 0.12 or aspect > 10.0:
                     continue
+
+                option_label = self._option_image_label(page_text_blocks, cluster)
 
                 best_q_idx = -1
                 best_score = float('inf')
@@ -514,6 +546,25 @@ class ExamImageExtractor:
 
                 # Se nenhuma questão foi encontrada acima na mesma coluna/página:
                 if best_q_idx == -1:
+                    # A continuação de uma questão pode começar no fim da
+                    # página anterior e deixar as alternativas-imagem no topo
+                    # da página seguinte. O rótulo visual é evidência forte:
+                    # prefira a última questão compatível com imagens antes de
+                    # cair na questão da coluna atual (normalmente a próxima).
+                    if option_label:
+                        previous_image_qs = [
+                            pq
+                            for pq in prev_page_qs
+                            if pq[1].get('_has_trigger')
+                            and self._question_mentions_image_options(pq[1])
+                        ]
+                        if previous_image_qs:
+                            best_q_idx = max(
+                                previous_image_qs,
+                                key=lambda item: item[1].get('_y', 0),
+                            )[0]
+
+                if best_q_idx == -1:
                     # Prioriza estritamente questões da mesma coluna
                     col_trigger_qs = [pq for pq in same_col_qs if pq[1].get('_has_trigger')]
                     if col_trigger_qs:
@@ -537,6 +588,7 @@ class ExamImageExtractor:
                     if not has_trigger and best_score > 350:
                         continue
                     q_images = target_q.get('images') or []
+                    option_images = target_q.get('option_images') or {}
                     q_num = target_q.get('numero_questao', '0')
 
                     rel_url = self.render_and_save_crop(
@@ -544,13 +596,17 @@ class ExamImageExtractor:
                         cluster=cluster,
                         exam_id=exam_id,
                         q_num=q_num,
-                        img_index=len(q_images) + 1
+                        img_index=len(q_images) + len(option_images) + 1,
                     )
 
                     if rel_url:
-                        if rel_url not in q_images:
-                            q_images.append(rel_url)
-                        target_q['images'] = q_images
+                        if option_label:
+                            option_images[option_label] = rel_url
+                            target_q['option_images'] = option_images
+                        else:
+                            if rel_url not in q_images:
+                                q_images.append(rel_url)
+                            target_q['images'] = q_images
                         used_diagrams.add(diag_key)
 
         # Limpeza temporária
@@ -559,7 +615,45 @@ class ExamImageExtractor:
 
         return questions
 
-        return questions
+    @staticmethod
+    def _option_image_label(
+        page_text_blocks: List[Tuple[fitz.Rect, str]],
+        cluster: fitz.Rect,
+    ) -> Optional[str]:
+        """Retorna o rótulo de uma alternativa-imagem próxima ao cluster."""
+
+        candidates: List[Tuple[float, str]] = []
+        for block_rect, block_text in page_text_blocks:
+            match = OPTION_IMAGE_LABEL_REGEX.fullmatch(" ".join(str(block_text).split()))
+            if not match:
+                continue
+            label = (match.group(1) or match.group(2) or "").upper()
+            vertical_gap = max(0.0, cluster.y0 - block_rect.y1, block_rect.y0 - cluster.y1)
+            horizontal_gap = max(0.0, cluster.x0 - block_rect.x1, block_rect.x0 - cluster.x1)
+            aligned = (
+                vertical_gap <= 18.0 and horizontal_gap <= 48.0
+            ) or (
+                horizontal_gap <= 18.0 and vertical_gap <= 28.0
+            )
+            if aligned:
+                candidates.append((vertical_gap + horizontal_gap, label))
+        if not candidates:
+            return None
+        candidates.sort(key=lambda item: item[0])
+        return candidates[0][1]
+
+    @staticmethod
+    def _question_mentions_image_options(question: Dict[str, Any]) -> bool:
+        text = str(question.get('enunciado', question.get('statement', '')) or '')
+        raw_options = question.get('opcoes', question.get('options', {})) or {}
+        if isinstance(raw_options, dict):
+            text = f"{text} {' '.join(str(value or '') for value in raw_options.values())}"
+        return bool(
+            re.search(
+                r"(?i)\b(?:imagens?|figuras?|desenhos?)\b.*\b(?:alternativa|abaixo|a\s+seguir|apresentad)",
+                text,
+            )
+        )
 
 
 # =============================================================================

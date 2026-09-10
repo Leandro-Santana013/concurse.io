@@ -197,6 +197,10 @@ class Question(Base):
     correct_answer = Column(String(10), nullable=False)
     subject = Column(String(100), nullable=True, default='Geral', index=True)
     images = Column(Text, nullable=True)
+    # Mapa opcional de alternativas visuais: {"A": ["/static/...png"], ...}.
+    # Mantém `images` para figuras do corpo da questão e não quebra o payload
+    # legado de questões que não possuem imagens por alternativa.
+    option_images = Column(Text, nullable=True)
     numero_questao = Column(String(50), nullable=True)
     # Índice Canônico: posição estável 0..N-1 na ordem da Cadeia de Encadeamento,
     # desacoplada do rótulo textual `numero_questao` (que pode repetir/falhar
@@ -368,6 +372,22 @@ def _ensure_question_index_column():
     print("[Schema] Coluna 'question_index' adicionada à tabela 'questions'.")
 
 
+def _ensure_question_option_images_column():
+    """Garante a coluna aditiva para imagens que pertencem a alternativas."""
+
+    from sqlalchemy import inspect
+
+    inspector = inspect(engine)
+    if 'questions' not in inspector.get_table_names():
+        return
+    cols = {c['name'] for c in inspector.get_columns('questions')}
+    if 'option_images' in cols:
+        return
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE questions ADD COLUMN option_images TEXT"))
+    print("[Schema] Coluna 'option_images' adicionada à tabela 'questions'.")
+
+
 def _ensure_user_security_columns():
     """Migração aditiva mínima para bancos criados antes da criptografia de PII."""
     inspector = inspect(engine)
@@ -462,6 +482,7 @@ def _migrate_user_security_rows() -> int:
 def init_db():
     Base.metadata.create_all(bind=engine)
     _ensure_question_index_column()
+    _ensure_question_option_images_column()
     _ensure_user_security_columns()
     migrated = _migrate_user_security_rows()
     if migrated:

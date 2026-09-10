@@ -69,6 +69,19 @@ def _is_idcap_exam(title: str = "", source_url: str = "", source: str = "") -> b
     return bool(IDCAP_SOURCE_PATTERN.search(f"{title} {source_url} {source}"))
 
 
+def _pdf_contains_idcap(pdf_path: str | os.PathLike[str]) -> bool:
+    """Detecta IDCAP no próprio PDF quando a URL foi normalizada para local."""
+
+    try:
+        import fitz
+
+        with fitz.open(str(pdf_path)) as document:
+            text = "\n".join(page.get_text("text") for page in document)
+        return bool(IDCAP_SOURCE_PATTERN.search(text))
+    except Exception:
+        return False
+
+
 def set_exam_progress(exam_id: int, status_msg: str, pct: int, error_type: Optional[str] = None):
     """Atualiza o progresso do exame no banco de dados de forma thread-safe com retentativas e garantias de integridade."""
     safe_msg = (status_msg[:285] + '...') if len(status_msg) > 290 else status_msg
@@ -85,6 +98,7 @@ def set_exam_progress(exam_id: int, status_msg: str, pct: int, error_type: Optio
                     exam.error_type = safe_error
                 if pct == 100:
                     exam.status = 'Aprovada'
+                    exam.error_type = None
                 elif pct == -1:
                     exam.status = 'Erro'
                 session.commit()
@@ -299,6 +313,15 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
             if not is_pdf_file(Path(pdf_path)):
                 set_exam_progress(exam_id, "Não foi possível obter o arquivo da prova.", -1, "DOWNLOAD_FAILED")
                 return
+
+            # A URL local persistida pode ter substituído a origem original e
+            # apagado a palavra IDCAP do título. O rodapé/termo do próprio
+            # PDF é a evidência estável para manter a ingestão sem gabarito
+            # dedicado e não reclassificar o exame como IBAM.
+            if not is_idcap_exam and _pdf_contains_idcap(pdf_path):
+                is_idcap_exam = True
+                gabarito_url = None
+                gabarito_override = None
 
             set_exam_progress(exam_id, "Inspecionando estrutura do documento...", 25)
             inspection = inspect_pdf_document(pdf_path)
@@ -580,6 +603,19 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
                         else:
                             images_json = None
 
+                        raw_option_images = q_data.get('option_images')
+                        if isinstance(raw_option_images, dict) and raw_option_images:
+                            try:
+                                option_images_json = json.dumps(
+                                    raw_option_images,
+                                    ensure_ascii=False,
+                                    default=str,
+                                ).replace('\x00', '')
+                            except Exception:
+                                option_images_json = None
+                        else:
+                            option_images_json = None
+
                         num_q = str(q_data.get('numero_questao') or idx).replace('\x00', '').strip()[:50]
                         q_index = q_data.get('question_index') if isinstance(q_data.get('question_index'), int) else (idx - 1)
 
@@ -590,6 +626,7 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
                             correct_answer=correct_ans,
                             subject=subject_clean,
                             images=images_json,
+                            option_images=option_images_json,
                             numero_questao=num_q,
                             question_index=q_index,
                             latex_support=int(q_data.get('latex_support', 0) or 0)

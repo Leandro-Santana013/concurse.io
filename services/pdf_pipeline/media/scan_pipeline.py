@@ -1266,7 +1266,7 @@ def _detect_visual_rects(
 
     components = _merge_close_rects(components, gap=20.0)
     result: Dict[int, List[fitz.Rect]] = defaultdict(list)
-    for q_num, y0, y1, has_trigger in question_windows:
+    for q_window_index, (q_num, y0, y1, has_trigger) in enumerate(question_windows):
         if not has_trigger:
             continue
         # Primeiro procure somente depois do cabeçalho da própria questão.
@@ -1280,10 +1280,24 @@ def _detect_visual_rects(
             search_windows.append((max(35.0, y0 - 165.0), search_y1))
 
         candidates = []
-        for search_y0, current_search_y1 in search_windows:
+        for search_index, (search_y0, current_search_y1) in enumerate(search_windows):
             candidates = []
             for rect in components:
                 if rect.y1 < search_y0 or rect.y0 > current_search_y1:
+                    continue
+                if search_index > 0 and any(
+                    previous_has_trigger
+                    and rect.y1 > previous_y0
+                    and rect.y0 < previous_y1
+                    for previous_y0, previous_y1, previous_has_trigger in (
+                        (previous_window[1], previous_window[2], previous_window[3])
+                        for previous_window in question_windows[:q_window_index]
+                    )
+                ):
+                    # A fallback strip above this header belongs to an
+                    # earlier triggered question when it intersects that
+                    # question's primary window. Do not duplicate the same
+                    # diagram/table on the next question.
                     continue
                 visible_y = max(
                     0.0,
@@ -1291,20 +1305,20 @@ def _detect_visual_rects(
                 )
                 if visible_y < min(15.0, rect.height * 0.30):
                     continue
-            area = rect.width * rect.height
-            if rect.width < 100.0 and rect.x1 < page.rect.width * 0.24:
-                # Resíduos das circunferências vermelhas que envolvem as
-                # alternativas não são uma ilustração da questão.
-                continue
-            if (
-                rect.width > page.rect.width * 0.55
-                and rect.height < 60.0
-            ) or rect.width / max(1.0, rect.height) > 8.0:
-                # Três linhas de texto que o OCR não mascarou podem formar
-                # um componente largo, mas baixo. Esse padrão aparece em
-                # enunciados e cabeçalhos, não em mapas/tabelas; descartá-lo
-                # evita vincular texto da questão 21 como se fosse imagem.
-                continue
+                area = rect.width * rect.height
+                if rect.width < 100.0 and rect.x1 < page.rect.width * 0.24:
+                    # Resíduos das circunferências vermelhas que envolvem as
+                    # alternativas não são uma ilustração da questão.
+                    continue
+                if (
+                    rect.width > page.rect.width * 0.55
+                    and rect.height < 60.0
+                ) or rect.width / max(1.0, rect.height) > 8.0:
+                    # Três linhas de texto que o OCR não mascarou podem formar
+                    # um componente largo, mas baixo. Esse padrão aparece em
+                    # enunciados e cabeçalhos, não em mapas/tabelas; descartá-lo
+                    # evita vincular texto da questão 21 como se fosse imagem.
+                    continue
                 if any(
                     rect.intersects(
                         fitz.Rect(
