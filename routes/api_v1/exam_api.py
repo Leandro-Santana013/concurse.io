@@ -1,6 +1,7 @@
 import re
 import json
 import asyncio
+from collections import Counter
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -13,6 +14,7 @@ from models.database import (
     Exam,
     Question,
     ExamAttempt,
+    GeneratedExamSession,
     create_generated_exam_session,
     resolve_exam_questions,
 )
@@ -24,6 +26,8 @@ from schemas.exam_schemas import (
     AttemptSubmission,
     AttemptResult,
     ExamIngestResponse,
+    CustomSimulationOptionsSchema,
+    CustomSimulationSummarySchema,
 )
 from routes.api_v1.user_context import (
     get_accessible_exam_or_404,
@@ -34,6 +38,150 @@ from routes.api_v1.exam_media import secure_exam_image_urls, secure_exam_option_
 from services.exam_library import claim_exam_for_user, get_user_exam_ids, link_ready_exam_to_user
 
 router = APIRouter()
+
+
+def _normalized_subject(value: Any) -> str:
+    normalized = str(value or '').strip()
+    return normalized or 'Geral'
+
+
+def _normalized_subject_filters(subjects: Optional[List[str]]) -> List[str]:
+    result = []
+    seen = set()
+    for subject in subjects or []:
+        normalized = _normalized_subject(subject)
+        key = normalized.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(normalized)
+    return result
+
+
+def _custom_question_query(db: Session, user_id: int):
+    """Questões válidas de provas reais que pertencem à biblioteca do usuário."""
+    accessible_exam_ids = get_user_exam_ids(db, user_id)
+    if not accessible_exam_ids:
+        return None
+
+    return (
+        db.query(Question)
+        .join(Exam, Exam.id == Question.exam_id)
+        .filter(
+            Question.exam_id.in_(accessible_exam_ids),
+            Exam.status == 'Aprovada',
+            func.upper(func.trim(Question.correct_answer)).in_(['A', 'B', 'C', 'D', 'E']),
+        )
+    )
+
+
+def _decode_generated_question_ids(session: GeneratedExamSession) -> List[int]:
+    try:
+        raw_ids = json.loads(session.question_ids_json or '[]')
+    except (TypeError, ValueError, json.JSONDecodeError):
+        raw_ids = []
+    if not isinstance(raw_ids, list):
+        return []
+    normalized = []
+    seen = set()
+    for raw_id in raw_ids:
+        try:
+            question_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if question_id <= 0 or question_id in seen:
+            continue
+        seen.add(question_id)
+        normalized.append(question_id)
+    return normalized
+
+
+@router.get("/custom-simulations/options", response_model=CustomSimulationOptionsSchema)
+def get_custom_simulation_options(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Retorna os filtros disponíveis para montar um simulado personalizado."""
+    query = _custom_question_query(db, current_user.id)
+    if query is None:
+        return CustomSimulationOptionsSchema()
+
+    rows = query.with_entities(Question.subject, Question.exam_id, Exam.title).all()
+    subject_counts = Counter(_normalized_subject(subject) for subject, _exam_id, _title in rows)
+    source_counts = Counter(
+        (int(exam_id), str(title or 'Prova sem título'))
+        for _subject, exam_id, title in rows
+    )
+
+    subjects = [
+        {"name": name, "count": count}
+        for name, count in sorted(
+            subject_counts.items(),
+            key=lambda item: (-item[1], item[0].casefold()),
+        )
+    ]
+    sources = [
+        {"id": exam_id, "title": title, "count": count}
+        for (exam_id, title), count in sorted(
+            source_counts.items(),
+            key=lambda item: (-item[1], item[0][1].casefold()),
+        )
+    ]
+    return CustomSimulationOptionsSchema(
+        available_questions=len(rows),
+        subjects=subjects,
+        sources=sources,
+    )
+
+
+@router.get("/custom-simulations", response_model=List[CustomSimulationSummarySchema])
+def list_custom_simulations(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Lista somente os simulados personalizados do usuário, separados das provas reais."""
+    sessions = (
+        db.query(GeneratedExamSession, Exam)
+        .join(Exam, Exam.id == GeneratedExamSession.exam_id)
+        .filter(
+            Exam.user_id == current_user.id,
+            GeneratedExamSession.kind == 'custom',
+        )
+        .order_by(GeneratedExamSession.created_at.desc(), GeneratedExamSession.exam_id.desc())
+        .all()
+    )
+    if not sessions:
+        return []
+
+    exam_ids = [exam.id for _session, exam in sessions]
+    attempts_by_exam: Dict[int, List[ExamAttempt]] = {}
+    for attempt in (
+        db.query(ExamAttempt)
+        .filter(
+            ExamAttempt.user_id == current_user.id,
+            ExamAttempt.exam_id.in_(exam_ids),
+        )
+        .order_by(ExamAttempt.id.desc())
+        .all()
+    ):
+        attempts_by_exam.setdefault(attempt.exam_id, []).append(attempt)
+
+    result = []
+    for session, exam in sessions:
+        attempts = attempts_by_exam.get(exam.id, [])
+        scores = [attempt.percentage for attempt in attempts]
+        result.append(CustomSimulationSummarySchema(
+            id=exam.id,
+            title=exam.title,
+            kind=session.kind,
+            created_at=session.created_at,
+            question_count=len(_decode_generated_question_ids(session)),
+            attempt_count=len(attempts),
+            best_score=round(max(scores), 1) if scores else None,
+            last_score=round(attempts[0].percentage, 1) if attempts else None,
+        ))
+    return result
+
 
 @router.get("/folders", response_model=List[FolderSchema])
 def list_folders(
@@ -363,22 +511,46 @@ def submit_attempt(
 @router.post("/exams/generate_custom", response_model=ExamDetailSchema)
 def generate_custom_exam(
     count: int = Query(20, ge=5, le=100),
+    subjects: Optional[List[str]] = Query(default=None),
+    source_exam_id: Optional[int] = Query(default=None, ge=1),
+    strict: bool = Query(False),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Gera um simulado aleatório apenas com questões do acervo do usuário."""
-    accessible_exam_ids = get_user_exam_ids(db, current_user.id)
-    questions = (
-        db.query(Question)
-        .filter(Question.exam_id.in_(accessible_exam_ids))
-        .order_by(func.random())
-        .limit(count)
-        .all()
-    ) if accessible_exam_ids else []
+    """Gera uma sessão persistida com filtros explícitos da biblioteca do usuário."""
+    normalized_subjects = _normalized_subject_filters(subjects)
+    query = _custom_question_query(db, current_user.id)
+    if query is None:
+        raise HTTPException(status_code=400, detail="Nenhuma questão disponível na sua biblioteca.")
+
+    if normalized_subjects:
+        subject_expression = func.coalesce(
+            func.nullif(func.trim(Question.subject), ''),
+            'Geral',
+        )
+        query = query.filter(subject_expression.in_(normalized_subjects))
+
+    if source_exam_id is not None:
+        query = query.filter(Question.exam_id == source_exam_id)
+
+    available_count = int(query.count())
+    if available_count < count and strict:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Há apenas {available_count} questões válidas para os filtros escolhidos; reduza a quantidade ou amplie a seleção.",
+        )
+
+    count = min(count, available_count)
+    questions = query.order_by(func.random()).limit(count).all()
     if not questions:
         raise HTTPException(status_code=400, detail="Nenhuma questão disponível na sua biblioteca.")
 
-    title = f"Simulado Personalizado ({len(questions)} Questões)"
+    if len(normalized_subjects) == 1:
+        title = f"Simulado personalizado · {normalized_subjects[0]} ({len(questions)} questões)"
+    elif normalized_subjects:
+        title = f"Simulado personalizado · {len(normalized_subjects)} disciplinas ({len(questions)} questões)"
+    else:
+        title = f"Simulado personalizado · Todas as disciplinas ({len(questions)} questões)"
     exam = create_generated_exam_session(
         db,
         title=title,

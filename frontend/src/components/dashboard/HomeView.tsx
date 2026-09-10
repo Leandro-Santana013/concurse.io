@@ -15,7 +15,13 @@ import { useExam } from '../../context/ExamContext';
 import { useUI } from '../../context/UIContext';
 import { api, AuthRequiredError } from '../../services/api';
 import { useExamStore } from '../../store/useExamStore';
-import type { ExamSummary, Folder, NotebookSubjectStat } from '../../types/exam';
+import type {
+  CustomSimulationRequest,
+  ExamSummary,
+  Folder,
+  NotebookSubjectStat,
+} from '../../types/exam';
+import { CustomSimulationModal } from './CustomSimulationModal';
 
 type LoadState = 'loading' | 'ready' | 'error';
 
@@ -33,7 +39,6 @@ export const HomeView: React.FC = () => {
     formatTime,
     generateCustomExam,
     isFinished,
-    isLoadingExam,
     loadAndStartExam,
     progressPercentage,
   } = useExam();
@@ -41,6 +46,7 @@ export const HomeView: React.FC = () => {
   const [notebook, setNotebook] = useState<NotebookSubjectStat[]>([]);
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [launchingExamId, setLaunchingExamId] = useState<number | null>(null);
+  const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
 
   const loadOverview = useCallback(async () => {
     setLoadState('loading');
@@ -81,12 +87,13 @@ export const HomeView: React.FC = () => {
     ? `/prova/${activeExam.id}${isFinished ? '/resultado' : ''}`
     : '/biblioteca';
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (request: CustomSimulationRequest) => {
     try {
-      await generateCustomExam(20);
+      await generateCustomExam(request);
       const generatedExam = useExamStore.getState().activeExam;
       if (!generatedExam) throw new Error('O simulado não pôde ser aberto.');
-      showToast('success', 'Simulado pronto', 'Selecionamos 20 questões da sua biblioteca.');
+      setIsCustomModalOpen(false);
+      showToast('success', 'Simulado pronto', `${request.count} questões foram selecionadas para você.`);
       navigate(`/prova/${generatedExam.id}`);
     } catch (error) {
       showToast(
@@ -96,6 +103,9 @@ export const HomeView: React.FC = () => {
       );
     }
   };
+
+  const openCustomModal = useCallback(() => setIsCustomModalOpen(true), []);
+  const closeCustomModal = useCallback(() => setIsCustomModalOpen(false), []);
 
   const handleOpenExam = async (examId: number) => {
     setLaunchingExamId(examId);
@@ -190,13 +200,12 @@ export const HomeView: React.FC = () => {
           <button
             type="button"
             className="quick-action-card"
-            onClick={handleGenerate}
-            disabled={isLoadingExam}
+            onClick={openCustomModal}
           >
             <RotateCcw aria-hidden="true" />
             <span>
-              <strong>{isLoadingExam ? 'Preparando…' : 'Simulado de 20 questões'}</strong>
-              <small>Seleção mista da biblioteca</small>
+              <strong>Montar simulado personalizado</strong>
+              <small>Escolha quantidade e disciplinas</small>
             </span>
             <ArrowRight aria-hidden="true" />
           </button>
@@ -290,6 +299,12 @@ export const HomeView: React.FC = () => {
           </section>
         </div>
       )}
+
+      <CustomSimulationModal
+        isOpen={isCustomModalOpen}
+        onClose={closeCustomModal}
+        onSubmit={handleGenerate}
+      />
     </div>
   );
 };

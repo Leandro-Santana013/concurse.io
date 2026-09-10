@@ -40,6 +40,35 @@ class FolderSchema(BaseModel):
     name: str
     exams: List[ExamSummarySchema] = Field(default_factory=list)
 
+
+class CustomSimulationSubjectSchema(BaseModel):
+    name: str
+    count: int = 0
+
+
+class CustomSimulationSourceSchema(BaseModel):
+    id: int
+    title: str
+    count: int = 0
+
+
+class CustomSimulationOptionsSchema(BaseModel):
+    available_questions: int = 0
+    subjects: List[CustomSimulationSubjectSchema] = Field(default_factory=list)
+    sources: List[CustomSimulationSourceSchema] = Field(default_factory=list)
+
+
+class CustomSimulationSummarySchema(BaseModel):
+    id: int
+    title: str
+    kind: str = "custom"
+    created_at: str
+    question_count: int = 0
+    attempt_count: int = 0
+    best_score: Optional[float] = None
+    last_score: Optional[float] = None
+
+
 class ExamDetailSchema(BaseModel):
     id: int
     title: str

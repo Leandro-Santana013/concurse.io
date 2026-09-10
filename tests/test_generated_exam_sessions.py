@@ -184,6 +184,39 @@ def test_custom_exam_uses_only_questions_from_the_current_users_library(api_and_
     assert returned_ids.isdisjoint(foreign_ids)
 
 
+def test_custom_simulation_options_filters_and_history_are_separate(api_and_session_factory):
+    client, session_factory = api_and_session_factory
+
+    options_response = client.get("/api/v1/custom-simulations/options")
+    assert options_response.status_code == 200
+    options = options_response.json()
+    assert options["available_questions"] == 5
+    assert {item["name"] for item in options["subjects"]} == {"Português", "Direito"}
+    assert {item["title"] for item in options["sources"]} == {"Prova fonte"}
+
+    with session_factory() as db:
+        source_exam_id = db.query(Exam.id).filter(Exam.title == "Prova fonte").one()[0]
+
+    generated_response = client.post(
+        f"/api/v1/exams/generate_custom?count=5&source_exam_id={source_exam_id}&strict=true"
+    )
+    assert generated_response.status_code == 200
+
+    insufficient_response = client.post(
+        "/api/v1/exams/generate_custom?count=5&subjects=Portugu%C3%AAs&strict=true"
+    )
+    assert insufficient_response.status_code == 400
+    assert "questões válidas" in insufficient_response.json()["detail"]
+
+    history_response = client.get("/api/v1/custom-simulations")
+    assert history_response.status_code == 200
+    history = history_response.json()
+    assert len(history) == 1
+    assert history[0]["kind"] == "custom"
+    assert history[0]["question_count"] == 5
+    assert history[0]["attempt_count"] == 0
+
+
 def test_notebook_resolves_generated_attempts_and_deduplicates_original_questions(api_and_session_factory):
     client, session_factory = api_and_session_factory
 

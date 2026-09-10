@@ -40,6 +40,40 @@ export interface Folder {
   exams: ExamSummary[];
 }
 
+export interface CustomSimulationRequest {
+  count: number;
+  subjects?: string[];
+  sourceExamId?: number | null;
+}
+
+export interface CustomSimulationSubjectOption {
+  name: string;
+  count: number;
+}
+
+export interface CustomSimulationSourceOption {
+  id: number;
+  title: string;
+  count: number;
+}
+
+export interface CustomSimulationOptions {
+  available_questions: number;
+  subjects: CustomSimulationSubjectOption[];
+  sources: CustomSimulationSourceOption[];
+}
+
+export interface CustomSimulationSummary {
+  id: number;
+  title: string;
+  kind: string;
+  created_at: string;
+  question_count: number;
+  attempt_count: number;
+  best_score: number | null;
+  last_score: number | null;
+}
+
 export interface ExamDetail {
   id: number;
   title: string;

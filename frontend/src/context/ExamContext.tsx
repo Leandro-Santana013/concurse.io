@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
 import { useExamStore } from '../store/useExamStore';
-import { ExamDetail, AttemptResult, Question } from '../types/exam';
+import { ExamDetail, AttemptResult, CustomSimulationRequest, Question } from '../types/exam';
 import { api } from '../services/api';
 
 interface ExamContextType {
@@ -29,7 +29,7 @@ interface ExamContextType {
   // Actions
   startExam: (exam: ExamDetail) => void;
   loadAndStartExam: (examId: number) => Promise<void>;
-  generateCustomExam: (count?: number) => Promise<void>;
+  generateCustomExam: (request?: number | CustomSimulationRequest) => Promise<void>;
   loadErrorNotebookExam: (subject?: string) => Promise<void>;
   selectAnswer: (qNum: string, answer: string) => void;
   toggleFlagQuestion: (qNum: string) => void;
@@ -110,10 +110,10 @@ export const ExamProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   // Generate mixed exam
-  const generateCustomExam = async (count: number = 20) => {
+  const generateCustomExam = async (request: number | CustomSimulationRequest = 20) => {
     setIsLoadingExam(true);
     try {
-      const customExam = await api.generateCustomExam(count);
+      const customExam = await api.generateCustomExam(request);
       clearEliminatedOptions();
       store.startExam(customExam);
     } finally {

@@ -11,6 +11,9 @@ import {
   ExamIngestResult,
   ActiveDownload,
   SearchResultsPage,
+  CustomSimulationOptions,
+  CustomSimulationRequest,
+  CustomSimulationSummary,
 } from '../types/exam';
 import { AuthConfig, AuthUser } from '../types/auth';
 
@@ -72,8 +75,34 @@ export const api = {
     return res.json();
   },
 
-  async generateCustomExam(count: number = 20): Promise<ExamDetail> {
-    const res = await apiFetch(`${API_BASE}/exams/generate_custom?count=${count}`, {
+  async getCustomSimulationOptions(): Promise<CustomSimulationOptions> {
+    const res = await apiFetch(`${API_BASE}/custom-simulations/options`);
+    if (res.status === 401) throw new AuthRequiredError();
+    if (!res.ok) throw new Error('Falha ao carregar filtros do simulado personalizado');
+    return res.json();
+  },
+
+  async getCustomSimulations(): Promise<CustomSimulationSummary[]> {
+    const res = await apiFetch(`${API_BASE}/custom-simulations`);
+    if (res.status === 401) throw new AuthRequiredError();
+    if (!res.ok) throw new Error('Falha ao carregar testes personalizados');
+    return res.json();
+  },
+
+  async generateCustomExam(
+    request: number | CustomSimulationRequest = 20,
+  ): Promise<ExamDetail> {
+    const config: CustomSimulationRequest = typeof request === 'number'
+      ? { count: request }
+      : request;
+    const params = new URLSearchParams({ count: String(config.count ?? 20) });
+    for (const subject of config.subjects || []) {
+      params.append('subjects', subject);
+    }
+    if (config.sourceExamId) params.set('source_exam_id', String(config.sourceExamId));
+    params.set('strict', 'true');
+
+    const res = await apiFetch(`${API_BASE}/exams/generate_custom?${params.toString()}`, {
       method: 'POST',
     });
     if (!res.ok) throw new Error('Falha ao gerar simulado personalizado');
