@@ -8,6 +8,8 @@ if hasattr(sys.stdout, 'reconfigure'):
 from services.pdf_pipeline import parse_exam_document, format_latex_formulas
 from services.pdf_pipeline.hybrid_extractor import (
     _assess_native_text_quality,
+    _precision_recovery_targets,
+    _should_run_precision_recovery,
     extract_heuristic_options,
     _normalize_roman_list_option,
     _score_option_map,
@@ -161,6 +163,41 @@ def test_native_text_quality_does_not_force_ocr_for_structured_text_pdf():
         total_image_count=0,
     )
     assert result["needs_vision_ocr"] is False
+
+
+def test_precision_recovery_does_not_target_valid_five_option_questions():
+    questions = [
+        {
+            "numero_questao": str(number),
+            "opcoes": {letter: f"Alternativa {letter}" for letter in "ABCDE"},
+        }
+        for number in range(1, 71)
+    ]
+
+    assert _precision_recovery_targets(questions) == set()
+    assert _should_run_precision_recovery(
+        needs_vision_ocr=False,
+        native_layer_usable=False,
+    ) is False
+
+
+def test_precision_recovery_keeps_four_option_scan_repair_signal():
+    questions = [
+        {
+            "numero_questao": "1",
+            "opcoes": {letter: f"Alternativa {letter}" for letter in "ABCD"},
+        },
+        {
+            "numero_questao": "2",
+            "opcoes": {letter: f"Alternativa {letter}" for letter in "ABC"},
+        },
+    ]
+
+    assert _precision_recovery_targets(questions) == {2}
+    assert _should_run_precision_recovery(
+        needs_vision_ocr=True,
+        native_layer_usable=False,
+    ) is True
 
 
 def test_heuristic_options_ignores_standalone_scan_markers():

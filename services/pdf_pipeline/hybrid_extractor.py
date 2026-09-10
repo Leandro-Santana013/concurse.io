@@ -6,6 +6,7 @@ import hashlib
 import json
 import time
 import fitz
+from collections import Counter
 from typing import List, Dict, Any, Optional, Tuple, Set
 
 from .layout.layout_detector import (
@@ -710,6 +711,81 @@ def _normalize_roman_list_option(text: str) -> str:
     )
 
 
+_ROMAN_CONFUSION_RE = re.compile(
+    r"(?i)(?<![A-Za-z0-9])(?:i1|il|ill|ivl?|vll|vlll|lx)(?![A-Za-z0-9])"
+)
+
+
+def _dominant_option_count(questions: List[Dict[str, Any]]) -> Optional[int]:
+    """Detecta o tamanho dominante do mapa de alternativas da prova.
+
+    A recuperação de precisão nasceu para cadernos com quatro alternativas.
+    Provas A-E são válidas e não podem ser tratadas como incompletas apenas
+    porque possuem cinco opções.
+    """
+    counts: Counter[int] = Counter()
+    for question in questions:
+        options = question.get("opcoes") or {}
+        option_count = len(options) if isinstance(options, (dict, list)) else 0
+        if 2 <= option_count <= 5:
+            counts[option_count] += 1
+
+    if not counts:
+        return None
+    most_common = counts.most_common()
+    if len(most_common) > 1 and most_common[0][1] == most_common[1][1]:
+        return None
+    return most_common[0][0]
+
+
+def _precision_recovery_targets(questions: List[Dict[str, Any]]) -> Set[int]:
+    """Retorna somente questões que justificam uma leitura OCR de precisão."""
+    expected_option_count = _dominant_option_count(questions)
+    targets: Set[int] = set()
+
+    for question in questions:
+        raw_number = question.get("numero_questao")
+        if not str(raw_number or "").isdigit():
+            continue
+
+        options = question.get("opcoes") or {}
+        option_count = len(options) if isinstance(options, (dict, list)) else 0
+        needs_precision = option_count < 4 or (
+            expected_option_count == 4 and option_count != 4
+        )
+        option_values = (
+            options.values()
+            if isinstance(options, dict)
+            else options
+            if isinstance(options, list)
+            else []
+        )
+        for value in option_values:
+            text = str(value or "").strip()
+            compact = re.sub(r"\s+", "", text)
+            if _ROMAN_CONFUSION_RE.search(text) or (
+                len(compact) <= 12
+                and re.search(r"\d", text)
+                and not re.fullmatch(r"[\d\s.,%()+\-×*/^]+", text)
+            ):
+                needs_precision = True
+                break
+
+        if needs_precision:
+            targets.add(int(raw_number))
+
+    return targets
+
+
+def _should_run_precision_recovery(
+    *,
+    needs_vision_ocr: bool,
+    native_layer_usable: bool,
+) -> bool:
+    """Impede uma segunda passada OCR em PDFs textuais já confiáveis."""
+    return bool(needs_vision_ocr and not native_layer_usable)
+
+
 def _recover_scan_options_at_high_resolution(
     doc: fitz.Document,
     questions: List[Dict[str, Any]],
@@ -720,9 +796,9 @@ def _recover_scan_options_at_high_resolution(
 
     A passada normal é suficiente para a maior parte do caderno. Se uma
     questão ainda tiver uma expressão numérica corrompida, uma lista romana
-    ambígua ou quantidade diferente de quatro alternativas, repete somente a
-    página correspondente em alta resolução e substitui o mapa apenas quando
-    a nova estrutura for claramente melhor.
+    ambígua ou alternativas insuficientes, repete somente a página
+    correspondente em alta resolução e substitui o mapa apenas quando a nova
+    estrutura for claramente melhor.
     """
     from .media.vision_pipeline import _supplement_native_question_headers
     from services.pdf_pipeline.layout.layout_detector import (
@@ -730,33 +806,7 @@ def _recover_scan_options_at_high_resolution(
         extract_ocr_lines_three_passes,
     )
 
-    roman_confusion_re = re.compile(
-        r"(?i)(?<![A-Za-z0-9])(?:i1|il|ill|ivl?|vll|vlll|lx)(?![A-Za-z0-9])"
-    )
-
-    def needs_precision(question: Dict[str, Any]) -> bool:
-        options = question.get('opcoes') or {}
-        if len(options) != 4:
-            return True
-        for value in options.values():
-            text = str(value or '').strip()
-            compact = re.sub(r'\s+', '', text)
-            if roman_confusion_re.search(text):
-                return True
-            if (
-                len(compact) <= 12
-                and re.search(r'\d', text)
-                and not re.fullmatch(r'[\d\s.,%()+\-×*/^]+', text)
-            ):
-                return True
-        return False
-
-    targets = {
-        int(question.get('numero_questao'))
-        for question in questions
-        if str(question.get('numero_questao', '')).isdigit()
-        and needs_precision(question)
-    }
+    targets = _precision_recovery_targets(questions)
     if not targets:
         return
 
@@ -1624,7 +1674,13 @@ def parse_exam_document(
         # Última recuperação direcionada para alternativas curtas de scans.
         # Executa antes do fechamento do documento e antes do vínculo de
         # diagramas, preservando o restante da extração já validada.
-        if not native_layer_usable:
+        # OCR de precisão é uma segunda passada cara. Só pode ser acionado
+        # quando a avaliação de qualidade realmente pediu Vision OCR; um PDF
+        # textual saudável não deve entrar aqui por não ser um "scan-like".
+        if _should_run_precision_recovery(
+            needs_vision_ocr=needs_vision_ocr,
+            native_layer_usable=native_layer_usable,
+        ):
             _recover_scan_options_at_high_resolution(
                 doc=doc,
                 questions=questions,
