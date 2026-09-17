@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from models.database import User, get_db
+from models.database import MeshPeer, User, get_db
 from routes.api_v1.user_context import get_current_user
 from app_security import identifier_lookup_values
 from services.auth import (
@@ -179,6 +179,9 @@ def delete_account(
     current_user=Depends(get_current_user),
 ):
     """Exclui permanentemente a conta do usuário e limpa os cookies de sessão."""
+    db.query(MeshPeer).filter(MeshPeer.user_id == current_user.id).delete(
+        synchronize_session=False,
+    )
     db.delete(current_user)
     db.commit()
 
