@@ -125,6 +125,7 @@ def test_fetch_proxy_verifies_peer_bytes(mesh_client, monkeypatch):
     assert fetched.status_code == 200
     assert fetched.content == data
     assert fetched.headers["x-mesh-provider"] == "desktop-node-2"
+    assert ContentAddressedStore().read_bytes(asset_id) == data
 
 
 def test_announce_rejects_node_reuse_by_another_user(mesh_client):
