@@ -36,7 +36,17 @@ mídia segue protegida por autorização da prova, e o manifesto é somente um
 
 O caminho central funciona imediatamente em web/PWA e desktop: o celular faz
 login com a mesma conta e recebe os mesmos vínculos do Supabase. A camada P2P
-pode ser adicionada depois atrás do `asset_id`, sem alterar a estrutura das
-questões. O snapshot calcula hashes dos arquivos referenciados, portanto uma
-biblioteca muito grande pode exigir cache de hash quando a rede mesh entrar em
-produção.
+pode usar os endpoints autenticados `/mesh/announce`, `/mesh/providers` e
+`/mesh/fetch`: o desktop anuncia um lease curto e o servidor procura peers da
+mesma conta antes de buscar a mídia central. O peer só serve blobs por
+`sha256:<digest>` e o proxy descarta qualquer resposta cujo hash não confira.
+
+O snapshot hidrata o cache `MESH_CONTENT_DIR` do nó local. Portanto, a primeira
+abertura de uma prova torna as imagens referenciadas disponíveis para anúncio;
+o nome original do PNG não entra na chave de armazenamento. O lease expira
+sozinho e pode ser renovado pelo desktop, sem deixar endpoints antigos ativos.
+
+O transporte exige que o endpoint anunciado seja alcançável pelo servidor
+(rede local, VPN ou encaminhamento HTTPS). NAT sem rota direta continua sendo
+um caso para um relay/WebRTC posterior; a verificação de conteúdo e a
+autorização da conta já ficam prontas para essa troca.

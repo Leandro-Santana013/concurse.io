@@ -41,6 +41,7 @@ provas_bancas/
 *.7z
 test.pdf
 static/images/questions/
+mesh_data/
 
 # Frontend (Node, Vite & Bundles)
 node_modules/

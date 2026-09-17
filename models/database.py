@@ -259,6 +259,20 @@ class UserExam(Base):
     exam = relationship("Exam", back_populates="library_entries")
 
 
+class MeshPeer(Base):
+    """Lease curta de um nó que possui blobs da biblioteca do usuário."""
+
+    __tablename__ = 'mesh_peers'
+
+    node_id = Column(String(128), primary_key=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    endpoint = Column(String(500), nullable=False)
+    asset_ids_json = Column(Text, nullable=False, default='[]')
+    last_seen = Column(String(30), nullable=False, index=True)
+    expires_at = Column(String(30), nullable=False, index=True)
+    created_at = Column(String(30), nullable=False)
+
+
 class ExamSource(Base):
     """Identidade canônica de uma origem; uma prova pode ter mais de uma URL alias."""
 

@@ -39,6 +39,7 @@ from routes.api_v1.user_context import (
 from routes.api_v1.exam_media import secure_exam_image_urls, secure_exam_option_image_urls
 from services.exam_library import claim_exam_for_user, get_user_exam_ids, link_ready_exam_to_user
 from services.exam_assets import build_exam_asset_manifest, library_version
+from services.p2p.content_store import ContentAddressedStore
 
 router = APIRouter()
 QUESTION_MEDIA_DIR = (Path(__file__).resolve().parents[2] / "static" / "images" / "questions").resolve()
@@ -308,6 +309,7 @@ def get_library_snapshot(
     }
     manifests = {}
     version_rows = []
+    mesh_store = ContentAddressedStore()
     for summary in flat_exams:
         exam = exams_by_id.get(int(summary.id))
         if exam is None:
@@ -318,6 +320,21 @@ def get_library_snapshot(
             questions,
             media_root=QUESTION_MEDIA_DIR,
         )
+        # O snapshot também hidrata o cache local por conteúdo. Isso faz com
+        # que o mesmo nó possa anunciar os blobs que acabou de indexar sem
+        # duplicar a lógica de resolução de imagens do pipeline.
+        for asset in manifest["assets"]:
+            if not asset.get("available"):
+                continue
+            try:
+                mesh_store.put_file(
+                    asset["asset_id"],
+                    QUESTION_MEDIA_DIR / asset["filename"],
+                )
+            except (OSError, ValueError):
+                # A prova continua sincronizável pela API mesmo se um arquivo
+                # for removido no intervalo entre o hash e a cópia local.
+                pass
         manifests[str(exam.id)] = manifest
         version_rows.append({
             "exam_id": int(exam.id),
