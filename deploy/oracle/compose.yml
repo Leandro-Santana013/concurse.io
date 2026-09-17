@@ -1,0 +1,60 @@
+name: concurseio
+
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: deploy/oracle/Dockerfile
+    image: concurseio-app:local
+    restart: unless-stopped
+    init: true
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?configure DATABASE_URL}
+      FRONTEND_URL: ${FRONTEND_URL:?configure FRONTEND_URL}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
+      GOOGLE_CLOCK_SKEW_SECONDS: ${GOOGLE_CLOCK_SKEW_SECONDS:-60}
+      SESSION_SECRET: ${SESSION_SECRET:?configure SESSION_SECRET}
+      USER_DATA_ENCRYPTION_KEY: ${USER_DATA_ENCRYPTION_KEY:?configure USER_DATA_ENCRYPTION_KEY}
+      USER_DATA_ENCRYPTION_KEY_PREVIOUS: ${USER_DATA_ENCRYPTION_KEY_PREVIOUS:-}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
+      FORCE_HTTPS: ${FORCE_HTTPS:-true}
+      CORS_ORIGINS: ${CORS_ORIGINS:?configure CORS_ORIGINS}
+      APP_ADMIN_USER_IDS: ${APP_ADMIN_USER_IDS:-}
+      AUTH_DEV_BYPASS: ${AUTH_DEV_BYPASS:-false}
+      PDF_PARSE_CACHE_DIR: /var/lib/concurse/parse-cache
+      MESH_SHARED_SECRET: ${MESH_SHARED_SECRET:-}
+      MESH_NODE_ID: ${MESH_NODE_ID:-oracle-central}
+      MESH_CONTENT_DIR: /var/lib/concurse/mesh-content
+    volumes:
+      - exam_pdfs:/app/pdfs
+      - question_images:/app/static/images/questions
+      - parser_cache:/var/lib/concurse/parse-cache
+      - mesh_content:/var/lib/concurse/mesh-content
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?configure DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+
+volumes:
+  exam_pdfs:
+  question_images:
+  parser_cache:
+  mesh_content:
+  caddy_data:
+  caddy_config:
