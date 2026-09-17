@@ -47,7 +47,7 @@ class ContentAddressedStore:
         if expected is None or asset_id_from_bytes(data) != expected:
             raise ValueError("O conteúdo não corresponde ao asset_id informado")
         target = self.path_for(expected)
-        if target.is_file():
+        if target.is_file() and self._file_matches(target, expected):
             return target
         self._atomic_write(target, data)
         return target
@@ -68,7 +68,7 @@ class ContentAddressedStore:
             raise ValueError("O arquivo não corresponde ao asset_id informado")
 
         target = self.path_for(expected)
-        if target.is_file():
+        if target.is_file() and self._file_matches(target, expected):
             return target
         with source_path.open("rb") as source_stream:
             self._atomic_write_stream(target, source_stream)
@@ -80,6 +80,17 @@ class ContentAddressedStore:
         if asset_id_from_bytes(data) != normalize_asset_id(asset_id):
             raise IOError("Blob corrompido no armazenamento da malha")
         return data
+
+    @staticmethod
+    def _file_matches(path: Path, expected: str) -> bool:
+        digest = hashlib.sha256()
+        try:
+            with path.open("rb") as stream:
+                while chunk := stream.read(1024 * 1024):
+                    digest.update(chunk)
+        except OSError:
+            return False
+        return f"sha256:{digest.hexdigest()}" == expected
 
     def _atomic_write(self, target: Path, data: bytes) -> None:
         from io import BytesIO

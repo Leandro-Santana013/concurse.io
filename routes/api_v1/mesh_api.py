@@ -184,6 +184,12 @@ async def fetch_from_mesh(
             body = response.content
             if asset_id_from_bytes(body) != normalized_asset:
                 continue
+            try:
+                # O proxy também se torna provider depois de uma transferência
+                # íntegra, formando a redistribuição em cadeia da malha.
+                ContentAddressedStore().put_bytes(normalized_asset, body)
+            except (OSError, ValueError):
+                pass
             media_type = response.headers.get("content-type", "application/octet-stream").split(";", 1)[0]
             result = Response(content=body, media_type=media_type)
             result.headers["Cache-Control"] = "private, no-store"

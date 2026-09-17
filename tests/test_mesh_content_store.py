@@ -19,6 +19,10 @@ def test_content_store_writes_and_verifies_by_digest(tmp_path):
     with pytest.raises(ValueError):
         store.put_bytes(asset_id, b"tampered")
 
+    path.write_bytes(b"corrupt cache")
+    store.put_bytes(asset_id, data)
+    assert store.read_bytes(asset_id) == data
+
 
 def test_mesh_token_is_scoped_to_node_asset_and_expiration(monkeypatch):
     monkeypatch.setenv("MESH_SHARED_SECRET", "mesh-secret")
