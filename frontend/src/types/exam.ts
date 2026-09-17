@@ -40,6 +40,39 @@ export interface Folder {
   exams: ExamSummary[];
 }
 
+export interface LibraryAssetReference {
+  question_id: number;
+  slot: string;
+  index: number;
+  option_key?: string | null;
+}
+
+export interface LibraryAsset {
+  asset_id: string;
+  filename: string;
+  media_url: string;
+  size?: number | null;
+  content_type: string;
+  available: boolean;
+  references: LibraryAssetReference[];
+}
+
+export interface LibraryAssetManifest {
+  exam_id: number;
+  manifest_id: string;
+  assets: LibraryAsset[];
+}
+
+export interface LibrarySnapshot {
+  schema_version: number;
+  user_id: number;
+  generated_at: string;
+  library_version: string;
+  folders: Folder[];
+  exams: ExamSummary[];
+  asset_manifests: Record<string, LibraryAssetManifest>;
+}
+
 export interface CustomSimulationRequest {
   count: number;
   subjects?: string[];

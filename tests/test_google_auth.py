@@ -178,6 +178,41 @@ def test_google_login_callback_session_and_logout(auth_client, monkeypatch):
     assert client.get("/api/v1/auth/me").status_code == 401
 
 
+def test_google_subject_reuses_same_user_for_a_second_device_login(auth_client, monkeypatch):
+    client, session_factory = auth_client
+    identity = {
+        "sub": "same-google-account",
+        "email": "same@example.com",
+        "email_verified": True,
+        "name": "Pessoa",
+        "picture": "",
+        "iss": "https://accounts.google.com",
+    }
+    monkeypatch.setattr(auth_api, "exchange_google_code", lambda _code, _redirect_uri: identity)
+
+    first_login = client.get("/api/v1/auth/google/login")
+    first_state = parse_qs(urlparse(first_login.headers["location"]).query)["state"][0]
+    first_callback = client.get(
+        "/api/v1/auth/google/callback",
+        params={"code": "first-device-code", "state": first_state},
+    )
+    assert first_callback.status_code == 302
+    first_user_id = client.get("/api/v1/auth/me").json()["id"]
+
+    second_login = client.get("/api/v1/auth/google/login")
+    second_state = parse_qs(urlparse(second_login.headers["location"]).query)["state"][0]
+    second_callback = client.get(
+        "/api/v1/auth/google/callback",
+        params={"code": "second-device-code", "state": second_state},
+    )
+    assert second_callback.status_code == 302
+    second_user_id = client.get("/api/v1/auth/me").json()["id"]
+
+    with session_factory() as db:
+        assert first_user_id == second_user_id
+        assert db.query(User).count() == 1
+
+
 def test_google_callback_rejects_invalid_state(auth_client):
     client, _ = auth_client
 

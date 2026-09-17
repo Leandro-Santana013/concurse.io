@@ -1,5 +1,6 @@
 import {
   Folder,
+  LibrarySnapshot,
   ExamDetail,
   SearchResultItem,
   AttemptSubmission,
@@ -66,6 +67,13 @@ export const api = {
     const res = await apiFetch(`${API_BASE}/folders`);
     if (res.status === 401) throw new AuthRequiredError();
     if (!res.ok) throw new Error('Falha ao carregar pastas de provas');
+    return res.json();
+  },
+
+  async getLibrarySnapshot(): Promise<LibrarySnapshot> {
+    const res = await apiFetch(`${API_BASE}/library/snapshot`);
+    if (res.status === 401) throw new AuthRequiredError();
+    if (!res.ok) throw new Error('Falha ao sincronizar a biblioteca');
     return res.json();
   },
 

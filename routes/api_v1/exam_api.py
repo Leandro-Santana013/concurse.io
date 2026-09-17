@@ -7,7 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.expression import func
-from datetime import datetime
+from datetime import datetime, timezone
+from pathlib import Path
 
 from models.database import (
     get_db,
@@ -28,6 +29,7 @@ from schemas.exam_schemas import (
     ExamIngestResponse,
     CustomSimulationOptionsSchema,
     CustomSimulationSummarySchema,
+    LibrarySnapshotSchema,
 )
 from routes.api_v1.user_context import (
     get_accessible_exam_or_404,
@@ -36,8 +38,10 @@ from routes.api_v1.user_context import (
 )
 from routes.api_v1.exam_media import secure_exam_image_urls, secure_exam_option_image_urls
 from services.exam_library import claim_exam_for_user, get_user_exam_ids, link_ready_exam_to_user
+from services.exam_assets import build_exam_asset_manifest, library_version
 
 router = APIRouter()
+QUESTION_MEDIA_DIR = (Path(__file__).resolve().parents[2] / "static" / "images" / "questions").resolve()
 
 
 def _normalized_subject(value: Any) -> str:
@@ -269,6 +273,67 @@ def list_folders(
         FolderSchema(id=folder_id, name=data["name"], exams=data["exams"])
         for folder_id, data in grouped.items()
     ]
+
+
+@router.get("/library/snapshot", response_model=LibrarySnapshotSchema)
+def get_library_snapshot(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Entrega uma fotografia completa da biblioteca do usuário.
+
+    O endpoint é usado por outro dispositivo depois do login Google. A
+    autorização continua sendo feita no servidor por `UserExam`/`Exam.user_id`;
+    o cliente nunca precisa conhecer o `sub` bruto do Google. O manifesto de
+    imagens usa hashes de conteúdo para que a camada desktop/P2P possa
+    distribuir o mesmo arquivo sem depender do nome local gerado pelo OCR.
+    """
+
+    folders = list_folders(db=db, current_user=current_user)
+    flat_exams = [exam for folder in folders for exam in folder.exams]
+    if not flat_exams:
+        return LibrarySnapshotSchema(
+            user_id=int(current_user.id),
+            generated_at=datetime.now(timezone.utc).isoformat(),
+            library_version=library_version([]),
+            folders=[],
+            exams=[],
+            asset_manifests={},
+        )
+
+    exam_ids = [int(exam.id) for exam in flat_exams]
+    exams_by_id = {
+        int(exam.id): exam
+        for exam in db.query(Exam).filter(Exam.id.in_(exam_ids)).all()
+    }
+    manifests = {}
+    version_rows = []
+    for summary in flat_exams:
+        exam = exams_by_id.get(int(summary.id))
+        if exam is None:
+            continue
+        questions, _is_generated_session = resolve_exam_questions(db, exam)
+        manifest = build_exam_asset_manifest(
+            exam.id,
+            questions,
+            media_root=QUESTION_MEDIA_DIR,
+        )
+        manifests[str(exam.id)] = manifest
+        version_rows.append({
+            "exam_id": int(exam.id),
+            "status": str(exam.status or ""),
+            "title": str(exam.title or ""),
+            "manifest_id": manifest["manifest_id"],
+        })
+
+    return LibrarySnapshotSchema(
+        user_id=int(current_user.id),
+        generated_at=datetime.now(timezone.utc).isoformat(),
+        library_version=library_version(sorted(version_rows, key=lambda row: row["exam_id"])),
+        folders=folders,
+        exams=flat_exams,
+        asset_manifests=manifests,
+    )
 
 def _sort_questions_key(q):
     q_index = getattr(q, 'question_index', None) if not isinstance(q, dict) else q.get('question_index')

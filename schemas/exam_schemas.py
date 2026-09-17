@@ -41,6 +41,39 @@ class FolderSchema(BaseModel):
     exams: List[ExamSummarySchema] = Field(default_factory=list)
 
 
+class LibraryAssetReferenceSchema(BaseModel):
+    question_id: int
+    slot: str
+    index: int = 0
+    option_key: Optional[str] = None
+
+
+class LibraryAssetSchema(BaseModel):
+    asset_id: str
+    filename: str
+    media_url: str
+    size: Optional[int] = None
+    content_type: str = "application/octet-stream"
+    available: bool = False
+    references: List[LibraryAssetReferenceSchema] = Field(default_factory=list)
+
+
+class LibraryAssetManifestSchema(BaseModel):
+    exam_id: int
+    manifest_id: str
+    assets: List[LibraryAssetSchema] = Field(default_factory=list)
+
+
+class LibrarySnapshotSchema(BaseModel):
+    schema_version: int = 1
+    user_id: int
+    generated_at: str
+    library_version: str
+    folders: List[FolderSchema] = Field(default_factory=list)
+    exams: List[ExamSummarySchema] = Field(default_factory=list)
+    asset_manifests: Dict[str, LibraryAssetManifestSchema] = Field(default_factory=dict)
+
+
 class CustomSimulationSubjectSchema(BaseModel):
     name: str
     count: int = 0

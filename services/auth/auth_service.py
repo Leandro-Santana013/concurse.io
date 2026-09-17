@@ -48,8 +48,16 @@ def _b64encode(value: bytes) -> str:
 
 
 def _b64decode(value: str) -> bytes:
-    padding = "=" * (-len(value) % 4)
-    return base64.urlsafe_b64decode(value + padding)
+    # Rejeita representações não canônicas. Em Base64 URL-safe, alguns bits
+    # excedentes no último caractere podem ser ignorados pelo decoder; sem
+    # esta comparação um token alterado no último caractere poderia decodificar
+    # para os mesmos bytes e passar a validação AES/HMAC.
+    normalized = str(value or "").rstrip("=")
+    padding = "=" * (-len(normalized) % 4)
+    decoded = base64.urlsafe_b64decode(normalized + padding)
+    if _b64encode(decoded) != normalized:
+        raise ValueError("Codificação Base64 não canônica.")
+    return decoded
 
 
 def create_session_token(

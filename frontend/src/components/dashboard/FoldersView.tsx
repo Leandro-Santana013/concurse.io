@@ -96,7 +96,13 @@ export const FoldersView: React.FC<FoldersViewProps> = ({ onStartExam }) => {
     setError(null);
     setCustomError(null);
     try {
-      setFolders(await api.getFolders());
+      // A snapshot é o caminho de sincronização entre dispositivos: depois
+      // do login Google o celular recebe todos os vínculos UserExam em uma
+      // única resposta, incluindo o manifesto de imagens por hash.
+      const snapshot = typeof api.getLibrarySnapshot === 'function'
+        ? await api.getLibrarySnapshot()
+        : null;
+      setFolders(snapshot?.folders ?? await api.getFolders());
       try {
         if (typeof api.getCustomSimulations === 'function') {
           setCustomSimulations(await api.getCustomSimulations());
