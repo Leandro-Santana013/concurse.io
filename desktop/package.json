@@ -1,0 +1,14 @@
+{
+  "name": "concurse-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Aplicativo desktop concurse.io baseado no origin HTTPS e na rede mesh privada.",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "icons": "tauri icon ../frontend/public/favicon.svg"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}

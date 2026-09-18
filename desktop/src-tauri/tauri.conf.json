@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "concurse.io",
+  "version": "0.1.0",
+  "identifier": "io.concurse.desktop",
+  "build": {
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "npm --prefix ../frontend run dev -- --host 127.0.0.1",
+    "frontendDist": "https://concurse.duckdns.org"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "concurse.io",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1024,
+        "minHeight": 640,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "Education",
+    "shortDescription": "Provas e simulados de concursos",
+    "longDescription": "Aplicativo desktop para acessar a biblioteca de provas e a rede mesh privada do concurse.io."
+  }
+}

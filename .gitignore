@@ -73,6 +73,7 @@ desktop.ini
 # Rust Artifacts
 rust_engine/target/
 **/target/
+desktop/src-tauri/gen/
 *.pyd
 *.whl
 
