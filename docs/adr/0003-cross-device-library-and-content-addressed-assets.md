@@ -50,3 +50,22 @@ O transporte exige que o endpoint anunciado seja alcançável pelo servidor
 (rede local, VPN ou encaminhamento HTTPS). NAT sem rota direta continua sendo
 um caso para um relay/WebRTC posterior; a verificação de conteúdo e a
 autorização da conta já ficam prontas para essa troca.
+
+Para reduzir latência e dependência do origin, o transporte agora possui um
+manifesto de blocos. O manifesto usa blocos de 1 MiB por padrão, com hash
+SHA-256 individual e hash completo do asset. O `fetch` consulta todos os peers
+disponíveis, baixa índices em paralelo com um limite de conexões, valida cada
+bloco e grava o resultado em uma troca atômica. Falhas são tentadas em outro
+peer e, por compatibilidade, o download inteiro antigo continua disponível.
+
+O cache local é consultado antes da descoberta e um arquivo montado com sucesso
+entra no conjunto de providers do nó. A política de cache é privada porque o
+isolamento por `user_id` continua sendo obrigatório; a mesma prova pode ser
+deduplicada por hash dentro da conta sem virar um objeto público. O tamanho do
+bloco, concorrência, pool HTTP e timeouts são ajustáveis por variáveis `MESH_*`
+para respeitar os limites de CPU, memória e banda da VM.
+
+Clientes desktop podem obter um ticket curto em `/mesh/ticket/{asset_id}`. O
+ticket entrega apenas URLs e tokens limitados ao asset e ao node; o segredo
+compartilhado nunca deixa o origin. Assim, o cliente busca diretamente os
+blocos dos peers quando a topologia permite e usa `/mesh/fetch` como fallback.

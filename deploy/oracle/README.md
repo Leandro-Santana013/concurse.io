@@ -67,6 +67,34 @@ API (rede local, VPN ou encaminhamento HTTPS); o Compose não abre uma porta
 peer nova automaticamente. Não exponha a porta do peer sem HTTPS e uma regra
 de rede restrita.
 
+Um cliente desktop que possa alcançar os peers pode pedir um ticket em
+`GET /api/v1/mesh/ticket/{asset_id}`. O ticket contém URLs e tokens de curta
+duração; o cliente baixa diretamente dos pares e usa o origin apenas como
+fallback. O segredo `MESH_SHARED_SECRET` nunca é enviado ao cliente.
+
+### Distribuição por blocos
+
+Para arquivos maiores, o nó publica um manifesto content-addressed em
+`GET /api/v1/mesh/manifest/{asset_id}` e entrega blocos autenticados em
+`GET /api/v1/mesh/content/{asset_id}/chunk/{index}`. O endpoint de `fetch`
+consulta os peers em paralelo, distribui os índices entre eles, valida o SHA-256
+de cada bloco e só então monta o arquivo em uma troca atômica. Um peer lento ou
+indisponível é substituído pelos demais; se um nó antigo não entende o
+manifesto, a transferência inteira legada é usada automaticamente.
+
+O cache local é verificado antes da rede e o arquivo completo passa a ser
+provider depois de uma montagem íntegra. Isso reduz o tráfego do origin e faz
+com que uma prova continue disponível quando apenas um nó de usuário tem a
+cópia. Os valores `MESH_CHUNK_SIZE`, `MESH_FETCH_CONCURRENCY`,
+`MESH_HTTP_MAX_CONNECTIONS` e `MESH_HTTP_KEEPALIVE` controlam o paralelismo;
+comece com os padrões do `.env.example` e só aumente a concorrência após
+observar CPU, memória e banda da VM.
+
+O isolamento por conta Google continua valendo: a descoberta retorna apenas
+peers do mesmo usuário. A malha não transforma a prova em conteúdo público e
+não deve ser exposta diretamente à Internet sem HTTPS, token de peer e uma
+rede restrita.
+
 O Docker inicializa um volume nomeado vazio com os arquivos que já existem naquele caminho na imagem. Assim, no primeiro deploy, os volumes `exam_pdfs` e `question_images` recebem o conteúdo local incluído no build; depois disso, eles persistem e não são sobrescritos nas atualizações. Consulte a [documentação oficial de volumes Docker](https://docs.docker.com/engine/storage/volumes/).
 
 Para atualizar o código depois de copiá-lo para a VM, atualize o repositório e execute novamente:

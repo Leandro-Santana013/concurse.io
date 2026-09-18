@@ -27,6 +27,12 @@ services:
       MESH_SHARED_SECRET: ${MESH_SHARED_SECRET:-}
       MESH_NODE_ID: ${MESH_NODE_ID:-oracle-central}
       MESH_CONTENT_DIR: /var/lib/concurse/mesh-content
+      MESH_CHUNK_SIZE: ${MESH_CHUNK_SIZE:-1048576}
+      MESH_FETCH_CONCURRENCY: ${MESH_FETCH_CONCURRENCY:-8}
+      MESH_PEER_TIMEOUT_SECONDS: ${MESH_PEER_TIMEOUT_SECONDS:-8}
+      MESH_PEER_CONNECT_TIMEOUT_SECONDS: ${MESH_PEER_CONNECT_TIMEOUT_SECONDS:-3}
+      MESH_HTTP_MAX_CONNECTIONS: ${MESH_HTTP_MAX_CONNECTIONS:-32}
+      MESH_HTTP_KEEPALIVE: ${MESH_HTTP_KEEPALIVE:-16}
     volumes:
       - exam_pdfs:/app/pdfs
       - question_images:/app/static/images/questions

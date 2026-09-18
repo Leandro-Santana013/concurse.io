@@ -15,6 +15,7 @@ import {
   CustomSimulationOptions,
   CustomSimulationRequest,
   CustomSimulationSummary,
+  MeshTicket,
 } from '../types/exam';
 import { AuthConfig, AuthUser } from '../types/auth';
 
@@ -74,6 +75,13 @@ export const api = {
     const res = await apiFetch(`${API_BASE}/library/snapshot`);
     if (res.status === 401) throw new AuthRequiredError();
     if (!res.ok) throw new Error('Falha ao sincronizar a biblioteca');
+    return res.json();
+  },
+
+  async getMeshTicket(assetId: string): Promise<MeshTicket> {
+    const res = await apiFetch(`${API_BASE}/mesh/ticket/${encodeURIComponent(assetId)}`);
+    if (res.status === 401) throw new AuthRequiredError();
+    if (!res.ok) throw new Error('Falha ao preparar a transferência entre dispositivos');
     return res.json();
   },
 

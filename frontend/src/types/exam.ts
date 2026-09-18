@@ -73,6 +73,22 @@ export interface LibrarySnapshot {
   asset_manifests: Record<string, LibraryAssetManifest>;
 }
 
+export interface MeshPeerTicket {
+  node_id: string;
+  endpoint: string;
+  token: string;
+  expires_at: number;
+  manifest_url: string;
+  content_url: string;
+  chunk_url_template: string;
+}
+
+export interface MeshTicket {
+  asset_id: string;
+  expires_in: number;
+  providers: MeshPeerTicket[];
+}
+
 export interface CustomSimulationRequest {
   count: number;
   subjects?: string[];

@@ -34,6 +34,38 @@ class MeshPeerSchema(BaseModel):
     last_seen: str
 
 
+class MeshChunkSchema(BaseModel):
+    index: int
+    offset: int
+    size: int
+    sha256: str
+
+
+class MeshManifestSchema(BaseModel):
+    version: int = 1
+    asset_id: str
+    size: int
+    chunk_size: int
+    chunk_count: int
+    chunks: List[MeshChunkSchema] = Field(default_factory=list)
+
+
 class MeshProvidersSchema(BaseModel):
     asset_id: str
     providers: List[MeshPeerSchema] = Field(default_factory=list)
+
+
+class MeshPeerTicketSchema(BaseModel):
+    node_id: str
+    endpoint: str
+    token: str
+    expires_at: int
+    manifest_url: str
+    content_url: str
+    chunk_url_template: str
+
+
+class MeshTicketSchema(BaseModel):
+    asset_id: str
+    expires_in: int
+    providers: List[MeshPeerTicketSchema] = Field(default_factory=list)
