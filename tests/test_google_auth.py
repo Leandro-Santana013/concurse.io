@@ -213,6 +213,74 @@ def test_google_subject_reuses_same_user_for_a_second_device_login(auth_client, 
         assert db.query(User).count() == 1
 
 
+def test_desktop_oauth_uses_one_time_loopback_code_and_bearer_session(auth_client, monkeypatch):
+    client, _ = auth_client
+    identity = {
+        "sub": "desktop-google-account",
+        "email": "desktop@example.com",
+        "email_verified": True,
+        "name": "Desktop",
+        "picture": "",
+        "iss": "https://accounts.google.com",
+    }
+    monkeypatch.setattr(auth_api, "exchange_google_code", lambda _code, _redirect_uri: identity)
+
+    login_response = client.get(
+        "/api/v1/auth/google/login",
+        params={
+            "client": "desktop",
+            "desktop_return": "http://127.0.0.1:45678/callback",
+        },
+    )
+    state = parse_qs(urlparse(login_response.headers["location"]).query)["state"][0]
+    callback_response = client.get(
+        "/api/v1/auth/google/callback",
+        params={"code": "desktop-code", "state": state},
+    )
+
+    assert callback_response.status_code == 302
+    redirect = urlparse(callback_response.headers["location"])
+    assert redirect.scheme == "http"
+    assert redirect.netloc == "127.0.0.1:45678"
+    code = parse_qs(redirect.query)["code"][0]
+
+    exchange_response = client.post(
+        "/api/v1/auth/google/desktop/exchange",
+        json={"code": code},
+    )
+    assert exchange_response.status_code == 200
+    session_token = exchange_response.json()["session_token"]
+    assert client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {session_token}"},
+    ).status_code == 200
+    assert client.post(
+        "/api/v1/auth/google/desktop/exchange",
+        json={"code": code},
+    ).status_code == 400
+
+
+def test_desktop_oauth_returns_errors_to_loopback_callback(auth_client):
+    client, _ = auth_client
+    login_response = client.get(
+        "/api/v1/auth/google/login",
+        params={
+            "client": "desktop",
+            "desktop_return": "http://127.0.0.1:45679/callback",
+        },
+    )
+    state = parse_qs(urlparse(login_response.headers["location"]).query)["state"][0]
+    callback_response = client.get(
+        "/api/v1/auth/google/callback",
+        params={"error": "access_denied", "state": state},
+    )
+
+    assert callback_response.status_code == 302
+    redirect = urlparse(callback_response.headers["location"])
+    assert redirect.netloc == "127.0.0.1:45679"
+    assert parse_qs(redirect.query) == {"error": ["access_denied"]}
+
+
 def test_google_callback_rejects_invalid_state(auth_client):
     client, _ = auth_client
 

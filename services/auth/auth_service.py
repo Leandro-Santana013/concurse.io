@@ -10,7 +10,7 @@ import logging
 import os
 import time
 from typing import Any, Dict, Optional
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit, urlunsplit
 
 import requests
 from cryptography.exceptions import InvalidTag
@@ -24,12 +24,14 @@ LOGGER = logging.getLogger(__name__)
 SESSION_COOKIE = "concurse_session"
 OAUTH_STATE_COOKIE = "concurse_oauth_state"
 OAUTH_RETURN_COOKIE = "concurse_oauth_return"
+OAUTH_CLIENT_COOKIE = "concurse_oauth_client"
 SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30
 SESSION_TOKEN_PREFIX = "v2."
 SESSION_TOKEN_AAD = b"concurse.io:session:v2"
 OAUTH_MAX_AGE_SECONDS = 10 * 60
 DEFAULT_GOOGLE_CLOCK_SKEW_SECONDS = 60
 MAX_GOOGLE_CLOCK_SKEW_SECONDS = 300
+DESKTOP_OAUTH_CODE_MAX_AGE_SECONDS = 120
 
 
 class GoogleOAuthError(RuntimeError):
@@ -200,6 +202,33 @@ def normalize_return_path(value: Optional[str]) -> str:
     if not candidate.startswith("/") or candidate.startswith("//"):
         return "/"
     return candidate[:500]
+
+
+def normalize_desktop_return(value: Optional[str]) -> str | None:
+    """Aceita somente o callback loopback criado pelo aplicativo instalado."""
+
+    candidate = str(value or "").strip()
+    if not candidate:
+        return None
+    try:
+        parsed = urlsplit(candidate)
+        hostname = (parsed.hostname or "").lower()
+        port = parsed.port
+    except ValueError:
+        return None
+    if (
+        parsed.scheme != "http"
+        or hostname not in {"127.0.0.1", "localhost"}
+        or parsed.path != "/callback"
+        or port is None
+        or not 1024 <= int(port) <= 65535
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+    ):
+        return None
+    return urlunsplit(("http", f"{hostname}:{port}", "/callback", "", ""))
 
 
 def is_cookie_secure(request: Request) -> bool:

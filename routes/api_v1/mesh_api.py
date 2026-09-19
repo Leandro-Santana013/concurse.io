@@ -201,6 +201,30 @@ def withdraw_peer(
     return {"ok": True}
 
 
+@router.get("/mesh/peers")
+def list_peers(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Retorna o estado leve da malha externa para a conta autenticada.
+
+    O endpoint não expõe a lista de assets. O desktop só precisa saber se há
+    dispositivos com lease ativo para atualizar a UI; a escolha dos blobs e a
+    autorização continuam restritas a ``/mesh/providers/{asset_id}`` e
+    ``/mesh/fetch/{asset_id}``.
+    """
+
+    peers = _active_peers(db, current_user.id)
+    return {
+        "peers": [_peer_response(peer).model_dump() for peer in peers],
+        "transport": {
+            "direct": "endpoint",
+            "fallback": "origin",
+            "chunked": True,
+        },
+    }
+
+
 @router.get("/mesh/providers/{asset_id}", response_model=MeshProvidersSchema)
 def list_providers(
     asset_id: str,

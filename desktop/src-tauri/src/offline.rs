@@ -1,11 +1,11 @@
 //! Local-first storage and a small, content-addressed peer mesh.
 //!
-//! The desktop build deliberately does not use the web API.  Every proof is
-//! stored as a blob addressed by its SHA-256 and its exam manifest is kept in
-//! a JSON catalog under the application data directory.  Nodes discover one
-//! another with a LAN UDP broadcast and exchange verified chunks over a short
-//! lived TCP connection.  There is no central origin, account service or
-//! DNS dependency in this module.
+//! The local commands keep proofs as blobs addressed by their SHA-256 and keep
+//! the exam manifest in a JSON catalog under the application data directory.
+//! Nodes discover one another with a LAN UDP broadcast and exchange verified
+//! chunks over a short-lived TCP connection. The hybrid build adds the OAuth
+//! loopback bridge below, while the local catalog remains usable without an
+//! origin or DNS dependency.
 
 use base64::Engine;
 use serde::{Deserialize, Serialize};
@@ -16,6 +16,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream, UdpSocket};
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
@@ -97,6 +98,7 @@ struct Runtime {
     tcp_port: u16,
     catalog: Mutex<Catalog>,
     peers: Mutex<HashMap<String, PeerRecord>>,
+    oauth_result: Mutex<Option<String>>,
 }
 
 static RUNTIME: OnceLock<Arc<Runtime>> = OnceLock::new();
@@ -119,6 +121,131 @@ fn runtime() -> Result<Arc<Runtime>, String> {
         .get()
         .cloned()
         .ok_or_else(|| "O armazenamento local ainda não foi inicializado.".to_string())
+}
+
+fn percent_encode(value: &str) -> String {
+    value
+        .as_bytes()
+        .iter()
+        .flat_map(|byte| match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                vec![*byte as char]
+            }
+            _ => format!("%{byte:02X}").chars().collect(),
+        })
+        .collect()
+}
+
+fn percent_decode(value: &str) -> Option<String> {
+    let mut bytes = Vec::with_capacity(value.len());
+    let raw = value.as_bytes();
+    let mut index = 0;
+    while index < raw.len() {
+        match raw[index] {
+            b'+' => bytes.push(b' '),
+            b'%' if index + 2 < raw.len() => {
+                let high = (raw[index + 1] as char).to_digit(16)? as u8;
+                let low = (raw[index + 2] as char).to_digit(16)? as u8;
+                bytes.push((high << 4) | low);
+                index += 2;
+            }
+            byte => bytes.push(byte),
+        }
+        index += 1;
+    }
+    String::from_utf8(bytes).ok()
+}
+
+fn callback_result(request_line: &str) -> Option<String> {
+    let target = request_line.split_whitespace().nth(1)?;
+    let (path, query) = target.split_once('?')?;
+    if path != "/callback" {
+        return None;
+    }
+    query.split('&').find_map(|part| {
+        let (key, value) = part.split_once('=')?;
+        if key == "code" {
+            return percent_decode(value);
+        }
+        if key == "error" {
+            return percent_decode(value).map(|error| format!("__oauth_error__:{error}"));
+        }
+        None
+    })
+}
+
+fn normalize_api_origin(value: &str) -> Result<String, String> {
+    let origin = value.trim().trim_end_matches('/');
+    if origin.is_empty()
+        || !(origin.starts_with("https://") || origin.starts_with("http://"))
+        || origin
+            .chars()
+            .any(|character| matches!(character, '?' | '#' | ' ' | '\n' | '\r'))
+    {
+        return Err("O endereço do serviço de autenticação é inválido.".to_string());
+    }
+    Ok(origin.to_string())
+}
+
+pub fn begin_google_login(api_origin: String, next_path: String) -> Result<Value, String> {
+    let runtime = runtime()?;
+    let origin = normalize_api_origin(&api_origin)?;
+    let next = if next_path.starts_with('/') && !next_path.starts_with("//") {
+        next_path.chars().take(500).collect::<String>()
+    } else {
+        "/".to_string()
+    };
+    let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).map_err(|err| err.to_string())?;
+    let port = listener.local_addr().map_err(|err| err.to_string())?.port();
+    let desktop_return = format!("http://127.0.0.1:{port}/callback");
+    let login_url = format!(
+        "{origin}/api/v1/auth/google/login?client=desktop&desktop_return={}&next={}",
+        percent_encode(&desktop_return),
+        percent_encode(&next),
+    );
+    let result_runtime = runtime.clone();
+    thread::spawn(move || {
+        let Ok((mut stream, _)) = listener.accept() else { return };
+        let mut reader = BufReader::new(&mut stream);
+        let mut line = String::new();
+        let code = if reader.read_line(&mut line).is_ok() {
+            callback_result(&line)
+        } else {
+            None
+        };
+        if let Some(code) = code {
+            if let Ok(mut result) = result_runtime.oauth_result.lock() {
+                *result = Some(code);
+            }
+        }
+        let body = "<html><body>Login concluído. Volte ao aplicativo concurse.io.</body></html>";
+        let _ = write!(
+            stream,
+            "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body,
+        );
+    });
+    #[cfg(target_os = "windows")]
+    Command::new("rundll32.exe")
+        .args(["url.dll,FileProtocolHandler", &login_url])
+        .spawn()
+        .map_err(|err| format!("Não foi possível abrir o navegador: {err}"))?;
+    #[cfg(not(target_os = "windows"))]
+    Command::new("xdg-open")
+        .arg(&login_url)
+        .spawn()
+        .map_err(|err| format!("Não foi possível abrir o navegador: {err}"))?;
+    Ok(json!({"started": true, "callback_port": port}))
+}
+
+pub fn take_oauth_result() -> Result<Option<String>, String> {
+    let runtime = runtime()?;
+    runtime
+        .oauth_result
+        .lock()
+        .map_err(|_| "Login local ocupado".to_string())
+        .map(|mut value| value.take())
 }
 
 fn load_catalog(root: &Path, node_id: &str) -> Catalog {
@@ -204,6 +331,7 @@ pub fn init(app: &AppHandle) -> Result<(), String> {
         tcp_port,
         catalog: Mutex::new(catalog),
         peers: Mutex::new(HashMap::new()),
+        oauth_result: Mutex::new(None),
     });
     RUNTIME
         .set(runtime.clone())

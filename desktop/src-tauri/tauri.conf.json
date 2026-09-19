@@ -39,6 +39,6 @@
     ],
     "category": "Education",
     "shortDescription": "Provas e simulados de concursos",
-    "longDescription": "Aplicativo desktop para acessar a biblioteca de provas e a rede mesh privada do concurse.io."
+    "longDescription": "Aplicativo desktop local-first para acessar a biblioteca Google e distribuir provas em uma rede mesh entre pares."
   }
 }

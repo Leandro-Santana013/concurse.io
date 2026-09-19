@@ -2,7 +2,9 @@
 
 from .auth_service import (
     GoogleOAuthError,
+    DESKTOP_OAUTH_CODE_MAX_AGE_SECONDS,
     OAUTH_MAX_AGE_SECONDS,
+    OAUTH_CLIENT_COOKIE,
     OAUTH_RETURN_COOKIE,
     OAUTH_STATE_COOKIE,
     SESSION_MAX_AGE_SECONDS,
@@ -15,13 +17,16 @@ from .auth_service import (
     google_oauth_configured,
     is_cookie_secure,
     normalize_return_path,
+    normalize_desktop_return,
     read_session_token,
     session_token_needs_rotation,
 )
 
 __all__ = [
     "GoogleOAuthError",
+    "DESKTOP_OAUTH_CODE_MAX_AGE_SECONDS",
     "OAUTH_MAX_AGE_SECONDS",
+    "OAUTH_CLIENT_COOKIE",
     "OAUTH_RETURN_COOKIE",
     "OAUTH_STATE_COOKIE",
     "SESSION_MAX_AGE_SECONDS",
@@ -34,6 +39,7 @@ __all__ = [
     "google_oauth_configured",
     "is_cookie_secure",
     "normalize_return_path",
+    "normalize_desktop_return",
     "read_session_token",
     "session_token_needs_rotation",
 ]

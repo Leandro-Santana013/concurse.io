@@ -73,6 +73,10 @@ def get_current_user(
         candidate_id = getattr(scope_user, "id", None)
     if candidate_id is None:
         candidate_id = read_session_token(request.cookies.get(SESSION_COOKIE))
+    if candidate_id is None:
+        authorization = request.headers.get("authorization", "")
+        if authorization.lower().startswith("bearer "):
+            candidate_id = read_session_token(authorization[7:].strip())
 
     if candidate_id is not None:
         try:
@@ -91,5 +95,5 @@ def get_current_user(
     raise HTTPException(
         status_code=401,
         detail="Faça login para continuar.",
-        headers={"WWW-Authenticate": "Cookie"},
+        headers={"WWW-Authenticate": 'Bearer, Cookie'},
     )

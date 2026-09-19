@@ -4,12 +4,16 @@ import { Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../services/api';
 
+const DESKTOP_APP = import.meta.env.VITE_DESKTOP_APP === '1';
+const OFFLINE_DESKTOP = import.meta.env.VITE_OFFLINE_DESKTOP === '1';
+
 const errorMessages: Record<string, string> = {
   access_denied: 'O acesso pelo Google foi cancelado. Você pode tentar novamente quando quiser.',
   google_not_configured: 'O login com Google ainda não está configurado neste ambiente.',
   google_validation_failed: 'Não foi possível validar sua conta Google. Tente novamente.',
   invalid_state: 'A tentativa de login expirou por segurança. Inicie o acesso novamente.',
   missing_code: 'O Google não concluiu a autorização. Tente novamente.',
+  invalid_desktop_callback: 'O retorno local do aplicativo não é válido. Tente abrir o login novamente.',
 };
 
 const safeNextPath = (value: string | null) => {
@@ -27,15 +31,16 @@ const GoogleMark: React.FC = () => (
 );
 
 export const LoginPage: React.FC = () => {
-  const { error: sessionError, status } = useAuth();
+  const { error: sessionError, refreshSession, status } = useAuth();
   const [searchParams] = useSearchParams();
   const [googleEnabled, setGoogleEnabled] = useState<boolean | null>(null);
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [desktopLoginError, setDesktopLoginError] = useState<string | null>(null);
   const nextPath = safeNextPath(searchParams.get('next'));
   const errorCode = searchParams.get('error') || '';
   const visibleError = useMemo(
-    () => errorMessages[errorCode] || sessionError,
-    [errorCode, sessionError],
+    () => errorMessages[errorCode] || desktopLoginError || sessionError,
+    [desktopLoginError, errorCode, sessionError],
   );
 
   useEffect(() => {
@@ -51,6 +56,40 @@ export const LoginPage: React.FC = () => {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!DESKTOP_APP || OFFLINE_DESKTOP) return;
+    let active = true;
+    const poll = window.setInterval(() => {
+      void api.takeDesktopOAuthCode().then(async (code) => {
+        if (!active || !code) return;
+        if (code.startsWith('__oauth_error__:')) {
+          setIsRedirecting(false);
+          const errorCode = code.slice('__oauth_error__:'.length);
+          setDesktopLoginError(errorMessages[errorCode] || 'O login Google não foi concluído.');
+          return;
+        }
+        try {
+          await api.exchangeDesktopOAuthCode(code);
+          await refreshSession();
+        } catch (error) {
+          if (active) {
+            setIsRedirecting(false);
+            setDesktopLoginError(error instanceof Error ? error.message : 'Não foi possível concluir o login Google.');
+          }
+        }
+      }).catch((error) => {
+        if (active) {
+          setIsRedirecting(false);
+          setDesktopLoginError(error instanceof Error ? error.message : 'Não foi possível consultar o retorno do Google.');
+        }
+      });
+    }, 500);
+    return () => {
+      active = false;
+      window.clearInterval(poll);
+    };
+  }, [refreshSession]);
 
   if (status === 'authenticated') {
     return <Navigate to={nextPath} replace />;
@@ -94,6 +133,13 @@ export const LoginPage: React.FC = () => {
                   return;
                 }
                 setIsRedirecting(true);
+                if (DESKTOP_APP) {
+                  event.preventDefault();
+                  void api.beginGoogleLogin(nextPath).catch((error) => {
+                    setIsRedirecting(false);
+                    setDesktopLoginError(error instanceof Error ? error.message : 'Não foi possível abrir o login Google.');
+                  });
+                }
               }}
             >
               {isRedirecting ? (

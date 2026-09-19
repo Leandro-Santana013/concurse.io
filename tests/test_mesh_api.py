@@ -87,6 +87,35 @@ def test_announce_discover_and_serve_blob(mesh_client):
     assert client.get(f"/api/v1/mesh/content/{asset_id}").status_code == 401
 
 
+def test_external_mesh_status_returns_only_active_peer_metadata(mesh_client):
+    client, _session_factory = mesh_client
+    asset_id = asset_id_from_bytes(b"mesh status asset")
+    announced = client.post(
+        "/api/v1/mesh/announce",
+        json={
+            "node_id": "desktop-status-1",
+            "endpoint": "https://peer.example/device",
+            "asset_ids": [asset_id],
+            "lease_seconds": 120,
+        },
+    )
+    assert announced.status_code == 200
+
+    status = client.get("/api/v1/mesh/peers")
+    assert status.status_code == 200
+    payload = status.json()
+    assert payload["transport"] == {
+        "direct": "endpoint",
+        "fallback": "origin",
+        "chunked": True,
+    }
+    assert len(payload["peers"]) == 1
+    assert payload["peers"][0]["node_id"] == "desktop-status-1"
+    assert payload["peers"][0]["endpoint"] == "https://peer.example/device"
+    assert payload["peers"][0]["asset_count"] == 1
+    assert isinstance(payload["peers"][0]["last_seen"], str)
+
+
 def test_fetch_proxy_verifies_peer_bytes(mesh_client, monkeypatch):
     client, _session_factory = mesh_client
     data = b"proxy image"

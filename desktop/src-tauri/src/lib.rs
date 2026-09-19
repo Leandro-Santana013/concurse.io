@@ -41,6 +41,16 @@ fn offline_download_asset(asset_id: String) -> Result<serde_json::Value, String>
 }
 
 #[tauri::command]
+fn desktop_begin_google_login(api_origin: String, next_path: String) -> Result<serde_json::Value, String> {
+    offline::begin_google_login(api_origin, next_path)
+}
+
+#[tauri::command]
+fn desktop_take_oauth_result() -> Result<Option<String>, String> {
+    offline::take_oauth_result()
+}
+
+#[tauri::command]
 fn offline_search(query: String) -> Result<serde_json::Value, String> {
     offline::search(query)
 }
@@ -97,6 +107,8 @@ pub fn run() {
             offline_import_file,
             offline_mesh_peers,
             offline_download_asset,
+            desktop_begin_google_login,
+            desktop_take_oauth_result,
             offline_search,
             offline_submit_attempt,
             offline_stats,

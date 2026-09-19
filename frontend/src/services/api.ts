@@ -21,13 +21,39 @@ import { AuthConfig, AuthUser } from '../types/auth';
 
 export const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN || '').trim().replace(/\/+$/, '');
 export const OFFLINE_DESKTOP = import.meta.env.VITE_OFFLINE_DESKTOP === '1';
+export const DESKTOP_APP = import.meta.env.VITE_DESKTOP_APP === '1';
 
-const invokeOffline = async <T>(command: string, args: Record<string, unknown> = {}): Promise<T> => {
-  if (!OFFLINE_DESKTOP) {
+const DESKTOP_SESSION_KEY = 'concurse.desktop.session.v1';
+let desktopSessionToken = (() => {
+  try {
+    return typeof window === 'undefined' ? '' : window.localStorage.getItem(DESKTOP_SESSION_KEY) || '';
+  } catch {
+    return '';
+  }
+})();
+
+const setDesktopSessionToken = (token: string) => {
+  desktopSessionToken = token;
+  try {
+    if (typeof window === 'undefined') return;
+    if (token) window.localStorage.setItem(DESKTOP_SESSION_KEY, token);
+    else window.localStorage.removeItem(DESKTOP_SESSION_KEY);
+  } catch {
+    // A sessão em memória ainda permite o uso desta execução do aplicativo.
+  }
+};
+
+const invokeDesktop = async <T>(command: string, args: Record<string, unknown> = {}): Promise<T> => {
+  if (!DESKTOP_APP) {
     throw new Error('O comando local só está disponível no aplicativo desktop.');
   }
   const { invoke } = await import('@tauri-apps/api/core');
   return invoke<T>(command, args);
+};
+
+const invokeOffline = async <T>(command: string, args: Record<string, unknown> = {}): Promise<T> => {
+  if (!OFFLINE_DESKTOP) throw new Error('O armazenamento offline não está habilitado neste build.');
+  return invokeDesktop<T>(command, args);
 };
 
 export const apiUrl = (path: string): string => {
@@ -61,8 +87,13 @@ const normalizeExam = (exam: ExamDetail): ExamDetail => ({
   })),
 });
 
-const apiFetch = (input: RequestInfo | URL, init: RequestInit = {}) =>
-  fetch(input, { ...init, credentials: 'include' });
+const apiFetch = (input: RequestInfo | URL, init: RequestInit = {}) => {
+  const headers = new Headers(init.headers);
+  if (desktopSessionToken && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${desktopSessionToken}`);
+  }
+  return fetch(input, { ...init, headers, credentials: 'include' });
+};
 
 export class AuthRequiredError extends Error {
   constructor(message = 'Sua sessão expirou. Faça login novamente para ver sua biblioteca.') {
@@ -92,12 +123,42 @@ export const api = {
     return `${API_BASE}/auth/google/login?next=${encodeURIComponent(safePath)}`;
   },
 
+  async beginGoogleLogin(nextPath: string = '/'): Promise<void> {
+    if (DESKTOP_APP) {
+      await invokeDesktop('desktop_begin_google_login', {
+        apiOrigin: API_ORIGIN,
+        nextPath,
+      });
+      return;
+    }
+    window.location.assign(this.getGoogleLoginUrl(nextPath));
+  },
+
+  async takeDesktopOAuthCode(): Promise<string | null> {
+    if (!DESKTOP_APP) return null;
+    return invokeDesktop<string | null>('desktop_take_oauth_result');
+  },
+
+  async exchangeDesktopOAuthCode(code: string): Promise<AuthUser> {
+    const res = await fetch(`${API_BASE}/auth/google/desktop/exchange`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+    if (!res.ok) throw new Error('Não foi possível concluir o login Google no aplicativo.');
+    const payload: { session_token?: string; user?: AuthUser } = await res.json();
+    if (!payload.session_token || !payload.user) throw new Error('O servidor não retornou uma sessão válida.');
+    setDesktopSessionToken(payload.session_token);
+    return payload.user;
+  },
+
   async logout(): Promise<void> {
     if (OFFLINE_DESKTOP) return;
     const res = await apiFetch(`${API_BASE}/auth/logout`, {
       method: 'POST',
     });
     if (!res.ok) throw new Error('Não foi possível encerrar a sessão');
+    setDesktopSessionToken('');
   },
 
   async deleteAccount(): Promise<void> {
@@ -106,6 +167,7 @@ export const api = {
       method: 'DELETE',
     });
     if (!res.ok) throw new Error('Não foi possível excluir a sua conta');
+    setDesktopSessionToken('');
   },
 
   async getFolders(): Promise<Folder[]> {
@@ -137,6 +199,14 @@ export const api = {
     const res = await apiFetch(`${API_BASE}/mesh/ticket/${encodeURIComponent(assetId)}`);
     if (res.status === 401) throw new AuthRequiredError();
     if (!res.ok) throw new Error('Falha ao preparar a transferência entre dispositivos');
+    return res.json();
+  },
+
+  async getMeshProviders(assetId: string): Promise<{ asset_id: string; providers: Array<{ node_id: string; endpoint: string; asset_count: number; last_seen: string }> }> {
+    if (OFFLINE_DESKTOP) return { asset_id: assetId, providers: [] };
+    const res = await apiFetch(`${API_BASE}/mesh/providers/${encodeURIComponent(assetId)}`);
+    if (res.status === 401) throw new AuthRequiredError();
+    if (!res.ok) throw new Error('Falha ao consultar os pares externos');
     return res.json();
   },
 
@@ -314,12 +384,35 @@ export const api = {
   },
 
   async getMeshPeers(): Promise<{ node_id: string; tcp_port: number; peers: Array<{ node_id: string; address: string; tcp_port: number; profile_name: string; assets: Array<{ asset_id: string; size: number; title: string }>; last_seen: number }> }> {
-    if (!OFFLINE_DESKTOP) return { node_id: '', tcp_port: 0, peers: [] };
-    return invokeOffline('offline_mesh_peers');
+    if (OFFLINE_DESKTOP) return invokeOffline('offline_mesh_peers');
+    const res = await apiFetch(`${API_BASE}/mesh/peers`);
+    if (res.status === 401) throw new AuthRequiredError();
+    if (!res.ok) throw new Error('Falha ao consultar a malha externa');
+    const payload: {
+      peers?: Array<{ node_id: string; endpoint: string; asset_count: number; last_seen: string }>;
+    } = await res.json();
+    return {
+      node_id: 'origin',
+      tcp_port: 0,
+      peers: (payload.peers || []).map((peer) => ({
+        node_id: peer.node_id,
+        address: peer.endpoint,
+        tcp_port: 0,
+        profile_name: 'Dispositivo da sua conta Google',
+        assets: [],
+        last_seen: Math.floor(new Date(peer.last_seen).getTime() / 1000) || 0,
+      })),
+    };
   },
 
   async downloadMeshAsset(assetId: string): Promise<{ ok: boolean; status: string; exam_id?: number; title?: string }> {
-    if (!OFFLINE_DESKTOP) throw new Error('A malha local só está disponível no desktop.');
-    return invokeOffline('offline_download_asset', { assetId });
+    if (OFFLINE_DESKTOP) return invokeOffline('offline_download_asset', { assetId });
+    const res = await apiFetch(`${API_BASE}/mesh/fetch/${encodeURIComponent(assetId)}`);
+    if (res.status === 401) throw new AuthRequiredError();
+    if (!res.ok) throw new Error('Nenhum par externo entregou uma cópia íntegra.');
+    // O origin só coordena/cacheia a transferência; o conteúdo continua
+    // validado pelo endpoint content-addressed antes de chegar ao cliente.
+    await res.arrayBuffer();
+    return { ok: true, status: 'downloaded' };
   },
 };

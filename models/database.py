@@ -280,6 +280,18 @@ class MeshPeer(Base):
     )
 
 
+class DesktopOAuthCode(Base):
+    """Código de uso único para devolver uma sessão OAuth ao app desktop."""
+
+    __tablename__ = 'desktop_oauth_codes'
+
+    code_hash = Column(String(64), primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    expires_at = Column(String(30), nullable=False, index=True)
+    used_at = Column(String(30), nullable=True)
+    created_at = Column(String(30), nullable=False)
+
+
 class ExamSource(Base):
     """Identidade canônica de uma origem; uma prova pode ter mais de uma URL alias."""
 
