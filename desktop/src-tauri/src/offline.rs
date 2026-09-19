@@ -16,6 +16,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream, UdpSocket};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -491,20 +492,59 @@ pub fn download_asset(expected_asset_id: String) -> Result<Value, String> {
     if !expected_asset_id.starts_with("sha256:") { return Err("Identificador de conteúdo inválido.".to_string()); }
     if blob_path(&runtime, &expected_asset_id).exists() { return Ok(json!({"ok": true, "status": "already_present"})); }
     let peers = runtime.peers.lock().map_err(|_| "Rede mesh ocupada".to_string())?.values().filter(|peer| peer.assets.iter().any(|asset| asset.asset_id == expected_asset_id)).cloned().collect::<Vec<_>>();
-    let peer = peers.first().ok_or_else(|| "Nenhum par online possui esta prova.".to_string())?.clone();
-    let exam = request_manifest(&peer, &expected_asset_id)?;
+    let first_peer = peers.first().ok_or_else(|| "Nenhum par online possui esta prova.".to_string())?.clone();
+    let exam = request_manifest(&first_peer, &expected_asset_id)?;
     let size = exam.blob_size;
     let temp_path = blob_path(&runtime, &expected_asset_id).with_extension("part");
     let mut file = OpenOptions::new().create(true).write(true).truncate(true).open(&temp_path).map_err(|err| err.to_string())?;
     file.set_len(size).map_err(|err| err.to_string())?;
-    let mut offset = 0;
-    while offset < size {
-        let length = (size - offset).min(CHUNK_SIZE);
-        let chunk = fetch_chunk(&peer, &expected_asset_id, offset, length)?;
-        if chunk.len() as u64 != length { return Err("O par enviou um bloco incompleto.".to_string()); }
-        file.seek(SeekFrom::Start(offset)).map_err(|err| err.to_string())?;
-        file.write_all(&chunk).map_err(|err| err.to_string())?;
-        offset += length;
+    let chunk_count = size.div_ceil(CHUNK_SIZE) as usize;
+    let chunks: Arc<Mutex<Vec<Option<Vec<u8>>>>> = Arc::new(Mutex::new(vec![None; chunk_count]));
+    let next_chunk = Arc::new(AtomicU64::new(0));
+    let failure: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+    let worker_count = (peers.len() * 2).clamp(1, 8);
+    let mut workers = Vec::with_capacity(worker_count);
+    let peers = Arc::new(peers);
+    for _ in 0..worker_count {
+        let chunks = chunks.clone();
+        let next_chunk = next_chunk.clone();
+        let failure = failure.clone();
+        let peers = peers.clone();
+        let expected_asset_id = expected_asset_id.clone();
+        workers.push(thread::spawn(move || loop {
+            if failure.lock().ok().and_then(|value| value.clone()).is_some() { break; }
+            let index = next_chunk.fetch_add(1, Ordering::Relaxed) as usize;
+            if index >= chunk_count { break; }
+            let offset = index as u64 * CHUNK_SIZE;
+            let length = (size - offset).min(CHUNK_SIZE);
+            let peer = &peers[index % peers.len()];
+            match fetch_chunk(peer, &expected_asset_id, offset, length) {
+                Ok(chunk) if chunk.len() as u64 == length => {
+                    if let Ok(mut values) = chunks.lock() { values[index] = Some(chunk); }
+                }
+                Ok(_) => {
+                    if let Ok(mut value) = failure.lock() { *value = Some("O par enviou um bloco incompleto.".to_string()); }
+                    break;
+                }
+                Err(error) => {
+                    if let Ok(mut value) = failure.lock() { *value = Some(error); }
+                    break;
+                }
+            }
+        }));
+    }
+    for worker in workers {
+        let _ = worker.join();
+    }
+    if let Some(error) = failure.lock().ok().and_then(|value| value.clone()) {
+        let _ = fs::remove_file(&temp_path);
+        return Err(error);
+    }
+    let chunks = chunks.lock().map_err(|_| "Blocos recebidos indisponíveis.".to_string())?;
+    for (index, chunk) in chunks.iter().enumerate() {
+        let Some(chunk) = chunk else { let _ = fs::remove_file(&temp_path); return Err("A transferência terminou sem todos os blocos.".to_string()); };
+        file.seek(SeekFrom::Start(index as u64 * CHUNK_SIZE)).map_err(|err| err.to_string())?;
+        file.write_all(chunk).map_err(|err| err.to_string())?;
     }
     file.flush().map_err(|err| err.to_string())?;
     let bytes = fs::read(&temp_path).map_err(|err| err.to_string())?;
