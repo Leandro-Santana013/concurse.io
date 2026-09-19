@@ -42,6 +42,8 @@ def _cors_origins():
     return [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        # Origem usada pelo frontend local empacotado no Tauri 2.
+        "http://tauri.localhost",
     ]
 
 @asynccontextmanager

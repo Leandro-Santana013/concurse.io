@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Clipboard, ExternalLink, FileText, Loader2, RefreshCw, X } from 'lucide-react';
-import { api } from '../../services/api';
+import { api, apiUrl } from '../../services/api';
 import { ImportStage } from '../../types/exam';
 import { useUI } from '../../context/UIContext';
 
@@ -115,7 +115,7 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
   const watchProgress = (examId: number, attempt = 0) => {
     stopWatching();
     const source = new EventSource(
-      `/api/v1/exams/${examId}/progress/stream`,
+      apiUrl(`/api/v1/exams/${examId}/progress/stream`),
       { withCredentials: true },
     );
     eventSourceRef.current = source;

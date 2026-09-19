@@ -6,7 +6,8 @@
   "build": {
     "devUrl": "http://localhost:5173",
     "beforeDevCommand": "npm --prefix ../frontend run dev -- --host 127.0.0.1",
-    "frontendDist": "https://concurse.duckdns.org"
+    "beforeBuildCommand": "npm --prefix ../frontend run build:desktop",
+    "frontendDist": "../../frontend/dist"
   },
   "app": {
     "windows": [

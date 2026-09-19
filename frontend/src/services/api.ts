@@ -19,7 +19,34 @@ import {
 } from '../types/exam';
 import { AuthConfig, AuthUser } from '../types/auth';
 
-const API_BASE = '/api/v1';
+export const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN || '').trim().replace(/\/+$/, '');
+
+export const apiUrl = (path: string): string => {
+  if (!path || /^[a-z][a-z\d+.-]*:\/\//i.test(path) || !API_ORIGIN) return path;
+  return `${API_ORIGIN}${path.startsWith('/') ? path : `/${path}`}`;
+};
+
+const API_BASE = apiUrl('/api/v1');
+
+const resolveApiUrl = (value: string): string => {
+  return apiUrl(value);
+};
+
+const normalizeExam = (exam: ExamDetail): ExamDetail => ({
+  ...exam,
+  questions: (exam.questions || []).map((question) => ({
+    ...question,
+    images: question.images?.map(resolveApiUrl) || question.images,
+    option_images: question.option_images
+      ? Object.fromEntries(
+          Object.entries(question.option_images).map(([key, images]) => [
+            key,
+            images.map(resolveApiUrl),
+          ]),
+        )
+      : question.option_images,
+  })),
+});
 
 const apiFetch = (input: RequestInfo | URL, init: RequestInit = {}) =>
   fetch(input, { ...init, credentials: 'include' });
@@ -75,7 +102,13 @@ export const api = {
     const res = await apiFetch(`${API_BASE}/library/snapshot`);
     if (res.status === 401) throw new AuthRequiredError();
     if (!res.ok) throw new Error('Falha ao sincronizar a biblioteca');
-    return res.json();
+    const snapshot: LibrarySnapshot = await res.json();
+    for (const manifest of Object.values(snapshot.asset_manifests || {})) {
+      for (const asset of manifest.assets || []) {
+        asset.media_url = resolveApiUrl(asset.media_url);
+      }
+    }
+    return snapshot;
   },
 
   async getMeshTicket(assetId: string): Promise<MeshTicket> {
@@ -88,7 +121,7 @@ export const api = {
   async getExam(examId: number): Promise<ExamDetail> {
     const res = await apiFetch(`${API_BASE}/exams/${examId}`);
     if (!res.ok) throw new Error('Falha ao carregar exame');
-    return res.json();
+    return normalizeExam(await res.json());
   },
 
   async getCustomSimulationOptions(): Promise<CustomSimulationOptions> {
@@ -122,7 +155,7 @@ export const api = {
       method: 'POST',
     });
     if (!res.ok) throw new Error('Falha ao gerar simulado personalizado');
-    return res.json();
+    return normalizeExam(await res.json());
   },
 
   async submitAttempt(submission: AttemptSubmission): Promise<AttemptResult> {
@@ -202,7 +235,7 @@ export const api = {
     const url = subject ? `${API_BASE}/notebook?subject=${encodeURIComponent(subject)}` : `${API_BASE}/notebook`;
     const res = await apiFetch(url);
     if (!res.ok) throw new Error('Falha ao gerar caderno de erros');
-    return res.json();
+    return normalizeExam(await res.json());
   },
 
   async getRanking(): Promise<RankingEntry[]> {

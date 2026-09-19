@@ -7,6 +7,7 @@ import { DirectIngestModal } from '../components/dashboard/DirectIngestModal';
 import { UIProvider } from '../context/UIContext';
 
 const apiMocks = vi.hoisted(() => ({
+  apiUrl: (path: string) => path,
   getActiveDownloads: vi.fn(async () => []),
   ingestExam: vi.fn(async () => ({
     exam_id: 42,
@@ -20,7 +21,7 @@ const apiMocks = vi.hoisted(() => ({
   getExamProgress: vi.fn(),
 }));
 
-vi.mock('../services/api', () => ({ api: apiMocks }));
+vi.mock('../services/api', () => ({ api: apiMocks, apiUrl: apiMocks.apiUrl }));
 
 class FakeEventSource {
   onmessage: ((event: MessageEvent) => void) | null = null;

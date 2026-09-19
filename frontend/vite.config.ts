@@ -2,7 +2,10 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  // O instalador Tauri carrega os arquivos do dist pelo protocolo local.
+  // O build web continua usando caminhos absolutos para preservar o deploy HTTP.
+  base: mode === 'desktop' ? './' : '/',
   plugins: [
     react(),
     tailwindcss(),
@@ -20,4 +23,4 @@ export default defineConfig({
       }
     }
   }
-});
+}));
