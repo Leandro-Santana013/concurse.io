@@ -64,7 +64,7 @@ npm run ios:dev
 npm run ios:build
 ```
 
-Android exige JDK, Android SDK/NDK, Gradle e um dispositivo ou emulador. Esses
-componentes não estão instalados nesta máquina Windows; por isso a
-configuração e o fluxo de autenticação estão preparados, mas o APK ainda
-precisa ser gerado em uma máquina com o SDK Android configurado.
+Android exige JDK, Android SDK/NDK, Gradle e um dispositivo ou emulador. No
+Windows, habilite também o Developer Mode para que o Tauri possa criar os
+links nativos usados pelo Gradle. Depois disso, `npm run android:build` gera o
+APK em `desktop/src-tauri/gen/android/app/build/outputs/apk/`.
