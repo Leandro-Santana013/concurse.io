@@ -24,6 +24,7 @@ export const OFFLINE_DESKTOP = import.meta.env.VITE_OFFLINE_DESKTOP === '1';
 export const DESKTOP_APP = import.meta.env.VITE_DESKTOP_APP === '1';
 
 const DESKTOP_SESSION_KEY = 'concurse.desktop.session.v1';
+const API_REQUEST_TIMEOUT_MS = 8000;
 let desktopSessionToken = (() => {
   try {
     return typeof window === 'undefined' ? '' : window.localStorage.getItem(DESKTOP_SESSION_KEY) || '';
@@ -53,6 +54,17 @@ const invokeDesktop = async <T>(command: string, args: Record<string, unknown> =
 
 const invokeOffline = async <T>(command: string, args: Record<string, unknown> = {}): Promise<T> => {
   if (!OFFLINE_DESKTOP) throw new Error('O armazenamento offline não está habilitado neste build.');
+  return invokeDesktop<T>(command, args);
+};
+
+const isTransportFailure = (error: unknown): boolean => {
+  if (error instanceof TypeError) return true;
+  const message = error instanceof Error ? error.message : String(error || '');
+  return /failed to fetch|load failed|network|timed out|timeout|aborted|canceled|cancelled/i.test(message);
+};
+
+const invokeLocalFallback = async <T>(command: string, args: Record<string, unknown> = {}): Promise<T> => {
+  if (!DESKTOP_APP) throw new Error('O cache local só está disponível no aplicativo desktop.');
   return invokeDesktop<T>(command, args);
 };
 
@@ -92,7 +104,14 @@ const apiFetch = (input: RequestInfo | URL, init: RequestInit = {}) => {
   if (desktopSessionToken && !headers.has('Authorization')) {
     headers.set('Authorization', `Bearer ${desktopSessionToken}`);
   }
-  return fetch(input, { ...init, headers, credentials: 'include' });
+  const controller = new AbortController();
+  const timeout = globalThis.setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+  return fetch(input, {
+    ...init,
+    headers,
+    credentials: 'include',
+    signal: controller.signal,
+  }).finally(() => globalThis.clearTimeout(timeout));
 };
 
 export class AuthRequiredError extends Error {
@@ -105,17 +124,31 @@ export class AuthRequiredError extends Error {
 export const api = {
   async getAuthConfig(): Promise<AuthConfig> {
     if (OFFLINE_DESKTOP) return invokeOffline<AuthConfig>('offline_auth_config');
-    const res = await apiFetch(`${API_BASE}/auth/config`);
-    if (!res.ok) throw new Error('Falha ao consultar a configuração de acesso');
-    return res.json();
+    try {
+      const res = await apiFetch(`${API_BASE}/auth/config`);
+      if (!res.ok) throw new Error('Falha ao consultar a configuração de acesso');
+      return res.json();
+    } catch (error) {
+      if (DESKTOP_APP && isTransportFailure(error)) return { google_enabled: false };
+      throw error;
+    }
   },
 
   async getCurrentUser(): Promise<AuthUser | null> {
     if (OFFLINE_DESKTOP) return invokeOffline<AuthUser>('offline_current_user');
-    const res = await apiFetch(`${API_BASE}/auth/me`);
-    if (res.status === 401) return null;
-    if (!res.ok) throw new Error('Falha ao verificar sua sessão');
-    return res.json();
+    try {
+      const res = await apiFetch(`${API_BASE}/auth/me`);
+      if (res.status === 401) return null;
+      if (!res.ok) throw new Error('Falha ao verificar sua sessão');
+      return res.json();
+    } catch (error) {
+      // A conta remota pode ficar temporariamente indisponível; o desktop
+      // continua abrindo a biblioteca já armazenada nesta máquina.
+      if (DESKTOP_APP && isTransportFailure(error)) {
+        return invokeLocalFallback<AuthUser>('offline_current_user');
+      }
+      throw error;
+    }
   },
 
   getGoogleLoginUrl(nextPath: string = '/'): string {
@@ -172,24 +205,38 @@ export const api = {
 
   async getFolders(): Promise<Folder[]> {
     if (OFFLINE_DESKTOP) return invokeOffline<Folder[]>('offline_folders');
-    const res = await apiFetch(`${API_BASE}/folders`);
-    if (res.status === 401) throw new AuthRequiredError();
-    if (!res.ok) throw new Error('Falha ao carregar pastas de provas');
-    return res.json();
+    try {
+      const res = await apiFetch(`${API_BASE}/folders`);
+      if (res.status === 401) throw new AuthRequiredError();
+      if (!res.ok) throw new Error('Falha ao carregar pastas de provas');
+      return res.json();
+    } catch (error) {
+      if (DESKTOP_APP && isTransportFailure(error)) {
+        return invokeLocalFallback<Folder[]>('offline_folders');
+      }
+      throw error;
+    }
   },
 
   async getLibrarySnapshot(): Promise<LibrarySnapshot> {
     if (OFFLINE_DESKTOP) return invokeOffline<LibrarySnapshot>('offline_library_snapshot');
-    const res = await apiFetch(`${API_BASE}/library/snapshot`);
-    if (res.status === 401) throw new AuthRequiredError();
-    if (!res.ok) throw new Error('Falha ao sincronizar a biblioteca');
-    const snapshot: LibrarySnapshot = await res.json();
-    for (const manifest of Object.values(snapshot.asset_manifests || {})) {
-      for (const asset of manifest.assets || []) {
-        asset.media_url = resolveApiUrl(asset.media_url);
+    try {
+      const res = await apiFetch(`${API_BASE}/library/snapshot`);
+      if (res.status === 401) throw new AuthRequiredError();
+      if (!res.ok) throw new Error('Falha ao sincronizar a biblioteca');
+      const snapshot: LibrarySnapshot = await res.json();
+      for (const manifest of Object.values(snapshot.asset_manifests || {})) {
+        for (const asset of manifest.assets || []) {
+          asset.media_url = resolveApiUrl(asset.media_url);
+        }
       }
+      return snapshot;
+    } catch (error) {
+      if (DESKTOP_APP && isTransportFailure(error)) {
+        return invokeLocalFallback<LibrarySnapshot>('offline_library_snapshot');
+      }
+      throw error;
     }
-    return snapshot;
   },
 
   async getMeshTicket(assetId: string): Promise<MeshTicket> {
@@ -212,9 +259,16 @@ export const api = {
 
   async getExam(examId: number): Promise<ExamDetail> {
     if (OFFLINE_DESKTOP) return normalizeExam(await invokeOffline<ExamDetail>('offline_get_exam', { examId }));
-    const res = await apiFetch(`${API_BASE}/exams/${examId}`);
-    if (!res.ok) throw new Error('Falha ao carregar exame');
-    return normalizeExam(await res.json());
+    try {
+      const res = await apiFetch(`${API_BASE}/exams/${examId}`);
+      if (!res.ok) throw new Error('Falha ao carregar exame');
+      return normalizeExam(await res.json());
+    } catch (error) {
+      if (DESKTOP_APP && isTransportFailure(error)) {
+        return normalizeExam(await invokeLocalFallback<ExamDetail>('offline_get_exam', { examId }));
+      }
+      throw error;
+    }
   },
 
   async getCustomSimulationOptions(): Promise<CustomSimulationOptions> {
@@ -339,10 +393,17 @@ export const api = {
 
   async getNotebookStats(): Promise<NotebookSubjectStat[]> {
     if (OFFLINE_DESKTOP) return invokeOffline<NotebookSubjectStat[]>('offline_notebook_stats');
-    const res = await apiFetch(`${API_BASE}/notebook/stats`);
-    if (res.status === 401) throw new AuthRequiredError();
-    if (!res.ok) throw new Error('Falha ao carregar dados do caderno de erros');
-    return res.json();
+    try {
+      const res = await apiFetch(`${API_BASE}/notebook/stats`);
+      if (res.status === 401) throw new AuthRequiredError();
+      if (!res.ok) throw new Error('Falha ao carregar dados do caderno de erros');
+      return res.json();
+    } catch (error) {
+      if (DESKTOP_APP && isTransportFailure(error)) {
+        return invokeLocalFallback<NotebookSubjectStat[]>('offline_notebook_stats');
+      }
+      throw error;
+    }
   },
 
   async getErrorNotebookExam(subject?: string): Promise<ExamDetail> {
@@ -385,24 +446,31 @@ export const api = {
 
   async getMeshPeers(): Promise<{ node_id: string; tcp_port: number; peers: Array<{ node_id: string; address: string; tcp_port: number; profile_name: string; assets: Array<{ asset_id: string; size: number; title: string }>; last_seen: number }> }> {
     if (OFFLINE_DESKTOP) return invokeOffline('offline_mesh_peers');
-    const res = await apiFetch(`${API_BASE}/mesh/peers`);
-    if (res.status === 401) throw new AuthRequiredError();
-    if (!res.ok) throw new Error('Falha ao consultar a malha externa');
-    const payload: {
-      peers?: Array<{ node_id: string; endpoint: string; asset_count: number; last_seen: string }>;
-    } = await res.json();
-    return {
-      node_id: 'origin',
-      tcp_port: 0,
-      peers: (payload.peers || []).map((peer) => ({
-        node_id: peer.node_id,
-        address: peer.endpoint,
+    try {
+      const res = await apiFetch(`${API_BASE}/mesh/peers`);
+      if (res.status === 401) throw new AuthRequiredError();
+      if (!res.ok) throw new Error('Falha ao consultar a malha externa');
+      const payload: {
+        peers?: Array<{ node_id: string; endpoint: string; asset_count: number; last_seen: string }>;
+      } = await res.json();
+      return {
+        node_id: 'origin',
         tcp_port: 0,
-        profile_name: 'Dispositivo da sua conta Google',
-        assets: [],
-        last_seen: Math.floor(new Date(peer.last_seen).getTime() / 1000) || 0,
-      })),
-    };
+        peers: (payload.peers || []).map((peer) => ({
+          node_id: peer.node_id,
+          address: peer.endpoint,
+          tcp_port: 0,
+          profile_name: 'Dispositivo da sua conta Google',
+          assets: [],
+          last_seen: Math.floor(new Date(peer.last_seen).getTime() / 1000) || 0,
+        })),
+      };
+    } catch (error) {
+      if (DESKTOP_APP && isTransportFailure(error)) {
+        return invokeLocalFallback('offline_mesh_peers');
+      }
+      throw error;
+    }
   },
 
   async downloadMeshAsset(assetId: string): Promise<{ ok: boolean; status: string; exam_id?: number; title?: string }> {

@@ -45,7 +45,11 @@ const PageScrollReset: React.FC = () => {
   const { pathname } = useLocation();
 
   useEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    // `auto` funciona também no WebView2/Tauri; `instant` não é suportado de
+    // forma consistente e podia deixar a tela presa na posição anterior.
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
   }, [pathname]);
 
   return null;
