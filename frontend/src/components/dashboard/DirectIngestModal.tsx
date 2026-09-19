@@ -14,6 +14,7 @@ interface DirectIngestModalProps {
 }
 
 const TERMINAL_ERRORS = new Set(['Erro', 'Falha']);
+const OFFLINE_DESKTOP = import.meta.env.VITE_OFFLINE_DESKTOP === '1';
 
 export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
   isOpen,
@@ -30,6 +31,7 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
   const retryTimerRef = useRef<number | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const [examUrl, setExamUrl] = useState('');
+  const [localFile, setLocalFile] = useState<File | null>(null);
   const [gabaritoUrl, setGabaritoUrl] = useState('');
   const [customTitle, setCustomTitle] = useState('');
   const [stage, setStage] = useState<ImportStage>('form');
@@ -53,6 +55,7 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
 
     previousFocusRef.current = document.activeElement as HTMLElement | null;
     setExamUrl(initialExamUrl);
+    setLocalFile(null);
     setGabaritoUrl(initialGabaritoUrl);
     setCustomTitle(initialTitle);
     setStage('form');
@@ -156,6 +159,41 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
   };
 
   const startImport = async () => {
+    if (OFFLINE_DESKTOP) {
+      if (!localFile) {
+        setErrorMessage('Escolha um PDF ou JSON de prova neste computador.');
+        setStage('error');
+        return;
+      }
+      setStage('submitting');
+      setProgress(15);
+      setErrorMessage(null);
+      setStatusMessage('Guardando a prova no armazenamento local...');
+      try {
+        const buffer = await localFile.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        const chunkSize = 0x8000;
+        for (let index = 0; index < bytes.length; index += chunkSize) {
+          binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+        }
+        const response = await api.ingestLocalFile(
+          localFile.name,
+          btoa(binary),
+          customTitle.trim() || localFile.name.replace(/\.[^.]+$/, ''),
+        );
+        setProgress(100);
+        setStatusMessage(response.message || 'Prova disponível neste computador.');
+        void refreshDownloads();
+        setReadyExamId(response.exam_id);
+        setStage('ready');
+      } catch (error) {
+        void refreshDownloads();
+        setStage('error');
+        setErrorMessage(error instanceof Error ? error.message : 'Não foi possível guardar o arquivo local.');
+      }
+      return;
+    }
     const cleanUrl = examUrl.trim();
     if (!cleanUrl) {
       setErrorMessage('Informe o link da prova.');
@@ -206,21 +244,40 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
         </header>
 
         <form onSubmit={handleSubmit} className="space-y-5 p-5 sm:p-6">
-          <div className="block">
-            <label className="field-label" htmlFor="exam-url">Link da prova</label>
-            <div className="mt-2 flex gap-2">
-              <input id="exam-url" type="url" required className="input-control font-mono text-sm" disabled={isBusy} value={examUrl} onChange={(event) => setExamUrl(event.target.value)} placeholder="https://.../prova.pdf" />
-              <button type="button" className="button-secondary shrink-0" disabled={isBusy} onClick={() => void pasteInto(setExamUrl)}><Clipboard aria-hidden="true" /> Colar</button>
+          {OFFLINE_DESKTOP ? (
+            <div className="block">
+              <label className="field-label" htmlFor="local-exam-file">Arquivo da prova</label>
+              <input
+                id="local-exam-file"
+                type="file"
+                accept=".pdf,.json,application/pdf,application/json"
+                className="input-control mt-2 text-sm"
+                disabled={isBusy}
+                onChange={(event) => setLocalFile(event.target.files?.[0] || null)}
+              />
+              <p className="mt-2 text-xs text-[var(--text-muted)]">
+                O PDF é guardado e compartilhado entre pares. Para abrir questões já extraídas, selecione o JSON da prova.
+              </p>
             </div>
-          </div>
+          ) : (
+            <>
+              <div className="block">
+                <label className="field-label" htmlFor="exam-url">Link da prova</label>
+                <div className="mt-2 flex gap-2">
+                  <input id="exam-url" type="url" required className="input-control font-mono text-sm" disabled={isBusy} value={examUrl} onChange={(event) => setExamUrl(event.target.value)} placeholder="https://.../prova.pdf" />
+                  <button type="button" className="button-secondary shrink-0" disabled={isBusy} onClick={() => void pasteInto(setExamUrl)}><Clipboard aria-hidden="true" /> Colar</button>
+                </div>
+              </div>
 
-          <div className="block">
-            <label className="field-label" htmlFor="answer-url">Link do gabarito <span className="font-normal text-[var(--text-muted)]">(opcional)</span></label>
-            <div className="mt-2 flex gap-2">
-              <input id="answer-url" type="url" className="input-control font-mono text-sm" disabled={isBusy} value={gabaritoUrl} onChange={(event) => setGabaritoUrl(event.target.value)} placeholder="https://.../gabarito.pdf" />
-              <button type="button" className="button-secondary shrink-0" disabled={isBusy} onClick={() => void pasteInto(setGabaritoUrl)}><Clipboard aria-hidden="true" /> Colar</button>
-            </div>
-          </div>
+              <div className="block">
+                <label className="field-label" htmlFor="answer-url">Link do gabarito <span className="font-normal text-[var(--text-muted)]">(opcional)</span></label>
+                <div className="mt-2 flex gap-2">
+                  <input id="answer-url" type="url" className="input-control font-mono text-sm" disabled={isBusy} value={gabaritoUrl} onChange={(event) => setGabaritoUrl(event.target.value)} placeholder="https://.../gabarito.pdf" />
+                  <button type="button" className="button-secondary shrink-0" disabled={isBusy} onClick={() => void pasteInto(setGabaritoUrl)}><Clipboard aria-hidden="true" /> Colar</button>
+                </div>
+              </div>
+            </>
+          )}
 
           <label className="block" htmlFor="exam-title">
             <span className="field-label">Título <span className="font-normal text-[var(--text-muted)]">(opcional)</span></span>
@@ -249,13 +306,17 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
           )}
 
           <footer className="flex flex-col-reverse gap-3 border-t border-[var(--border)] pt-5 sm:flex-row sm:items-center sm:justify-between">
-            <a className="text-link inline-flex min-h-11 items-center gap-2" href={pciUrl} target="_blank" rel="noreferrer"><ExternalLink aria-hidden="true" /> Abrir no PCI Concursos</a>
+            {OFFLINE_DESKTOP ? (
+              <span className="text-xs text-[var(--text-muted)]">Modo offline local · nenhum link será aberto</span>
+            ) : (
+              <a className="text-link inline-flex min-h-11 items-center gap-2" href={pciUrl} target="_blank" rel="noreferrer"><ExternalLink aria-hidden="true" /> Abrir no PCI Concursos</a>
+            )}
             <div className="flex flex-wrap justify-end gap-2">
               <button type="button" className="button-ghost" onClick={onClose}>{isBusy ? 'Fechar e acompanhar' : 'Cancelar'}</button>
               {stage === 'ready' && readyExamId ? (
                 <button type="button" className="button-primary" onClick={() => { onClose(); onExamReady?.(readyExamId); }}><FileText aria-hidden="true" /> Iniciar simulado</button>
               ) : (
-                <button type="submit" className="button-primary" disabled={isBusy || !examUrl.trim()}>{isBusy ? <Loader2 className="ingest-progress-loader" aria-hidden="true" /> : <FileText aria-hidden="true" />} Processar prova</button>
+                <button type="submit" className="button-primary" disabled={isBusy || (OFFLINE_DESKTOP ? !localFile : !examUrl.trim())}>{isBusy ? <Loader2 className="ingest-progress-loader" aria-hidden="true" /> : <FileText aria-hidden="true" />} {OFFLINE_DESKTOP ? 'Guardar prova' : 'Processar prova'}</button>
               )}
             </div>
           </footer>

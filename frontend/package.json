@@ -30,6 +30,7 @@
     "vitest-axe": "^0.1.0"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.11.1",
     "clsx": "^2.1.1",
     "katex": "^0.18.4",
     "lucide-react": "^1.33.0",

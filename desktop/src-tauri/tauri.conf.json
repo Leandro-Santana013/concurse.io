@@ -5,7 +5,7 @@
   "identifier": "io.concurse.desktop",
   "build": {
     "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "npm --prefix ../frontend run dev -- --host 127.0.0.1",
+    "beforeDevCommand": "set VITE_OFFLINE_DESKTOP=1&& npm --prefix ../frontend run dev -- --host 127.0.0.1",
     "beforeBuildCommand": "npm --prefix ../frontend run build:desktop",
     "frontendDist": "../../frontend/dist"
   },
