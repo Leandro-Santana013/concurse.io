@@ -4,7 +4,7 @@ Este diretório empacota uma aplicação Tauri 2 **local-first**. A versão de
 produção leva a interface, o catálogo, os arquivos das provas e o motor de
 rede no instalador. Ela não abre o site, não usa DuckDNS, Supabase, Google ou
 um backend remoto. Cada computador tem um perfil local e guarda sua biblioteca
-em `%LOCALAPPDATA%\concurse.io`.
+no diretório de dados privado da aplicação (`io.concurse.desktop` no Windows).
 
 Quando habilitada, a única comunicação é a malha entre instâncias do próprio
 aplicativo: os nós anunciam seus hashes por broadcast UDP na rede local e
@@ -16,8 +16,10 @@ NATs diferentes seria necessário um pareamento manual ou um relay, o que seria
 um serviço externo e contrariaria o modo totalmente autônomo.
 
 O importador desktop aceita um PDF para armazenar e redistribuir localmente e
-um JSON de prova extraída para abrir as questões sem servidor. A extração de
-PDF/OCR continua sendo uma etapa local separada; nenhum link remoto é chamado.
+um JSON de prova extraída para abrir as questões sem servidor. Para manter
+figuras sem um servidor, o JSON deve trazer as imagens como `data:`; referências
+HTTP externas são descartadas no modo offline. A extração de PDF/OCR continua
+sendo uma etapa local separada; nenhum link remoto é chamado.
 
 ## Desenvolvimento
 

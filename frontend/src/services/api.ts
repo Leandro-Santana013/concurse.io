@@ -38,6 +38,10 @@ export const apiUrl = (path: string): string => {
 const API_BASE = apiUrl('/api/v1');
 
 const resolveApiUrl = (value: string): string => {
+  // A desktop proof must remain self-contained.  Remote media references from
+  // a web export are ignored rather than letting the WebView make a hidden
+  // request; embedded data URLs and local asset paths remain available.
+  if (OFFLINE_DESKTOP && /^https?:\/\//i.test(value)) return '';
   return apiUrl(value);
 };
 
@@ -45,12 +49,12 @@ const normalizeExam = (exam: ExamDetail): ExamDetail => ({
   ...exam,
   questions: (exam.questions || []).map((question) => ({
     ...question,
-    images: question.images?.map(resolveApiUrl) || question.images,
+    images: question.images?.map(resolveApiUrl).filter(Boolean) || question.images,
     option_images: question.option_images
       ? Object.fromEntries(
           Object.entries(question.option_images).map(([key, images]) => [
             key,
-            images.map(resolveApiUrl),
+            images.map(resolveApiUrl).filter(Boolean),
           ]),
         )
       : question.option_images,

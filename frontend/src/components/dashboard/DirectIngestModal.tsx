@@ -238,7 +238,11 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
         <header className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-[var(--border)] bg-[var(--surface)] p-5">
           <div>
             <h2 id="import-title" className="text-lg font-semibold text-[var(--text)]">Importar prova</h2>
-            <p id="import-description" className="mt-1 text-sm text-[var(--text-muted)]">Cole o link da prova e, se tiver, o link do gabarito oficial.</p>
+            <p id="import-description" className="mt-1 text-sm text-[var(--text-muted)]">
+              {OFFLINE_DESKTOP
+                ? 'Escolha um arquivo que já esteja neste computador.'
+                : 'Cole o link da prova e, se tiver, o link do gabarito oficial.'}
+            </p>
           </div>
           <button ref={closeButtonRef} type="button" className="icon-button" onClick={onClose} aria-label="Fechar importação"><X aria-hidden="true" /></button>
         </header>
