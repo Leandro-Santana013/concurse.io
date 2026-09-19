@@ -15,7 +15,6 @@ import {
   CustomSimulationOptions,
   CustomSimulationRequest,
   CustomSimulationSummary,
-  MeshTicket,
 } from '../types/exam';
 import { AuthConfig, AuthUser } from '../types/auth';
 
@@ -239,24 +238,6 @@ export const api = {
     }
   },
 
-  async getMeshTicket(assetId: string): Promise<MeshTicket> {
-    if (OFFLINE_DESKTOP) {
-      throw new Error('A prova local é lida diretamente do armazenamento deste computador.');
-    }
-    const res = await apiFetch(`${API_BASE}/mesh/ticket/${encodeURIComponent(assetId)}`);
-    if (res.status === 401) throw new AuthRequiredError();
-    if (!res.ok) throw new Error('Falha ao preparar a transferência entre dispositivos');
-    return res.json();
-  },
-
-  async getMeshProviders(assetId: string): Promise<{ asset_id: string; providers: Array<{ node_id: string; endpoint: string; asset_count: number; last_seen: string }> }> {
-    if (OFFLINE_DESKTOP) return { asset_id: assetId, providers: [] };
-    const res = await apiFetch(`${API_BASE}/mesh/providers/${encodeURIComponent(assetId)}`);
-    if (res.status === 401) throw new AuthRequiredError();
-    if (!res.ok) throw new Error('Falha ao consultar os pares externos');
-    return res.json();
-  },
-
   async getExam(examId: number): Promise<ExamDetail> {
     if (OFFLINE_DESKTOP) return normalizeExam(await invokeOffline<ExamDetail>('offline_get_exam', { examId }));
     try {
@@ -444,43 +425,4 @@ export const api = {
     });
   },
 
-  async getMeshPeers(): Promise<{ node_id: string; tcp_port: number; peers: Array<{ node_id: string; address: string; tcp_port: number; profile_name: string; assets: Array<{ asset_id: string; size: number; title: string }>; last_seen: number }> }> {
-    if (OFFLINE_DESKTOP) return invokeOffline('offline_mesh_peers');
-    try {
-      const res = await apiFetch(`${API_BASE}/mesh/peers`);
-      if (res.status === 401) throw new AuthRequiredError();
-      if (!res.ok) throw new Error('Falha ao consultar a malha externa');
-      const payload: {
-        peers?: Array<{ node_id: string; endpoint: string; asset_count: number; last_seen: string }>;
-      } = await res.json();
-      return {
-        node_id: 'origin',
-        tcp_port: 0,
-        peers: (payload.peers || []).map((peer) => ({
-          node_id: peer.node_id,
-          address: peer.endpoint,
-          tcp_port: 0,
-          profile_name: 'Dispositivo da sua conta Google',
-          assets: [],
-          last_seen: Math.floor(new Date(peer.last_seen).getTime() / 1000) || 0,
-        })),
-      };
-    } catch (error) {
-      if (DESKTOP_APP && isTransportFailure(error)) {
-        return invokeLocalFallback('offline_mesh_peers');
-      }
-      throw error;
-    }
-  },
-
-  async downloadMeshAsset(assetId: string): Promise<{ ok: boolean; status: string; exam_id?: number; title?: string }> {
-    if (OFFLINE_DESKTOP) return invokeOffline('offline_download_asset', { assetId });
-    const res = await apiFetch(`${API_BASE}/mesh/fetch/${encodeURIComponent(assetId)}`);
-    if (res.status === 401) throw new AuthRequiredError();
-    if (!res.ok) throw new Error('Nenhum par externo entregou uma cópia íntegra.');
-    // O origin só coordena/cacheia a transferência; o conteúdo continua
-    // validado pelo endpoint content-addressed antes de chegar ao cliente.
-    await res.arrayBuffer();
-    return { ok: true, status: 'downloaded' };
-  },
 };

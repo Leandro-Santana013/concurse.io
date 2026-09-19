@@ -9,12 +9,11 @@ import {
   Play,
   RefreshCw,
   RotateCcw,
-  Wifi,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useExam } from '../../context/ExamContext';
 import { useUI } from '../../context/UIContext';
-import { api, AuthRequiredError, DESKTOP_APP, OFFLINE_DESKTOP } from '../../services/api';
+import { api, AuthRequiredError } from '../../services/api';
 import { useExamStore } from '../../store/useExamStore';
 import type {
   CustomSimulationRequest,
@@ -25,7 +24,6 @@ import type {
 import { CustomSimulationModal } from './CustomSimulationModal';
 
 type LoadState = 'loading' | 'ready' | 'error';
-const REMOTE_DESKTOP = DESKTOP_APP && !OFFLINE_DESKTOP;
 
 interface LibraryExam extends ExamSummary {
   folderName: string;
@@ -49,23 +47,6 @@ export const HomeView: React.FC = () => {
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [launchingExamId, setLaunchingExamId] = useState<number | null>(null);
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
-  const [meshPeers, setMeshPeers] = useState<Array<{
-    node_id: string;
-    address: string;
-    profile_name: string;
-    assets: Array<{ asset_id: string; title: string }>;
-  }>>([]);
-  const [meshBusy, setMeshBusy] = useState(false);
-
-  const refreshMesh = useCallback(async () => {
-    if (!OFFLINE_DESKTOP && !REMOTE_DESKTOP) return;
-    try {
-      const state = await api.getMeshPeers();
-      setMeshPeers(state.peers);
-    } catch {
-      setMeshPeers([]);
-    }
-  }, []);
 
   const loadOverview = useCallback(async () => {
     setLoadState('loading');
@@ -94,35 +75,6 @@ export const HomeView: React.FC = () => {
     void loadOverview();
   }, [loadOverview]);
 
-  useEffect(() => {
-    if (!OFFLINE_DESKTOP && !REMOTE_DESKTOP) return;
-    void refreshMesh();
-    const interval = window.setInterval(() => void refreshMesh(), REMOTE_DESKTOP ? 30000 : 5000);
-    return () => window.clearInterval(interval);
-  }, [refreshMesh]);
-
-  const syncMesh = async () => {
-    setMeshBusy(true);
-    let downloaded = 0;
-    try {
-      for (const peer of meshPeers) {
-        for (const asset of peer.assets) {
-          const result = await api.downloadMeshAsset(asset.asset_id);
-          if (result.status === 'downloaded') downloaded += 1;
-        }
-      }
-      if (downloaded > 0) {
-        showToast('success', 'Provas recebidas', `${downloaded} prova(s) foram reconstruídas pelos pares.`);
-        await loadOverview();
-      } else {
-        showToast('info', 'Malha sincronizada', 'Nenhum arquivo novo foi encontrado nos pares online.');
-      }
-    } catch (error) {
-      showToast('error', 'Falha na malha', error instanceof Error ? error.message : 'Não foi possível buscar os blocos.');
-    } finally {
-      setMeshBusy(false);
-    }
-  };
 
   const recentExams = useMemo<LibraryExam[]>(() => folders
     .flatMap((folder) => folder.exams.map((exam) => ({ ...exam, folderName: folder.name })))
@@ -260,67 +212,6 @@ export const HomeView: React.FC = () => {
           </button>
         </div>
       </section>
-
-      {OFFLINE_DESKTOP && (
-        <section className="ui-card" aria-labelledby="mesh-title">
-          <div className="section-heading-row">
-            <div>
-              <p className="page-kicker">Rede local entre pares</p>
-              <h2 id="mesh-title" className="flex items-center gap-2"><Wifi aria-hidden="true" /> Malha de provas</h2>
-            </div>
-            <button type="button" className="ui-button ui-button-secondary" onClick={() => void syncMesh()} disabled={meshBusy || meshPeers.length === 0}>
-              <RefreshCw aria-hidden="true" className={meshBusy ? 'animate-spin' : undefined} /> {meshBusy ? 'Sincronizando…' : 'Buscar dos pares'}
-            </button>
-          </div>
-          <p className="mt-2 text-sm text-[var(--text-muted)]">Seu computador compartilha blocos verificados por SHA-256 somente com outros aplicativos na mesma rede. Nenhum servidor central é usado.</p>
-          {meshPeers.length === 0 ? (
-            <p className="mt-4 text-sm text-[var(--text-muted)]">Nenhum par online anunciado ainda. Deixe outro aplicativo aberto na mesma rede Wi-Fi.</p>
-          ) : (
-            <ul className="mt-4 grid gap-3 sm:grid-cols-2">
-              {meshPeers.map((peer) => (
-                <li key={peer.node_id} className="rounded-lg border border-[var(--border)] bg-[var(--surface-subtle)] p-3 text-sm">
-                  <strong className="flex items-center gap-2"><Wifi aria-hidden="true" className="h-4 w-4 text-[var(--success)]" /> {peer.profile_name || 'Par local'}</strong>
-                  <span className="mt-1 block text-xs text-[var(--text-muted)]">{peer.assets.length} prova(s) anunciada(s)</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
-
-      {REMOTE_DESKTOP && (
-        <section className="ui-card" aria-labelledby="external-mesh-title">
-          <div className="section-heading-row">
-            <div>
-              <p className="page-kicker">Rede externa entre dispositivos</p>
-              <h2 id="external-mesh-title" className="flex items-center gap-2"><Wifi aria-hidden="true" /> Malha da sua conta</h2>
-            </div>
-            <button
-              type="button"
-              className="ui-button ui-button-secondary"
-              onClick={() => void refreshMesh()}
-              disabled={meshBusy}
-            >
-              <RefreshCw aria-hidden="true" className={meshBusy ? 'animate-spin' : undefined} /> Atualizar
-            </button>
-          </div>
-          <p className="mt-2 text-sm text-[var(--text-muted)]">
-            Depois do login Google, o origin descobre dispositivos da mesma conta que estejam anunciando um lease público. O transporte tenta a rota direta e, quando ela não é alcançável, o origin reconstrói os blocos em paralelo com verificação SHA-256.
-          </p>
-          {meshPeers.length === 0 ? (
-            <p className="mt-4 text-sm text-[var(--text-muted)]">Nenhum outro dispositivo está online agora. A biblioteca continua disponível pelo origin e o cache local permanece rápido.</p>
-          ) : (
-            <ul className="mt-4 grid gap-3 sm:grid-cols-2">
-              {meshPeers.map((peer) => (
-                <li key={peer.node_id} className="rounded-lg border border-[var(--border)] bg-[var(--surface-subtle)] p-3 text-sm">
-                  <strong className="flex items-center gap-2"><Wifi aria-hidden="true" className="h-4 w-4 text-[var(--success)]" /> {peer.profile_name}</strong>
-                  <span className="mt-1 block text-xs text-[var(--text-muted)]">Conectado · endpoint {peer.address}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
 
       {loadState === 'error' ? (
         <section className="ui-error-state" role="alert">

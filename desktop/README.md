@@ -1,28 +1,18 @@
 # Aplicativo desktop concurse.io
 
-Este diretório empacota uma aplicação Tauri 2 **local-first híbrida**. A versão
-de produção leva a interface, o cache local e o motor de rede no instalador.
-O catálogo e as tentativas continuam rápidos no computador, enquanto o login
-Google, os vínculos da biblioteca e a sinalização da malha usam o origin
-configurado em `frontend/.env.desktop`.
+Este diretório empacota uma aplicação Tauri 2 local-first. A interface e o
+cache de provas ficam no computador, enquanto o login Google, a biblioteca de
+cada usuário e o compartilhamento de provas usam o fluxo central do projeto,
+com dados persistidos no Supabase por meio da API da aplicação.
 
-Na rede local, os nós anunciam seus hashes por broadcast UDP e trocam blocos
-de até 1 MiB por TCP. Fora da LAN, o origin autentica a conta, mantém leases
-curtos dos dispositivos e o endpoint `/mesh/fetch` baixa blocos em paralelo
-com fallback íntegro. Um peer desktop só entra na descoberta externa quando seu
-endpoint público é configurado e alcançável pelo origin; sem essa configuração,
-o aplicativo usa a biblioteca sincronizada pelo origin. O caminho direto entre peers usa um endpoint alcançável;
-quando dois clientes estão atrás de NAT sem rota, o origin faz a reconstrução
-dos blocos se conseguir alcançar algum provider. Para ligação direta entre NATs
-restritivos, configure STUN/TURN ou um relay dedicado no plano de controle.
-Cada arquivo é content-addressed por `sha256:<hash>` e só entra no cache depois
-da verificação do hash final.
+Quando o origin está disponível, a conta Google determina quais provas estão
+atribuídas ao usuário. O aplicativo consulta a biblioteca central e mantém uma
+cópia local para reabrir provas sincronizadas sem repetir o download. Não há
+descoberta de pares, broadcast UDP, servidor TCP local ou endpoint `/mesh/*`.
 
-O importador offline continua aceitando PDF para armazenar/redistribuir e JSON
-de prova extraída para abrir as questões. O fluxo híbrido usa os dados
-atribuídos à conta Google e mantém o cache local para reabrir provas sem
-repetir o download. O login desktop abre o navegador padrão, recebe um código
-loopback de uso único e nunca transforma a tela principal em um site.
+O importador desktop continua aceitando PDF para guardar localmente e JSON de
+prova extraída para abrir as questões. A extração de PDF/OCR continua sendo
+uma etapa separada; o aplicativo não executa OCR em segundo plano.
 
 ## Desenvolvimento
 
@@ -34,10 +24,10 @@ npm install
 npm run dev
 ```
 
-O modo de desenvolvimento carrega o Vite em `http://localhost:5173`. Para o
-perfil híbrido, preencha `VITE_API_ORIGIN` em `.env.desktop`; para testar sem
-origin use `npm run build:desktop:offline`. O backend precisa estar publicado
-com Google OAuth configurado para o login e com o plano de controle mesh ativo.
+O perfil normal usa `frontend/.env.desktop` e o origin configurado em
+`VITE_API_ORIGIN`. Para testar sem rede, use o perfil local com
+`npm run build:desktop:offline`; nesse modo o login e o compartilhamento entre
+usuários ficam indisponíveis, mas o cache e a importação local continuam.
 
 ## Instalador
 
@@ -45,11 +35,7 @@ com Google OAuth configurado para o login e com o plano de controle mesh ativo.
 npm run build
 ```
 
-O Tauri gera o executável e o instalador para o sistema operacional atual em
-`desktop/src-tauri/target/release/bundle/`. O instalador não recebe credenciais
-de serviço e não depende de variáveis de ambiente de produção.
-
-No Windows, o Tauri ainda usa o WebView2 como motor de renderização da
-interface React, mas o conteúdo carregado é o `frontend/dist` local. Remover
-também o WebView2 exigiria reescrever a interface em Win32/WinUI; isso não
-cria uma conexão com a internet.
+O Tauri gera o executável e os instaladores em
+`desktop/src-tauri/target/release/bundle/`. O instalador não contém credenciais
+de serviço. No Windows, a interface React é renderizada pelo WebView2 local;
+isso não abre o site como tela principal.

@@ -8,7 +8,6 @@ from .database import (
     Question,
     ExamAttempt,
     UserExam,
-    MeshPeer,
     ExamSource,
     GeneratedExamSession,
     ExamCatalog,

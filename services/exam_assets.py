@@ -2,9 +2,8 @@
 
 As questões continuam armazenando as referências legadas (por exemplo,
 ``/static/images/questions/foo.png``). Este módulo cria uma camada de
-identidade por conteúdo para a sincronização entre dispositivos e para uma
-futura distribuição P2P: o nome local do arquivo não é usado como identidade
-da imagem.
+identidade por conteúdo para a sincronização da biblioteca: o nome local do
+arquivo não é usado como identidade da imagem.
 """
 
 from __future__ import annotations

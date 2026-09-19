@@ -1,7 +1,7 @@
 import json
 import os
 from datetime import datetime
-from sqlalchemy import create_engine, Column, Integer, String, Text, Float, ForeignKey, Index, event, inspect, text
+from sqlalchemy import create_engine, Column, Integer, String, Text, Float, ForeignKey, event, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from dotenv import load_dotenv
 
@@ -257,27 +257,6 @@ class UserExam(Base):
 
     user = relationship("User", back_populates="exam_library")
     exam = relationship("Exam", back_populates="library_entries")
-
-
-class MeshPeer(Base):
-    """Lease curta de um nó que possui blobs da biblioteca do usuário."""
-
-    __tablename__ = 'mesh_peers'
-
-    node_id = Column(String(128), primary_key=True)
-    user_id = Column(Integer, nullable=False, index=True)
-    endpoint = Column(String(500), nullable=False)
-    asset_ids_json = Column(Text, nullable=False, default='[]')
-    last_seen = Column(String(30), nullable=False, index=True)
-    expires_at = Column(String(30), nullable=False, index=True)
-    created_at = Column(String(30), nullable=False)
-
-    __table_args__ = (
-        # A descoberta sempre filtra pela conta e pelo lease; o índice
-        # composto evita varredura da tabela quando o número de dispositivos
-        # crescer no Supabase.
-        Index('ix_mesh_peers_user_expires', 'user_id', 'expires_at'),
-    )
 
 
 class DesktopOAuthCode(Base):

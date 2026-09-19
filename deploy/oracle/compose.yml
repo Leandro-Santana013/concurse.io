@@ -24,20 +24,10 @@ services:
       APP_ADMIN_USER_IDS: ${APP_ADMIN_USER_IDS:-}
       AUTH_DEV_BYPASS: ${AUTH_DEV_BYPASS:-false}
       PDF_PARSE_CACHE_DIR: /var/lib/concurse/parse-cache
-      MESH_SHARED_SECRET: ${MESH_SHARED_SECRET:-}
-      MESH_NODE_ID: ${MESH_NODE_ID:-oracle-central}
-      MESH_CONTENT_DIR: /var/lib/concurse/mesh-content
-      MESH_CHUNK_SIZE: ${MESH_CHUNK_SIZE:-1048576}
-      MESH_FETCH_CONCURRENCY: ${MESH_FETCH_CONCURRENCY:-8}
-      MESH_PEER_TIMEOUT_SECONDS: ${MESH_PEER_TIMEOUT_SECONDS:-8}
-      MESH_PEER_CONNECT_TIMEOUT_SECONDS: ${MESH_PEER_CONNECT_TIMEOUT_SECONDS:-3}
-      MESH_HTTP_MAX_CONNECTIONS: ${MESH_HTTP_MAX_CONNECTIONS:-32}
-      MESH_HTTP_KEEPALIVE: ${MESH_HTTP_KEEPALIVE:-16}
     volumes:
       - exam_pdfs:/app/pdfs
       - question_images:/app/static/images/questions
       - parser_cache:/var/lib/concurse/parse-cache
-      - mesh_content:/var/lib/concurse/mesh-content
     expose:
       - "8000"
 
@@ -61,6 +51,5 @@ volumes:
   exam_pdfs:
   question_images:
   parser_cache:
-  mesh_content:
   caddy_data:
   caddy_config:

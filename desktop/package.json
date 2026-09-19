@@ -2,7 +2,7 @@
   "name": "concurse-desktop",
   "private": true,
   "version": "0.1.0",
-  "description": "Aplicativo desktop concurse.io local-first com rede mesh entre pares.",
+  "description": "Aplicativo desktop concurse.io local-first com biblioteca centralizada.",
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build",

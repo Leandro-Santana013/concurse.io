@@ -51,49 +51,19 @@ docker compose --env-file .env -f compose.yml logs -f app caddy
 
 Este Compose conecta ao Supabase indicado por `DATABASE_URL`; não copia o `concurse.db` local nem cria um banco novo. No primeiro início, `init_db()` pode criar tabelas, adicionar colunas ausentes e atualizar registros legados da tabela `users` para proteger dados pessoais. A atualização de dados atinge `users`; ela não reescreve o texto nem o gabarito de provas e questões. Faça backup do Supabase e confirme a chave de criptografia antes de iniciar o app; a VM também precisa de acesso de saída ao endpoint do banco.
 
-## Rede mesh privada
+## Compartilhamento centralizado
 
-O serviço mantém o Supabase como plano de controle e usa `mesh_peers` para
-descobrir nós da mesma conta. Configure `MESH_SHARED_SECRET` com o mesmo valor
-em cada nó, use um `MESH_NODE_ID` diferente por máquina e mantenha
-`MESH_CONTENT_DIR` em volume persistente. O snapshot da biblioteca hidrata esse
-cache com as imagens que a prova referencia.
+O compartilhamento entre dispositivos usa a biblioteca central do projeto. A
+conta Google identifica o usuário, `user_exams` vincula cada prova à biblioteca
+correta e o snapshot da biblioteca entrega os metadados e as imagens protegidas
+pela API. O Supabase continua sendo o banco de dados e o armazenamento da
+aplicação; não há leases de dispositivos, descoberta de pares ou volume de
+blocos de distribuição na VM.
 
-Um nó anuncia um lease curto em `POST /api/v1/mesh/announce`, consulta
-`GET /api/v1/mesh/providers/{asset_id}` e pode buscar o blob via
-`GET /api/v1/mesh/fetch/{asset_id}`. O proxy só aceita bytes cujo SHA-256
-corresponde ao manifesto. O endpoint anunciado precisa ser alcançável pela
-API (rede local, VPN ou encaminhamento HTTPS); o Compose não abre uma porta
-peer nova automaticamente. Não exponha a porta do peer sem HTTPS e uma regra
-de rede restrita.
-
-Um cliente desktop que possa alcançar os peers pode pedir um ticket em
-`GET /api/v1/mesh/ticket/{asset_id}`. O ticket contém URLs e tokens de curta
-duração; o cliente baixa diretamente dos pares e usa o origin apenas como
-fallback. O segredo `MESH_SHARED_SECRET` nunca é enviado ao cliente.
-
-### Distribuição por blocos
-
-Para arquivos maiores, o nó publica um manifesto content-addressed em
-`GET /api/v1/mesh/manifest/{asset_id}` e entrega blocos autenticados em
-`GET /api/v1/mesh/content/{asset_id}/chunk/{index}`. O endpoint de `fetch`
-consulta os peers em paralelo, distribui os índices entre eles, valida o SHA-256
-de cada bloco e só então monta o arquivo em uma troca atômica. Um peer lento ou
-indisponível é substituído pelos demais; se um nó antigo não entende o
-manifesto, a transferência inteira legada é usada automaticamente.
-
-O cache local é verificado antes da rede e o arquivo completo passa a ser
-provider depois de uma montagem íntegra. Isso reduz o tráfego do origin e faz
-com que uma prova continue disponível quando apenas um nó de usuário tem a
-cópia. Os valores `MESH_CHUNK_SIZE`, `MESH_FETCH_CONCURRENCY`,
-`MESH_HTTP_MAX_CONNECTIONS` e `MESH_HTTP_KEEPALIVE` controlam o paralelismo;
-comece com os padrões do `.env.example` e só aumente a concorrência após
-observar CPU, memória e banda da VM.
-
-O isolamento por conta Google continua valendo: a descoberta retorna apenas
-peers do mesmo usuário. A malha não transforma a prova em conteúdo público e
-não deve ser exposta diretamente à Internet sem HTTPS, token de peer e uma
-rede restrita.
+O aplicativo desktop mantém uma cópia local somente para acelerar a leitura e
+permitir reabrir provas sincronizadas quando a conexão cair. Uma prova nova ou
+uma atribuição feita em outro dispositivo aparece depois da próxima
+sincronização central.
 
 O Docker inicializa um volume nomeado vazio com os arquivos que já existem naquele caminho na imagem. Assim, no primeiro deploy, os volumes `exam_pdfs` e `question_images` recebem o conteúdo local incluído no build; depois disso, eles persistem e não são sobrescritos nas atualizações. Consulte a [documentação oficial de volumes Docker](https://docs.docker.com/engine/storage/volumes/).
 

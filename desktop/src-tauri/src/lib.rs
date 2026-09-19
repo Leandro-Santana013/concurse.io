@@ -26,22 +26,19 @@ fn offline_get_exam(exam_id: u64) -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
-fn offline_import_file(filename: String, data_base64: String, title: String) -> Result<serde_json::Value, String> {
+fn offline_import_file(
+    filename: String,
+    data_base64: String,
+    title: String,
+) -> Result<serde_json::Value, String> {
     offline::import_file(filename, data_base64, title)
 }
 
 #[tauri::command]
-fn offline_mesh_peers() -> Result<serde_json::Value, String> {
-    offline::mesh_peers()
-}
-
-#[tauri::command]
-fn offline_download_asset(asset_id: String) -> Result<serde_json::Value, String> {
-    offline::download_asset(asset_id)
-}
-
-#[tauri::command]
-fn desktop_begin_google_login(api_origin: String, next_path: String) -> Result<serde_json::Value, String> {
+fn desktop_begin_google_login(
+    api_origin: String,
+    next_path: String,
+) -> Result<serde_json::Value, String> {
     offline::begin_google_login(api_origin, next_path)
 }
 
@@ -56,7 +53,11 @@ fn offline_search(query: String) -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
-fn offline_submit_attempt(exam_id: u64, elapsed_seconds: u64, answers: serde_json::Value) -> Result<serde_json::Value, String> {
+fn offline_submit_attempt(
+    exam_id: u64,
+    elapsed_seconds: u64,
+    answers: serde_json::Value,
+) -> Result<serde_json::Value, String> {
     offline::submit_attempt(exam_id, elapsed_seconds, answers)
 }
 
@@ -94,8 +95,7 @@ fn offline_custom_exam(count: usize) -> Result<serde_json::Value, String> {
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
-            offline::init(app.handle())
-                .map_err(|error| std::io::Error::other(error))?;
+            offline::init(app.handle()).map_err(|error| std::io::Error::other(error))?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -105,8 +105,6 @@ pub fn run() {
             offline_folders,
             offline_get_exam,
             offline_import_file,
-            offline_mesh_peers,
-            offline_download_asset,
             desktop_begin_google_login,
             desktop_take_oauth_result,
             offline_search,
