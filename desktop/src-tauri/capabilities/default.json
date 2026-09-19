@@ -3,5 +3,10 @@
   "identifier": "main-capability",
   "description": "Permissões mínimas da janela principal.",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": [
+    "core:default",
+    "core:event:default",
+    "deep-link:default",
+    "opener:default"
+  ]
 }

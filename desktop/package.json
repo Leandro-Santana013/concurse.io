@@ -6,7 +6,13 @@
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build",
-    "icons": "tauri icon icon-source.svg"
+    "icons": "tauri icon icon-source.svg",
+    "android:init": "tauri android init",
+    "android:dev": "tauri android dev",
+    "android:build": "tauri android build --apk",
+    "ios:init": "tauri ios init",
+    "ios:dev": "tauri ios dev",
+    "ios:build": "tauri ios build"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0"

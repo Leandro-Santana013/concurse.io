@@ -39,3 +39,32 @@ O Tauri gera o executável e os instaladores em
 `desktop/src-tauri/target/release/bundle/`. O instalador não contém credenciais
 de serviço. No Windows, a interface React é renderizada pelo WebView2 local;
 isso não abre o site como tela principal.
+
+## Android e iOS
+
+O mesmo aplicativo pode ser empacotado para Android e iOS. O perfil móvel
+mantém o login Google, a biblioteca central da conta e o cache local, mas usa
+o navegador do sistema para autenticação e retorna ao aplicativo por
+`concurse://oauth/callback`.
+
+Na pasta `desktop`, os comandos Android são:
+
+```powershell
+npm run android:init
+npm run android:dev
+npm run android:build
+```
+
+Para iOS, a geração e a assinatura precisam ser executadas em um Mac com
+Xcode:
+
+```bash
+npm run ios:init
+npm run ios:dev
+npm run ios:build
+```
+
+Android exige JDK, Android SDK/NDK, Gradle e um dispositivo ou emulador. Esses
+componentes não estão instalados nesta máquina Windows; por isso a
+configuração e o fluxo de autenticação estão preparados, mas o APK ainda
+precisa ser gerado em uma máquina com o SDK Android configurado.

@@ -21,6 +21,8 @@ import { AuthConfig, AuthUser } from '../types/auth';
 export const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN || '').trim().replace(/\/+$/, '');
 export const OFFLINE_DESKTOP = import.meta.env.VITE_OFFLINE_DESKTOP === '1';
 export const DESKTOP_APP = import.meta.env.VITE_DESKTOP_APP === '1';
+export const TAURI_MOBILE_APP = import.meta.env.VITE_TAURI_MOBILE === '1';
+export const MOBILE_OAUTH_RETURN = 'concurse://oauth/callback';
 
 const DESKTOP_SESSION_KEY = 'concurse.desktop.session.v1';
 const API_REQUEST_TIMEOUT_MS = 8000;
@@ -152,7 +154,10 @@ export const api = {
 
   getGoogleLoginUrl(nextPath: string = '/'): string {
     const safePath = nextPath.startsWith('/') && !nextPath.startsWith('//') ? nextPath : '/';
-    return `${API_BASE}/auth/google/login?next=${encodeURIComponent(safePath)}`;
+    const mobileReturn = TAURI_MOBILE_APP
+      ? `&client=desktop&desktop_return=${encodeURIComponent(MOBILE_OAUTH_RETURN)}`
+      : '';
+    return `${API_BASE}/auth/google/login?next=${encodeURIComponent(safePath)}${mobileReturn}`;
   },
 
   async beginGoogleLogin(nextPath: string = '/'): Promise<void> {
@@ -161,6 +166,11 @@ export const api = {
         apiOrigin: API_ORIGIN,
         nextPath,
       });
+      return;
+    }
+    if (TAURI_MOBILE_APP) {
+      const { openUrl } = await import('@tauri-apps/plugin-opener');
+      await openUrl(this.getGoogleLoginUrl(nextPath));
       return;
     }
     window.location.assign(this.getGoogleLoginUrl(nextPath));
@@ -182,6 +192,31 @@ export const api = {
     if (!payload.session_token || !payload.user) throw new Error('O servidor não retornou uma sessão válida.');
     setDesktopSessionToken(payload.session_token);
     return payload.user;
+  },
+
+  async listenMobileOAuth(onCode: (code: string) => void): Promise<() => void> {
+    if (!TAURI_MOBILE_APP) return () => undefined;
+    const { getCurrent, onOpenUrl } = await import('@tauri-apps/plugin-deep-link');
+    const consume = (urls: string[] | null | undefined) => {
+      for (const value of urls || []) {
+        try {
+          const parsed = new URL(value);
+          if (
+            parsed.protocol !== 'concurse:'
+            || parsed.hostname !== 'oauth'
+            || parsed.pathname !== '/callback'
+          ) continue;
+          const error = parsed.searchParams.get('error');
+          const code = parsed.searchParams.get('code');
+          if (error) onCode(`__oauth_error__:${error}`);
+          else if (code) onCode(code);
+        } catch {
+          // A deep link from another source is ignored.
+        }
+      }
+    };
+    consume(await getCurrent());
+    return onOpenUrl(consume);
   },
 
   async logout(): Promise<void> {

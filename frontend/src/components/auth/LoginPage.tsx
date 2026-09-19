@@ -6,6 +6,7 @@ import { api } from '../../services/api';
 
 const DESKTOP_APP = import.meta.env.VITE_DESKTOP_APP === '1';
 const OFFLINE_DESKTOP = import.meta.env.VITE_OFFLINE_DESKTOP === '1';
+const TAURI_MOBILE_APP = import.meta.env.VITE_TAURI_MOBILE === '1';
 
 const errorMessages: Record<string, string> = {
   access_denied: 'O acesso pelo Google foi cancelado. Você pode tentar novamente quando quiser.',
@@ -58,26 +59,51 @@ export const LoginPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!DESKTOP_APP || OFFLINE_DESKTOP) return;
+    if ((!DESKTOP_APP && !TAURI_MOBILE_APP) || OFFLINE_DESKTOP) return;
     let active = true;
+    let stopMobileListener: (() => void) | undefined;
+    const completeLogin = async (code: string) => {
+      if (!active) return;
+      if (code.startsWith('__oauth_error__:')) {
+        setIsRedirecting(false);
+        const errorCode = code.slice('__oauth_error__:'.length);
+        setDesktopLoginError(errorMessages[errorCode] || 'O login Google não foi concluído.');
+        return;
+      }
+      try {
+        await api.exchangeDesktopOAuthCode(code);
+        await refreshSession();
+      } catch (error) {
+        if (active) {
+          setIsRedirecting(false);
+          setDesktopLoginError(error instanceof Error ? error.message : 'Não foi possível concluir o login Google.');
+        }
+      }
+    };
+    if (TAURI_MOBILE_APP) {
+      void api.listenMobileOAuth((code) => { void completeLogin(code); })
+        .then((stop) => {
+          if (!active) {
+            stop();
+            return;
+          }
+          stopMobileListener = stop;
+        })
+        .catch((error) => {
+          if (active) {
+            setIsRedirecting(false);
+            setDesktopLoginError(error instanceof Error ? error.message : 'Não foi possível receber o retorno do Google.');
+          }
+        });
+      return () => {
+        active = false;
+        stopMobileListener?.();
+      };
+    }
     const poll = window.setInterval(() => {
       void api.takeDesktopOAuthCode().then(async (code) => {
         if (!active || !code) return;
-        if (code.startsWith('__oauth_error__:')) {
-          setIsRedirecting(false);
-          const errorCode = code.slice('__oauth_error__:'.length);
-          setDesktopLoginError(errorMessages[errorCode] || 'O login Google não foi concluído.');
-          return;
-        }
-        try {
-          await api.exchangeDesktopOAuthCode(code);
-          await refreshSession();
-        } catch (error) {
-          if (active) {
-            setIsRedirecting(false);
-            setDesktopLoginError(error instanceof Error ? error.message : 'Não foi possível concluir o login Google.');
-          }
-        }
+        await completeLogin(code);
       }).catch((error) => {
         if (active) {
           setIsRedirecting(false);
@@ -88,6 +114,7 @@ export const LoginPage: React.FC = () => {
     return () => {
       active = false;
       window.clearInterval(poll);
+      stopMobileListener?.();
     };
   }, [refreshSession]);
 
@@ -133,7 +160,7 @@ export const LoginPage: React.FC = () => {
                   return;
                 }
                 setIsRedirecting(true);
-                if (DESKTOP_APP) {
+                if (DESKTOP_APP || TAURI_MOBILE_APP) {
                   event.preventDefault();
                   void api.beginGoogleLogin(nextPath).catch((error) => {
                     setIsRedirecting(false);

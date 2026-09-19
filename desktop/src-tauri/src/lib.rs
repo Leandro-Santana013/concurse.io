@@ -94,6 +94,8 @@ fn offline_custom_exam(count: usize) -> Result<serde_json::Value, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             offline::init(app.handle()).map_err(|error| std::io::Error::other(error))?;
             Ok(())

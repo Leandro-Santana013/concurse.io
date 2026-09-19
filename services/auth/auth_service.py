@@ -205,7 +205,7 @@ def normalize_return_path(value: Optional[str]) -> str:
 
 
 def normalize_desktop_return(value: Optional[str]) -> str | None:
-    """Aceita somente o callback loopback criado pelo aplicativo instalado."""
+    """Aceita o callback loopback do desktop ou o esquema privado do mobile."""
 
     candidate = str(value or "").strip()
     if not candidate:
@@ -216,19 +216,15 @@ def normalize_desktop_return(value: Optional[str]) -> str | None:
         port = parsed.port
     except ValueError:
         return None
-    if (
-        parsed.scheme != "http"
-        or hostname not in {"127.0.0.1", "localhost"}
-        or parsed.path != "/callback"
-        or port is None
-        or not 1024 <= int(port) <= 65535
-        or parsed.username
-        or parsed.password
-        or parsed.query
-        or parsed.fragment
-    ):
+    if parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path != "/callback":
         return None
-    return urlunsplit(("http", f"{hostname}:{port}", "/callback", "", ""))
+    if parsed.scheme == "http":
+        if hostname not in {"127.0.0.1", "localhost"} or port is None or not 1024 <= int(port) <= 65535:
+            return None
+        return urlunsplit(("http", f"{hostname}:{port}", "/callback", "", ""))
+    if parsed.scheme == "concurse" and hostname == "oauth" and port is None:
+        return "concurse://oauth/callback"
+    return None
 
 
 def is_cookie_secure(request: Request) -> bool:

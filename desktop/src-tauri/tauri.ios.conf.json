@@ -1,0 +1,19 @@
+{
+  "build": {
+    "beforeDevCommand": "npm --prefix ../frontend run dev -- --host 0.0.0.0",
+    "beforeBuildCommand": "npm --prefix ../frontend run build:mobile"
+  },
+  "plugins": {
+    "deep-link": {
+      "mobile": [
+        {
+          "scheme": ["concurse"],
+          "appLink": false
+        }
+      ]
+    },
+    "opener": {
+      "open": true
+    }
+  }
+}

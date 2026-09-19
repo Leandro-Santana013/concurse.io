@@ -281,6 +281,39 @@ def test_desktop_oauth_returns_errors_to_loopback_callback(auth_client):
     assert parse_qs(redirect.query) == {"error": ["access_denied"]}
 
 
+def test_mobile_oauth_uses_the_registered_private_scheme(auth_client, monkeypatch):
+    client, _ = auth_client
+    identity = {
+        "sub": "mobile-google-account",
+        "email": "mobile@example.com",
+        "email_verified": True,
+        "name": "Mobile",
+        "picture": "",
+        "iss": "https://accounts.google.com",
+    }
+    monkeypatch.setattr(auth_api, "exchange_google_code", lambda _code, _redirect_uri: identity)
+
+    login_response = client.get(
+        "/api/v1/auth/google/login",
+        params={
+            "client": "desktop",
+            "desktop_return": "concurse://oauth/callback",
+        },
+    )
+    state = parse_qs(urlparse(login_response.headers["location"]).query)["state"][0]
+    callback_response = client.get(
+        "/api/v1/auth/google/callback",
+        params={"code": "mobile-code", "state": state},
+    )
+
+    assert callback_response.status_code == 302
+    redirect = urlparse(callback_response.headers["location"])
+    assert redirect.scheme == "concurse"
+    assert redirect.netloc == "oauth"
+    assert redirect.path == "/callback"
+    assert parse_qs(redirect.query)["code"][0]
+
+
 def test_google_callback_rejects_invalid_state(auth_client):
     client, _ = auth_client
 
