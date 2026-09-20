@@ -1,0 +1,4 @@
+project_id = "pvojiokewtteroaraykk"
+
+[functions.media-gateway]
+verify_jwt = true
