@@ -42,6 +42,14 @@ def reprocess_all_exams():
 
     with Session() as session:
         exam_ids = [e.id for e in session.query(Exam.id).order_by(Exam.id).all()]
+
+    requested_ids = {
+        int(value.strip())
+        for value in os.getenv("REPROCESS_EXAM_IDS", "").split(",")
+        if value.strip().isdigit()
+    }
+    if requested_ids:
+        exam_ids = [exam_id for exam_id in exam_ids if exam_id in requested_ids]
     
     print(f"Total de exames encontrados no banco: {len(exam_ids)}\n")
 
@@ -84,18 +92,16 @@ def reprocess_all_exams():
             questions = parse_exam_document(
                 pdf_bytes_or_path=pdf_path,
                 exam_id=exam_id,
-                extract_images=True
+                extract_images=True,
+                allow_ocr=False,
             )
 
             if not questions or len(questions) < 2:
-                print(f"   Aviso: PDF é scan/não possui camada textual OCR ou questões ({pdf_path}).")
-                with Session() as session:
-                    exam = session.query(Exam).filter_by(id=exam_id).first()
-                    if exam:
-                        exam.status = 'Erro'
-                        exam.progress_message = 'Documento escaneado/sem texto OCR pesquisável.'
-                        session.commit()
-                error_count += 1
+                print(
+                    "   Ignorado: extração textual insuficiente ou OCR seria "
+                    f"acionado ({pdf_path}); dados existentes preservados."
+                )
+                skipped_count += 1
                 continue
 
             gabarito_dict = {}
@@ -173,38 +179,23 @@ def reprocess_all_exams():
                 answer_source = "none"
                 updated_questions, stats = merge_exam_with_gabarito(questions, {})
 
-            if not has_complete_official_answer_key(match_result, stats, answer_source):
-                with Session() as session:
-                    exam = session.query(Exam).filter_by(id=exam_id).first()
-                    if exam:
-                        exam.has_official_answers = 0
-                        exam.answer_key_source = "none"
-                        exam.gabarito_coverage = stats.get("coverage_pct", 0.0)
-                        exam.gabarito_text = format_gabarito_summary(gabarito_dict)
-                        exam.status = "Erro"
-                        exam.progress = -1
-                        exam.progress_message = "Gabarito oficial não foi validado; prova não aprovada."
-                        exam.error_type = "ANSWER_KEY_NOT_FOUND"
-                        session.add(AnswerKeyMatchAudit(
-                            exam_id=exam.id,
-                            accepted=0,
-                            status=match_result.status,
-                            confidence=match_result.confidence,
-                            answer_source="none",
-                            method=match_result.method,
-                            candidate_page=match_result.candidate_page,
-                            decision_json=match_result.to_audit_json(),
-                            created_at=datetime.now().isoformat(),
-                        ))
-                        session.commit()
-                print(f"   Gabarito não validado para o exame {exam_id}; prova não aprovada.\n")
-                error_count += 1
-                continue
+            if not match_result.accepted:
+                print(
+                    "   Gabarito oficial não validado; questões serão "
+                    "atualizadas sem alterar o status ou o gabarito existente."
+                )
 
             with Session() as session:
                 exam = session.query(Exam).filter_by(id=exam_id).first()
                 if not exam:
                     continue
+
+                existing_answers = {}
+                for old_question in session.query(Question).filter_by(exam_id=exam_id).all():
+                    old_number = str(old_question.numero_questao or "").strip()
+                    old_answer = str(old_question.correct_answer or "").strip()
+                    if old_number and old_answer and old_number not in existing_answers:
+                        existing_answers[old_number] = old_answer
 
                 session.query(Question).filter_by(exam_id=exam_id).delete()
 
@@ -220,11 +211,15 @@ def reprocess_all_exams():
                 sorted_questions = sorted(updated_questions, key=_q_sort_key)
 
                 for q_data in sorted_questions:
+                    question_number = str(q_data.get('numero_questao') or '').strip()
+                    answer = str(q_data.get('resposta') or '').strip()
+                    if not answer:
+                        answer = existing_answers.get(question_number, '')
                     new_q = Question(
                         exam_id=exam_id,
                         statement=q_data['enunciado'],
                         options=json.dumps(q_data['opcoes'], ensure_ascii=False),
-                        correct_answer=q_data['resposta'],
+                        correct_answer=answer,
                         subject=q_data.get('disciplina', 'Geral'),
                         images=json.dumps(q_data['images'], ensure_ascii=False) if q_data.get('images') else None,
                         numero_questao=str(q_data['numero_questao']),
@@ -232,19 +227,25 @@ def reprocess_all_exams():
                     )
                     session.add(new_q)
 
-                exam.status = 'Aprovada'
-                exam.progress = 100
-                exam.progress_message = f"Reprocessada com sucesso! ({len(updated_questions)} questões)"
-                exam.has_official_answers = 1 if stats['has_official_answers'] else 0
-                exam.gabarito_coverage = stats['coverage_pct']
-                exam.answer_key_source = answer_source
-                exam.gabarito_text = format_gabarito_summary(gabarito_dict)
+                if match_result.accepted:
+                    exam.status = 'Aprovada'
+                    exam.progress = 100
+                    exam.progress_message = f"Reprocessada com sucesso! ({len(updated_questions)} questões)"
+                    exam.has_official_answers = 1 if stats['has_official_answers'] else 0
+                    exam.gabarito_coverage = stats['coverage_pct']
+                    exam.answer_key_source = answer_source
+                    exam.gabarito_text = format_gabarito_summary(gabarito_dict)
+                else:
+                    exam.progress_message = (
+                        f"Questões reprocessadas sem alteração do gabarito "
+                        f"({len(updated_questions)} questões)"
+                    )
                 session.add(AnswerKeyMatchAudit(
                     exam_id=exam.id,
                     accepted=1 if match_result.accepted else 0,
                     status=match_result.status,
                     confidence=match_result.confidence,
-                    answer_source=answer_source,
+                    answer_source=(answer_source if match_result.accepted else "preserved_existing"),
                     method=match_result.method,
                     candidate_page=match_result.candidate_page,
                     decision_json=match_result.to_audit_json(),

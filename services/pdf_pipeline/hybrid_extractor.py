@@ -82,12 +82,14 @@ _NATIVE_NAMED_QUESTION_HEADER_RE = re.compile(
     r"(?=$|[ \t\.\)\-–—,:\"'])"
 )
 _NATIVE_OPTION_MARKER_RE = re.compile(
-    r"(?im)^\s*(?:\(?[A-Ea-e]\s*\)|[A-Ea-e]\s*[\.\-:])\s+"
+    r"(?im)^[ \t]*(?:\(?[A-Ea-e]\s*\)[ \t]*|"
+    r"[A-Ea-e]\s*[\.\-:][ \t]+|[A-Ea-e]\t[ \t]*\S)"
 )
 _DECLARED_QUESTION_COUNT_PATTERNS = (
     re.compile(
         r"(?i)\b(?:composto|cont[eé]m|contendo|total(?:iza|de)?)"
-        r"\D{0,30}(\d{1,3})\s+quest(?:[õo]es|oes)\b"
+        r"\D{0,30}(\d{1,3})\s*"
+        r"(?:\([^\)\n]{1,30}\)\s*)?\s+quest(?:[õo]es|oes)\b"
     ),
     re.compile(r"(?i)\b(\d{1,3})\s+quest(?:[õo]es|oes)\b"),
 )
@@ -116,6 +118,171 @@ def _native_question_header_match(text: str):
     )
 
 
+_SOURCE_PARAGRAPH_LINE_RE = re.compile(
+    r"(?m)^[ \t]*@@P(?P<number>\d{1,3})(?=\s|$)"
+)
+
+
+def _source_title_from_prefix(prefix: str) -> str:
+    """Extrai o título editorial que antecede o primeiro parágrafo numerado."""
+    lines = [line.strip() for line in str(prefix or "").splitlines() if line.strip()]
+    if not lines:
+        return ""
+
+    subject_line = re.compile(
+        r"(?i)^(?:CONHECIMENTOS\b|L[ÍI]NGUA\b|PORTUGU[ÊE]S\b|"
+        r"MATEM[ÁA]TICA\b|DIREITO\b|NO[ÇC]ÕES\b)"
+    )
+    subject_index = None
+    for index, line in enumerate(lines):
+        if subject_line.match(line):
+            subject_index = index
+
+    candidates = lines[subject_index:] if subject_index is not None else lines[-2:]
+    if not candidates:
+        return ""
+
+    first = re.sub(
+        r"(?i)^(?:CONHECIMENTOS(?:\s+(?:B[ÁA]SICOS|GERAIS|ESPEC[ÍI]FICOS|REGIONAIS))?\s*)?"
+        r"(?:L[ÍI]NGUA\s+(?:PORTUGUESA|INGLESA)|PORTUGU[ÊE]S|MATEM[ÁA]TICA|"
+        r"DIREITO(?:\s+[^:–—-]+)?)\s*[:–—-]?\s*",
+        "",
+        candidates[0],
+    ).strip()
+    title_lines = ([first] if first else []) + [line for line in candidates[1:] if line]
+    title = " ".join(title_lines).strip()
+    if title.upper() in {"TRANSPETRO", "CONHECIMENTOS BÁSICOS", "CONHECIMENTOS GERAIS"}:
+        return ""
+    return re.sub(r"\s+", " ", title)
+
+
+def _extract_numbered_source_context_blocks(
+    full_text: str,
+    found_positions: List[Tuple[int, int, int]],
+) -> List[Tuple[int, int, str, int]]:
+    """Recupera textos de apoio cujo PDF só imprime números na margem.
+
+    Esses documentos não têm o banner textual ``Texto para as questões...``.
+    Os marcadores ``@@P`` foram inseridos pelo detector geométrico a partir da
+    fonte/gutter original. Assim, o scanner global só enxerga os cabeçalhos
+    reais e podemos associar o apoio até o próximo grupo numerado.
+    """
+    marker_matches = list(_SOURCE_PARAGRAPH_LINE_RE.finditer(full_text or ""))
+    if len(marker_matches) < 2:
+        return []
+
+    groups: List[List[re.Match[str]]] = []
+    current: List[re.Match[str]] = []
+    previous_number: Optional[int] = None
+    previous_start: Optional[int] = None
+    for match in marker_matches:
+        number = int(match.group("number"))
+        starts_new_group = bool(
+            current
+            and (
+                previous_number is None
+                or number != previous_number + 1
+                or (
+                    previous_start is not None
+                    and match.start() - previous_start > 16000
+                )
+            )
+        )
+        if starts_new_group:
+            groups.append(current)
+            current = []
+        current.append(match)
+        previous_number = number
+        previous_start = match.start()
+    if current:
+        groups.append(current)
+
+    question_positions = sorted(
+        (
+            int(number),
+            int(start),
+            int(end),
+        )
+        for number, start, end in found_positions
+        if 1 <= int(number) <= 250
+    )
+    contexts: List[Tuple[int, int, str, int]] = []
+    for group_index, group in enumerate(groups):
+        if len(group) < 2:
+            continue
+        first_marker = group[0]
+        last_marker = group[-1]
+        next_group_start = (
+            groups[group_index + 1][0].start()
+            if group_index + 1 < len(groups)
+            else len(full_text)
+        )
+        group_questions = [
+            item
+            for item in question_positions
+            if last_marker.end() <= item[1] < next_group_start
+        ]
+        if not group_questions:
+            continue
+
+        first_question_start = min(item[1] for item in group_questions)
+        prefix_start = full_text.rfind("\n\n", 0, first_marker.start()) + 2
+        title = _source_title_from_prefix(
+            full_text[prefix_start:first_marker.start()]
+        )
+        body = full_text[first_marker.start():first_question_start].strip()
+        if not body:
+            continue
+        context_text = f"### {title}\n\n{body}" if title else body
+        q_min = min(item[0] for item in group_questions)
+        q_max = max(item[0] for item in group_questions)
+        contexts.append((q_min, q_max, context_text, prefix_start))
+    return contexts
+
+
+def _prepare_numbered_source_context(
+    text: str,
+    *,
+    preserve_native_word_boundaries: bool = False,
+) -> str:
+    """Formata o bloco numerado sem acionar a heurística de poema."""
+    if "@@P" not in str(text or ""):
+        return restore_exam_typography(
+            text,
+            preserve_native_word_boundaries=preserve_native_word_boundaries,
+        )
+
+    first_marker = _SOURCE_PARAGRAPH_LINE_RE.search(text)
+    if not first_marker:
+        return restore_exam_typography(
+            text,
+            preserve_native_word_boundaries=preserve_native_word_boundaries,
+        )
+
+    title = text[:first_marker.start()].strip()
+    body = text[first_marker.start():]
+    markers = list(_SOURCE_PARAGRAPH_LINE_RE.finditer(body))
+    paragraphs: List[str] = []
+    for index, marker in enumerate(markers):
+        end = markers[index + 1].start() if index + 1 < len(markers) else len(body)
+        paragraph = body[marker.start():end].strip()
+        paragraph = re.sub(
+            r"(?<=[A-Za-zÀ-ÿ])-[ \t\r\n]+(?=[a-zà-ÿ])",
+            "",
+            paragraph,
+        )
+        paragraph = re.sub(r"\s*\n\s*", " ", paragraph).strip()
+        paragraphs.append(paragraph)
+
+    prepared = "\n\n".join(part for part in ([title] if title else []) + paragraphs if part)
+    return prepared
+
+
+def _unprotect_source_paragraph_markers(text: str) -> str:
+    """Converte marcadores internos em números visíveis após toda a tipografia."""
+    return re.sub(r"@@P(\d{1,3})(?=\s|$)", r"\1", str(text or ""))
+
+
 def _declared_question_count(text: str) -> Optional[int]:
     """Encontra uma quantidade de questões declarada no caderno/capa."""
     candidates = []
@@ -126,6 +293,78 @@ def _declared_question_count(text: str) -> Optional[int]:
     return max(plausible) if plausible else None
 
 
+def _reconcile_rust_question_chain(
+    questions: List[Dict[str, Any]],
+    full_text: str,
+) -> List[Dict[str, Any]]:
+    """Remove reinícios espúrios quando o scanner estrito fecha uma cadeia.
+
+    O processador Rust considera banners de disciplina para permitir provas que
+    reiniciam a numeração. Em PDFs com rodapés numéricos, porém, esse caminho
+    pode escolher ``2, 12, 1..N`` em vez da cadeia física ``1..N``. O scanner
+    estrito já calcula a cadeia contínua sem reinícios; quando ela é completa e
+    o resultado processado só tem candidatos extras/duplicados, usamos suas
+    posições como âncora para escolher o corpo correto de cada número. Nenhuma
+    questão é criada aqui e uma cadeia incompleta continua no caminho original.
+    """
+
+    if len(questions) < 5:
+        return questions
+
+    strict_headers = rust_scan_question_headers(full_text)
+    if not strict_headers or len(strict_headers) < 5:
+        return questions
+
+    strict_numbers: List[int] = []
+    strict_positions: Dict[int, int] = {}
+    for header in strict_headers:
+        try:
+            number = int(header.get("number"))
+            position = int(header.get("start"))
+        except (AttributeError, TypeError, ValueError):
+            continue
+        if number in strict_positions:
+            continue
+        strict_numbers.append(number)
+        strict_positions[number] = position
+
+    if (
+        not strict_numbers
+        or strict_numbers[0] != 1
+        or strict_numbers != list(range(1, strict_numbers[-1] + 1))
+        or len(questions) <= len(strict_numbers)
+    ):
+        return questions
+
+    candidates_by_number: Dict[int, List[Dict[str, Any]]] = {}
+    for question in questions:
+        try:
+            number = int(question.get("numero_questao"))
+        except (AttributeError, TypeError, ValueError):
+            continue
+        if number in strict_positions:
+            candidates_by_number.setdefault(number, []).append(question)
+
+    if any(number not in candidates_by_number for number in strict_numbers):
+        return questions
+
+    selected: List[Dict[str, Any]] = []
+    for number in strict_numbers:
+        candidates = candidates_by_number[number]
+        target = strict_positions[number]
+
+        def distance(candidate: Dict[str, Any]) -> Tuple[int, int]:
+            try:
+                start = int(candidate.get("start_char"))
+            except (AttributeError, TypeError, ValueError):
+                return (10**12, 0)
+            return (abs(start - target), start)
+
+        selected.append(min(candidates, key=distance))
+
+    return selected
+
+
 def _assess_native_text_quality(
     full_text: str,
     *,
@@ -133,6 +372,7 @@ def _assess_native_text_quality(
     total_pages: int = 1,
     image_page_count: int = 0,
     total_image_count: int = 0,
+    full_page_scan_detected: bool = False,
 ) -> Dict[str, Any]:
     """Avalia se a camada nativa parece confiável para estruturar a prova.
 
@@ -145,6 +385,17 @@ def _assess_native_text_quality(
     document_source = str(document_text or text)
     question_numbers = _native_question_numbers(text)
     declared_count = _declared_question_count(document_source)
+    document_question_numbers = _native_question_numbers(document_source)
+    if (
+        not full_page_scan_detected
+        and declared_count
+        and document_question_numbers == list(range(1, declared_count + 1))
+    ):
+        # O detector de blocos pode perder cabeçalhos quando a página tem
+        # muitas imagens inline, embora a camada textual nativa contenha a
+        # sequência completa. Nesse caso, não acione OCR por uma deficiência
+        # do diagnóstico intermediário.
+        question_numbers = document_question_numbers
     option_marker_count = len(_NATIVE_OPTION_MARKER_RE.findall(text))
     replacement_count = text.count("\ufffd")
     mojibake_count = len(
@@ -153,7 +404,10 @@ def _assess_native_text_quality(
     page_count = max(1, int(total_pages or 1))
     image_ratio = float(image_page_count or 0) / page_count
     average_images = float(total_image_count or 0) / page_count
-    scan_like = image_ratio >= 0.75 and average_images >= 2.0
+    # Embedded diagrams and illustrations are common in text-based exams.
+    # Use the geometric full-page scan profile computed by the caller instead
+    # of treating image-object density as evidence that the text is OCR output.
+    scan_like = bool(full_page_scan_detected)
 
     reasons: List[str] = []
     if replacement_count >= 3:
@@ -185,6 +439,7 @@ def _assess_native_text_quality(
         "mojibake_count": mojibake_count,
         "image_page_ratio": image_ratio,
         "average_images_per_page": average_images,
+        "full_page_scan_detected": scan_like,
     }
 
 
@@ -265,7 +520,198 @@ def _extract_native_question_chunks(doc: fitz.Document) -> Dict[int, str]:
     flush_current()
     return chunks
 
-def extract_options_from_chunk(chunk: str) -> Tuple[Dict[str, str], Optional[str]]:
+
+_PDF_PAGE_CODE_RE = re.compile(
+    r"(?i)(?<![A-Z0-9])\*?[A-Z]{2}\d{4}[A-Z]{2}\d{1,3}\*?(?![A-Z0-9])"
+)
+_NATIVE_ENCODING_DAMAGE_RE = re.compile(
+    r"(?:\ufffd|Ã[\x80-\xbf]|Â[\x80-\xbf]|â(?:[\x80-\xbf]|[€™œ]))"
+)
+
+_PDF_SECTION_HEADER_TAIL_RE = re.compile(
+    r"\s+(?:"
+    r"LINGUAGENS\s*,?\s*C[ÓO]DIGOS\s+E\s+SUAS\s+TECNOLOGIAS|"
+    r"CI[ÊE]NCIAS\s+(?:HUMANAS|DA\s+NATUREZA)\s+E\s+SUAS\s+TECNOLOGIAS|"
+    r"MATEM[ÁA]TICA\s+E\s+SUAS\s+TECNOLOGIAS"
+    r")\s+QUEST[ÕO]ES\s+DE\s+\d{1,3}\s+A\s+\d{1,3}"
+    r"(?:\s+QUEST[ÕO]ES\s+DE\s+\d{1,3}\s+A\s+\d{1,3}(?:\s*\([^)]*\))?)?\s*$",
+    re.IGNORECASE,
+)
+
+
+def _strip_pdf_page_code_tail(text: Any) -> str:
+    """Remove identificadores PCI de paginação onde quer que vazem no texto."""
+
+    value = str(text or "")
+    return _PDF_PAGE_CODE_RE.sub("", value)
+
+
+def _strip_trailing_pdf_section_header(text: Any) -> str:
+    """Remove um banner de seção/range repetido que tenha sido colado ao fim."""
+
+    value = str(text or "")
+    return _PDF_SECTION_HEADER_TAIL_RE.sub("", value).rstrip()
+
+
+def _strip_trailing_exam_banner(text: Any) -> str:
+    """Remove banners de caderno que vazam para a última alternativa.
+
+    A diagramação da Transpetro repete ``RASCUNHO`` e ``TRANSPETRO`` entre
+    blocos. A camada textual pode colar esse rodapé ao fim da alternativa E;
+    o conteúdo anterior ao primeiro banner continua sendo o texto impresso da
+    alternativa.
+    """
+
+    value = str(text or "")
+    value = re.split(r"\s+RASCUNHO\b", value, maxsplit=1)[0]
+    # O cabeçalho institucional é impresso em caixa alta. Restringir a
+    # remoção a esse formato evita apagar uma menção legítima a Transpetro
+    # dentro do texto de uma alternativa.
+    value = re.sub(r"\s+TRANSPETRO\b.*$", "", value)
+    return value.rstrip()
+
+
+def _strip_exam_watermark_token(text: Any) -> str:
+    """Remove a leaked standalone ``RASCUNHO`` watermark token."""
+
+    value = re.sub(r"(?i)(?<![A-ZÀ-Ý0-9])RASCUNHO(?![A-ZÀ-Ý0-9])", "", str(text or ""))
+    value = re.sub(r"[ \t]+\n", "\n", value)
+    value = re.sub(r"\n[ \t]+", "\n", value)
+    return value.strip()
+
+
+def _strict_native_question_integrity(
+    questions: List[Dict[str, Any]],
+    *,
+    expected_count: int,
+    expected_option_labels: str = "ABCDE",
+) -> Dict[str, List[str]]:
+    """Gate fail-closed para texto nativo que não pode perder caracteres.
+
+    A validação de OCR existente também procura palavras aglutinadas, mas é
+    deliberadamente probabilística e pode sinalizar palavras legítimas. Para
+    um caderno textual como o da Transpetro, este gate usa apenas invariantes
+    determinísticos: sequência, rótulos, conteúdo não vazio, codificação e
+    ausência de banners.
+    """
+
+    expected_labels = set(expected_option_labels)
+    issues: Dict[str, List[str]] = {}
+    if len(questions) != int(expected_count):
+        issues["document"] = [
+            f"question_count:{len(questions)}/{int(expected_count)}"
+        ]
+
+    for index, question in enumerate(questions or [], start=1):
+        number = str(question.get("numero_questao") or "").strip()
+        question_issues: List[str] = []
+        if number != str(index):
+            question_issues.append(f"numero_questao:{number or 'vazio'}")
+        statement = str(question.get("enunciado") or "")
+        options = question.get("opcoes") or {}
+        labels = {str(label).strip().upper() for label in options}
+        if not statement.strip():
+            question_issues.append("enunciado_vazio")
+        if labels != expected_labels:
+            question_issues.append("rotulos_alternativas_incompletos")
+        if any(not str(options.get(label) or "").strip() for label in expected_labels):
+            question_issues.append("alternativa_vazia")
+        fields = [statement, *[str(options.get(label) or "") for label in expected_labels]]
+        if any(_NATIVE_ENCODING_DAMAGE_RE.search(value) for value in fields):
+            question_issues.append("codificacao_danificada")
+        if any(
+            re.search(r"(?i)\b(?:RASCUNHO|TRANSPETRO|pcimarkpci|www\.pciconcursos)\b", value)
+            for value in fields[1:]
+        ):
+            question_issues.append("banner_ou_marca_dagua")
+        if question_issues:
+            issues[number or f"index_{index}"] = sorted(set(question_issues))
+
+    return issues
+
+
+def _join_touching_native_word_fragments(text: str, words: Any) -> str:
+    """Recompõe tokens que o PDF separou apesar de não haver espaço visual."""
+
+    line_words: Dict[Tuple[int, int], List[Tuple[float, float, str, int]]] = {}
+    for word in words or []:
+        try:
+            x0, _y0, x1, _y1, token, block_no, line_no, word_no = word[:8]
+            line_words.setdefault((int(block_no), int(line_no)), []).append(
+                (float(x0), float(x1), str(token), int(word_no))
+            )
+        except (TypeError, ValueError):
+            continue
+
+    value = str(text or "")
+    for line in line_words.values():
+        line.sort(key=lambda item: item[3])
+        for left, right in zip(line, line[1:]):
+            left_token, right_token = left[2], right[2]
+            gap = right[0] - left[1]
+            if gap < -0.5 or gap > 0.75:
+                continue
+            if not re.fullmatch(r"[A-Za-zÀ-ÿ]{3,}", left_token):
+                continue
+            if not re.fullmatch(r"[A-Za-zÀ-ÿ]{2,}[.,;:!?)]*", right_token):
+                continue
+            split_pair = re.compile(
+                rf"(?<![A-Za-zÀ-ÿ]){re.escape(left_token)}\s+{re.escape(right_token)}"
+                rf"(?![A-Za-zÀ-ÿ])"
+            )
+            value = split_pair.sub(lambda _match: left_token + right_token, value, count=1)
+    return value
+
+
+def _extract_native_text_question_chunks(doc: fitz.Document) -> Dict[int, str]:
+    """Extrai questões explicitamente numeradas na ordem textual do PDF.
+
+    Usa o fluxo de texto do PDF, que preserva a ordem das colunas em cadernos
+    como o ENEM. A extração espacial legada continua disponível para scans;
+    este mapa é apenas uma fonte de recuperação para PDFs com texto nativo.
+    Numerações simples de páginas de instruções não são tratadas como questões.
+    """
+
+    chunks: Dict[int, str] = {}
+    for page in doc:
+        current_number: Optional[int] = None
+        current_lines: List[str] = []
+
+        def flush_current() -> None:
+            nonlocal current_number, current_lines
+            if current_number is not None and current_lines:
+                chunks.setdefault(
+                    current_number,
+                    _strip_pdf_page_code_tail("\n".join(current_lines).strip()),
+                )
+            current_number = None
+            current_lines = []
+
+        page_text = _join_touching_native_word_fragments(
+            page.get_text(),
+            page.get_text("words"),
+        )
+        for line in page_text.splitlines():
+            match = _NATIVE_NAMED_QUESTION_HEADER_RE.match(line)
+            if match:
+                flush_current()
+                question_number = int(match.group(1))
+                if 1 <= question_number <= 250:
+                    current_number = question_number
+                    current_lines = [line]
+            elif current_number is not None:
+                current_lines.append(line)
+
+        # A continuação de uma questão em outra página não vira candidato de
+        # recuperação: só aceitamos um bloco que contenha a sequência completa.
+        flush_current()
+    return chunks
+
+def extract_options_from_chunk(
+    chunk: str,
+    *,
+    preserve_native_word_boundaries: bool = False,
+) -> Tuple[Dict[str, str], Optional[str]]:
     """
     Extrai alternativas formatadas (A..E) diretamente do chunk de texto de uma questão.
     Retorna (opcoes_dict, novo_enunciado_limpo).
@@ -280,6 +726,9 @@ def extract_options_from_chunk(chunk: str) -> Tuple[Dict[str, str], Optional[str
         r'(?<=[\n\r])[ \t]*(?:\d+[\s\(\)\/]+)?\*?([A-Ea-e])\*?(?:\s*[\)\.\-\–\—\:]|[ \t]+)(?=[\w\u00C0-\u00FF\u201C\u201D\u2018\u2019\u00AB\u00BB\"\'\(\[\$\*\<])'
         r')'
     )
+    pattern_native_tab = re.compile(
+        r"(?m)^[ \t]*([A-Ea-e])[ \t]*\t+[ \t]*"
+    )
     matches = []
     for m in pattern_primary.finditer(chunk):
         letter = None
@@ -289,6 +738,9 @@ def extract_options_from_chunk(chunk: str) -> Tuple[Dict[str, str], Optional[str
                 break
         if letter:
             matches.append((letter, m.start(), m.end()))
+    for match in pattern_native_tab.finditer(chunk):
+        matches.append((match.group(1).upper(), match.start(), match.end()))
+    matches.sort(key=lambda match: (match[1], match[0]))
 
     if not matches or len(matches) < 2:
         return {}, None
@@ -333,14 +785,25 @@ def extract_options_from_chunk(chunk: str) -> Tuple[Dict[str, str], Optional[str
         opt_content = re.sub(r'^[A-Ea-e]\s*[\(\[]\s*[\)\]]\s*', '', opt_content)
         opt_content = re.sub(r'^\(?[A-Ea-e]\s*[\)\.\-–—:]\s*', '', opt_content)
         opt_content = re.sub(r'^\(\s*\)\s*', '', opt_content)
+        opt_content = _strip_pdf_page_code_tail(opt_content)
+        opt_content = _strip_trailing_pdf_section_header(opt_content)
+        numeric_only_option = opt_content.strip()
         opt_content = clean_text_artifacts(opt_content)
+        # O limpador remove números isolados de rodapés. Eles também são
+        # alternativas válidas (por exemplo, 36 e 72 em uma questão de cálculo).
+        if not opt_content and re.fullmatch(r'[+\-−]?\d{1,3}(?:[.,]\d+)?%?', numeric_only_option):
+            opt_content = numeric_only_option
         if o_idx == len(seq) - 1:
             opt_lines = opt_content.splitlines()
             while opt_lines and SUBJECT_REGEX.match(opt_lines[-1].strip()):
                 opt_lines.pop()
             opt_content = '\n'.join(opt_lines).strip()
             opt_content = re.sub(r'\s*(?:<[^\s>]+>|\*{1,3}|_{1,3})+\s*(?:Conhecimentos\s+Espec[íi\ufffd\?]?ficos|Conhecimentos\s+Gerais|Conhecimentos\s+B[áa\ufffd\?]?sicos|L[íi\ufffd\?]?ngua\s+Portuguesa|Portugu[êe]s|Matem[áa]tica|No[çc\ufffd\?][õo\ufffd\?]?es\s+de\s+[^\n<]+|Racioc[íi\ufffd\?]?nio\s+L[óo\ufffd\?]?gico[^\n<]*|Legisla[çc\ufffd\?][ãa\ufffd\?]?o\s+Espec[íi\ufffd\?]?fica|Inform[áa\ufffd\?]?tica|Direito\s+[^\n<]+|TEXTO:\s*[^\n<]+)(?:<[^\s>]+>|\*{1,3}|_{1,3})+\s*$', '', opt_content, flags=re.IGNORECASE)
-        opt_content = restore_exam_typography(opt_content, is_option=True)
+        opt_content = restore_exam_typography(
+            opt_content,
+            is_option=True,
+            preserve_native_word_boundaries=preserve_native_word_boundaries,
+        )
         formatted_opt, _ = format_latex_formulas(opt_content)
         options[letter] = formatted_opt
 
@@ -350,7 +813,15 @@ def extract_options_from_chunk(chunk: str) -> Tuple[Dict[str, str], Optional[str
         if len(re.sub(r'\s+', '', str(value or ''))) <= 3
         and not re.search(r'\d', str(value or ''))
     )
-    if short_non_numeric >= 2:
+    roman_only_options = bool(options) and all(
+        re.fullmatch(
+            r"(?:I|II|III|IV|V|VI|VII|VIII|IX|X)",
+            str(value or "").strip(),
+            re.IGNORECASE,
+        )
+        for value in options.values()
+    )
+    if short_non_numeric >= 2 and not roman_only_options:
         # Sequências A..D capturadas em rótulos de diagramas costumam gerar
         # valores como "D A", "E" e "C B". Elas não são alternativas válidas.
         return {}, None
@@ -708,7 +1179,7 @@ def _normalize_roman_list_option(text: str) -> str:
     value = str(text or '')
     # O OCR ocasionalmente cola o conector em ``V e VI`` como ``Ve Vl``.
     value = re.sub(
-        r'(?i)(?<![A-Za-z0-9])([ivx]+)e(?=\s*[ivx])',
+        r'(?i)(?<![A-Za-zÀ-ÿ0-9])([ivx]+)e(?=\s*[ivx])',
         r'\1 e',
         value,
     )
@@ -1075,6 +1546,422 @@ def _recover_scan_options_at_high_resolution(
             )
 
 
+def _native_option_marker_rows(
+    doc: fitz.Document,
+    question_number: int,
+    q_spatial_map: Dict[int, Tuple[int, float, float]],
+) -> Optional[Tuple[fitz.Page, List[Dict[str, Any]], fitz.Rect]]:
+    """Localiza cinco linhas A..E na coluna da questão para OCR regional."""
+
+    spatial = q_spatial_map.get(question_number)
+    if not spatial:
+        return None
+    page_index, question_x, question_y = spatial
+    if page_index < 0 or page_index >= len(doc):
+        return None
+    page = doc[page_index]
+
+    next_question_y = float(page.rect.height)
+    for other_number, (other_page, other_x, other_y) in q_spatial_map.items():
+        if (
+            other_number != question_number
+            and other_page == page_index
+            and other_y > question_y
+            and abs(other_x - question_x) <= 40.0
+        ):
+            next_question_y = min(next_question_y, float(other_y))
+
+    other_column_x = [
+        float(other_x)
+        for other_page, other_x, _other_y in q_spatial_map.values()
+        if other_page == page_index and other_x > question_x + 80.0
+    ]
+    right_edge = (
+        min(other_column_x) - 10.0
+        if other_column_x and question_x < float(page.rect.width) * 0.5
+        else float(page.rect.width) - 5.0
+    )
+
+    rows: List[Dict[str, Any]] = []
+    try:
+        native_dict = page.get_text("dict")
+    except Exception:
+        return None
+    for block in native_dict.get("blocks", []):
+        if block.get("type") != 0:
+            continue
+        for line in block.get("lines", []):
+            bbox = line.get("bbox") or (0.0, 0.0, 0.0, 0.0)
+            x0, y0, x1, y1 = (float(value) for value in bbox)
+            if (
+                x0 < question_x - 8.0
+                or x0 > question_x + 80.0
+                or y0 <= question_y + 8.0
+                or y0 >= next_question_y
+            ):
+                continue
+            spans = [
+                str(span.get("text") or "")
+                for span in line.get("spans", [])
+                if str(span.get("text") or "").strip()
+            ]
+            text = " ".join(spans).strip()
+            marker = re.match(r"^\s*([A-E])(?=\s|[.)\-:])", text, re.IGNORECASE)
+            if not marker and text.upper() in set("ABCDE"):
+                marker = re.match(r"^([A-E])$", text, re.IGNORECASE)
+            if not marker:
+                continue
+            rows.append({
+                "label": marker.group(1).upper(),
+                "x0": x0,
+                "x1": x1,
+                "y0": y0,
+                "y1": y1,
+                "mid_y": (y0 + y1) / 2.0,
+                "text": text,
+            })
+
+    rows.sort(key=lambda row: (row["mid_y"], row["x0"]))
+    sequences: List[List[Dict[str, Any]]] = []
+    for start_index, row in enumerate(rows):
+        if row["label"] != "A":
+            continue
+        sequence = [row]
+        expected = "B"
+        for next_row in rows[start_index + 1:]:
+            label = next_row["label"]
+            if label == expected and abs(next_row["x0"] - row["x0"]) <= 14.0:
+                sequence.append(next_row)
+                expected = chr(ord(expected) + 1)
+                if expected > "E":
+                    break
+            elif label <= expected:
+                continue
+            else:
+                break
+        if len(sequence) == 5:
+            horizontal_spread = max(row["x0"] for row in sequence) - min(
+                row["x0"] for row in sequence
+            )
+            vertical_gaps = [
+                sequence[index + 1]["mid_y"] - sequence[index]["mid_y"]
+                for index in range(len(sequence) - 1)
+            ]
+            if (
+                horizontal_spread <= 14.0
+                and all(8.0 <= gap <= 180.0 for gap in vertical_gaps)
+            ):
+                sequences.append(sequence)
+    if not sequences:
+        return None
+
+    # Quando o enunciado começa com "A ...", a última sequência A..E é a
+    # lista de alternativas; usar a posição final evita tratar o artigo como rótulo.
+    marker_rows = max(sequences, key=lambda sequence: sequence[0]["mid_y"])
+    clip = fitz.Rect(
+        max(0.0, question_x - 3.0),
+        max(0.0, marker_rows[0]["y0"] - 3.0),
+        max(question_x + 40.0, right_edge),
+        min(float(page.rect.height), marker_rows[-1]["y1"] + 4.0),
+    )
+    if clip.width <= 0 or clip.height <= 0:
+        return None
+    return page, marker_rows, clip
+
+
+def _has_dense_vector_option_rows(
+    page: fitz.Page,
+    marker_rows: List[Dict[str, Any]],
+    clip: fitz.Rect,
+) -> bool:
+    """Detecta alternativas visuais em linhas para não exigir OCR de seus rótulos."""
+
+    if len(marker_rows) != 5:
+        return False
+    vertical_gaps = [
+        float(marker_rows[index + 1]["mid_y"])
+        - float(marker_rows[index]["mid_y"])
+        for index in range(len(marker_rows) - 1)
+    ]
+    if not vertical_gaps or any(gap <= 8.0 or gap > 180.0 for gap in vertical_gaps):
+        return False
+    half_height = min(55.0, max(10.0, min(vertical_gaps) / 2.0 - 2.0))
+    drawings = page.get_drawings()
+    for marker in marker_rows:
+        center_y = float(marker["mid_y"])
+        row_rect = fitz.Rect(
+            clip.x0,
+            max(0.0, center_y - half_height),
+            clip.x1,
+            min(float(page.rect.height), center_y + half_height),
+        )
+        local_drawings = 0
+        for drawing in drawings:
+            rect = fitz.Rect(drawing.get("rect") or (0.0, 0.0, 0.0, 0.0))
+            page_scale = (
+                rect.width >= float(page.rect.width) * 0.8
+                and rect.height >= float(page.rect.height) * 0.8
+            )
+            if not page_scale and rect.intersects(row_rect):
+                local_drawings += 1
+        if local_drawings < 5:
+            return False
+    return True
+
+
+def _recover_native_geometric_options(
+    marker_rows: List[Dict[str, Any]],
+    native_words: List[Tuple[Any, ...]],
+    clip_right: float,
+) -> Optional[Dict[str, str]]:
+    """Recupera listas curtas e frações empilhadas pela geometria do texto nativo."""
+
+    if len(marker_rows) != 5 or [row.get("label") for row in marker_rows] != list("ABCDE"):
+        return None
+
+    roman_options: Dict[str, str] = {}
+    for row in marker_rows:
+        match = re.match(
+            r"^\s*[A-E]\s*(?:[.)\-:]\s*)?(.*?)\s*$",
+            str(row.get("text") or ""),
+            re.IGNORECASE,
+        )
+        suffix = str((match.group(1) if match else "") or "").strip()
+        if not re.fullmatch(r"[IVXLCDM]+", suffix, re.IGNORECASE):
+            roman_options = {}
+            break
+        roman_options[row["label"]] = suffix.upper()
+    if set(roman_options) == set("ABCDE"):
+        return roman_options
+
+    words: List[Tuple[float, float, float, float, str]] = []
+    for word in native_words:
+        if len(word) < 5:
+            continue
+        try:
+            x0, y0, x1, y1 = (float(value) for value in word[:4])
+        except (TypeError, ValueError):
+            continue
+        value = str(word[4] or "").strip()
+        if value:
+            words.append((x0, y0, x1, y1, value))
+
+    recovered: Dict[str, str] = {}
+    for row in marker_rows:
+        label = str(row["label"]).upper()
+        label_words = [
+            word
+            for word in words
+            if word[4].upper() == label
+            and abs(word[0] - float(row.get("x0", 0.0))) <= 16.0
+            and word[1] <= float(row.get("y1", 0.0)) + 3.0
+            and word[3] >= float(row.get("y0", 0.0)) - 3.0
+        ]
+        if not label_words:
+            continue
+        label_word = min(
+            label_words,
+            key=lambda word: abs(word[0] - float(row.get("x0", 0.0))),
+        )
+        anchor_y = (label_word[1] + label_word[3]) / 2.0
+        nearby_words = [
+            word
+            for word in words
+            if word[0] >= label_word[2] + 1.0
+            and word[0] < clip_right
+            and abs((word[1] + word[3]) / 2.0 - anchor_y) <= 18.5
+        ]
+        nearby_words.sort(key=lambda word: word[0])
+
+        terms: List[List[Tuple[float, float, float, float, str]]] = [[]]
+        for word in nearby_words:
+            if word[4] in {"+", "＋"}:
+                if terms[-1]:
+                    terms.append([])
+                continue
+            terms[-1].append(word)
+        if len(terms) != 2 or any(not term for term in terms):
+            continue
+
+        fractions: List[str] = []
+        for term in terms:
+            by_y = sorted(term, key=lambda word: (word[1] + word[3]) / 2.0)
+            y_centers = [(word[1] + word[3]) / 2.0 for word in by_y]
+            gaps = [
+                (y_centers[index + 1] - y_centers[index], index)
+                for index in range(len(y_centers) - 1)
+            ]
+            if not gaps:
+                fractions = []
+                break
+            vertical_gap, split_index = max(gaps, key=lambda item: item[0])
+            if vertical_gap < 5.0:
+                fractions = []
+                break
+
+            numerator_words = sorted(by_y[:split_index + 1], key=lambda word: word[0])
+            denominator_words = sorted(by_y[split_index + 1:], key=lambda word: word[0])
+            numerator = "".join(word[4] for word in numerator_words)
+            denominator = "".join(word[4] for word in denominator_words)
+            if not numerator or not denominator:
+                fractions = []
+                break
+            fractions.append(rf"\frac{{{numerator}}}{{{denominator}}}")
+
+        if len(fractions) == 2:
+            recovered[label] = " + ".join(fractions)
+
+    if set(recovered) != set("ABCDE"):
+        return None
+    return recovered
+
+
+def _looks_like_split_numeric_formula_options(options: Dict[str, str]) -> bool:
+    """Sinaliza fórmulas numéricas separadas em texto nativo, como ``36 3``."""
+
+    if set(options) != set("ABCDE"):
+        return False
+    values = [str(options.get(label) or "").strip() for label in "ABCDE"]
+    if any(not value for value in values):
+        return False
+    numeric_values = [
+        value
+        for value in values
+        if re.fullmatch(r"[%\d\s.,/+\-−°√π()xX×=]+", value)
+    ]
+    split_formula_count = sum(
+        bool(re.search(r"\d{1,3}\s+\d{1,2}", value))
+        for value in numeric_values
+    )
+    return len(numeric_values) >= 4 and split_formula_count >= 1
+
+
+def _ocr_native_option_rows(
+    page: fitz.Page,
+    marker_rows: List[Dict[str, Any]],
+    clip: fitz.Rect,
+) -> Optional[Dict[str, str]]:
+    """Lê somente as cinco linhas de alternativas sem rasterizar a página toda."""
+
+    from .layout.layout_detector import extract_ocr_lines_from_page
+
+    ocr_lines = extract_ocr_lines_from_page(
+        page,
+        dpi=300,
+        clip=clip,
+        min_score=0.20,
+    )
+    if not ocr_lines:
+        return None
+
+    recovered: Dict[str, str] = {}
+    for marker in marker_rows:
+        row_lines = [
+            line
+            for line in ocr_lines
+            if abs(
+                float(
+                    line.get(
+                        "mid_y",
+                        (float(line.get("y0", 0.0)) + float(line.get("y1", 0.0))) / 2.0,
+                    )
+                )
+                - marker["mid_y"]
+            ) <= 13.0
+        ]
+        pieces = []
+        for line in sorted(
+            row_lines,
+            key=lambda item: (
+                float(item.get("y0", 0.0)),
+                float(item.get("x0", 0.0)),
+            ),
+        ):
+            text = str(line.get("text") or "").strip()
+            if not text:
+                continue
+            if re.fullmatch(r"[A-E?][1Il]?", text, re.IGNORECASE):
+                continue
+            prefixed = re.match(r"^([A-E])\s*[.):\-]+\s*(\S.*)$", text, re.IGNORECASE)
+            if prefixed:
+                pieces.append(prefixed.group(2))
+            else:
+                pieces.append(text)
+        if (
+            len(pieces) == 2
+            and re.fullmatch(r"\d{1,3}", pieces[0])
+            and re.fullmatch(r"\d{1,3}", pieces[1])
+        ):
+            pieces = [f"{pieces[0]}/{pieces[1]}"]
+        value = " ".join(pieces).strip()
+        if value:
+            recovered[marker["label"]] = value
+
+    if set(recovered) != set("ABCDE"):
+        return None
+    return recovered
+
+
+def _recover_native_text_options_with_local_ocr(
+    doc: fitz.Document,
+    questions: List[Dict[str, Any]],
+    q_spatial_map: Dict[int, Tuple[int, float, float]],
+    expected_option_count: int = 5,
+) -> List[int]:
+    """Recupera fórmulas ambíguas com OCR de até oito faixas de alternativas."""
+
+    targets: List[Tuple[Dict[str, Any], Optional[Tuple[fitz.Page, List[Dict[str, Any]], fitz.Rect]]]] = []
+    for question in questions:
+        options = question.get("opcoes") or {}
+        math_issue = _looks_like_split_numeric_formula_options(options)
+        missing_expected_options = bool(
+            expected_option_count == 5
+            and (
+                set(options) != set("ABCDE")
+                or any(not str(options.get(label) or "").strip() for label in "ABCDE")
+            )
+        )
+        if not math_issue and not missing_expected_options:
+            continue
+        try:
+            question_number = int(question.get("numero_questao"))
+        except (TypeError, ValueError):
+            continue
+        marker_target = _native_option_marker_rows(doc, question_number, q_spatial_map)
+        # Não rasterizar alternativas desenhadas como imagens: o vínculo
+        # espacial de imagens continua responsável por esse tipo de questão.
+        if marker_target:
+            targets.append((question, marker_target))
+
+    unresolved: List[int] = []
+    for question, target in targets[:8]:
+        question_number = int(question["numero_questao"])
+        page, marker_rows, clip = target
+        recovered = _ocr_native_option_rows(page, marker_rows, clip)
+        if not recovered:
+            if _has_dense_vector_option_rows(page, marker_rows, clip):
+                print(
+                    f"[OCR local] Questão {question_number}: alternativas visuais "
+                    "preservadas para vínculo espacial de imagens.",
+                    flush=True,
+                )
+                continue
+            unresolved.append(question_number)
+            continue
+        formatted_options: Dict[str, str] = {}
+        for label in "ABCDE":
+            value = restore_exam_typography(recovered[label], is_option=True)
+            formatted_value, _ = format_latex_formulas(value)
+            formatted_options[label] = formatted_value
+        question["opcoes"] = formatted_options
+        print(
+            f"[OCR local] Fórmulas recuperadas na questão {question_number} "
+            f"(página {page.number + 1}, recorte de alternativas).",
+            flush=True,
+        )
+    return unresolved
+
+
 def _spatial_fast_enabled() -> bool:
     value = os.getenv("PDF_PIPELINE_FAST_SPATIAL_MAP")
     if value is None:
@@ -1221,7 +2108,8 @@ def parse_exam_document(
     extract_images: bool = True,
     gabarito_override: Optional[str] = None,
     force_ocr: bool = False,
-    layout_config: Optional[LayoutConfig] = None
+    layout_config: Optional[LayoutConfig] = None,
+    allow_ocr: bool = True,
 ) -> List[Dict[str, Any]]:
     """
     Motor híbrido avançado de processamento de exames:
@@ -1316,6 +2204,11 @@ def parse_exam_document(
     # detector aqui impede duas extrações completas da mesma página.
     from .media.scan_pipeline import scan_document_profile, extract_scan_questions
     scan_profile = scan_document_profile(doc)
+    native_text_question_chunks = (
+        _extract_native_text_question_chunks(doc)
+        if not scan_profile.get("scan_like")
+        else {}
+    )
 
     doc_topology = infer_document_topology(doc, watermarks)
     effective_layout_config = layout_config or LayoutConfig(topology=doc_topology)
@@ -1340,7 +2233,9 @@ def parse_exam_document(
             watermarks,
             force_ocr=bool(force_ocr and not scan_profile.get("scan_like")),
             config=effective_layout_config,
-            allow_ocr_fallback=not bool(scan_profile.get("scan_like")),
+            allow_ocr_fallback=bool(
+                allow_ocr and not scan_profile.get("scan_like")
+            ),
         )
         for b in ordered_blocks:
             raw_blocks.append(b['text'])
@@ -1363,6 +2258,7 @@ def parse_exam_document(
         total_pages=total_pages,
         image_page_count=sum(1 for count in image_counts if count > 0),
         total_image_count=sum(image_counts),
+        full_page_scan_detected=bool(scan_profile.get("scan_like")),
     )
     native_declared_count = int(
         native_quality.get("declared_question_count")
@@ -1398,6 +2294,21 @@ def parse_exam_document(
         test_rq = rust_process_exam_text(full_text)
         if not test_rq or len(test_rq) < 2:
             needs_vision_ocr = True
+
+    ocr_route_required = bool(
+        needs_vision_ocr
+        or (scan_profile.get("scan_like") and not native_layer_usable)
+    )
+    if not allow_ocr and ocr_route_required:
+        print(
+            "[OCR bloqueado] Documento não reprocessado porque o pipeline "
+            "solicitaria OCR.",
+            flush=True,
+        )
+        timing.mark("ocr_blocked")
+        timing.finish(pages=total_pages, questions=0)
+        doc.close()
+        return []
 
     if scan_profile.get("scan_like") and not native_layer_usable:
         print(
@@ -1534,6 +2445,10 @@ def parse_exam_document(
     # 5. Execução Unificada em Rust (Zero Ping-Pong) com Fallback Resiliente
     rust_questions = rust_process_exam_text(full_text)
     if rust_questions and len(rust_questions) >= 3:
+        rust_questions = _reconcile_rust_question_chain(
+            rust_questions,
+            full_text,
+        )
         # Reconciliação automática de questões com cabeçalho explícito 'QUESTÃO N' ausentes no output nativo
         existing_q_nums = {int(rq['numero_questao']) for rq in rust_questions if str(rq.get('numero_questao', '')).isdigit()}
         explicit_headers = re.findall(r'(?:^|\n)\s*(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+|ITEM\s+)0*(\d{1,3})\b', full_text, re.IGNORECASE)
@@ -1567,17 +2482,44 @@ def parse_exam_document(
         for rq in rust_questions:
             try:
                 qn = int(rq['numero_questao'])
-                m_h = re.search(rf'(?:^|\n)\s*(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+|ITEM\s+)0*{qn}\b', full_text, re.IGNORECASE)
+                # O Rust já devolve a posição do cabeçalho escolhido pela
+                # cadeia global. Rebuscar apenas pelo número reintroduz
+                # falsos cabeçalhos: em provas com textos numerados, ``2``
+                # pode ser o parágrafo de um texto de apoio ou uma página de
+                # instruções anterior à questão 2 real.
+                start_char = int(rq.get('start_char'))
+                end_char = int(rq.get('end_char'))
+                if 0 <= start_char < end_char <= len(full_text):
+                    rust_found_positions.append((qn, start_char, end_char))
+                    continue
+                m_h = re.search(
+                    rf'(?:^|\n)\s*(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+|ITEM\s+)0*{qn}\b',
+                    full_text,
+                    re.IGNORECASE,
+                )
                 if m_h:
                     rust_found_positions.append((qn, m_h.start(), m_h.end()))
             except Exception:
                 pass
         rust_context_blocks = extract_context_blocks(full_text, rust_found_positions)
+        numbered_context_blocks = _extract_numbered_source_context_blocks(
+            full_text,
+            rust_found_positions,
+        )
+        for numbered_context in numbered_context_blocks:
+            if not any(
+                numbered_context[0] == existing[0]
+                and numbered_context[1] == existing[1]
+                and numbered_context[3] == existing[3]
+                for existing in rust_context_blocks
+            ):
+                rust_context_blocks.append(numbered_context)
 
         questions = []
         for rq in rust_questions:
             q_num = int(rq['numero_questao'])
             formatted_enunciado = rq['enunciado']
+            uses_native_text_candidate = False
 
             # Injeção de Texto de Apoio Compartilhado em rust_questions
             matching_context = None
@@ -1588,12 +2530,18 @@ def parse_exam_document(
 
             if matching_context:
                 q_min, q_max, ctx_text = matching_context
-                cleaned_ctx = restore_exam_typography(ctx_text)
+                cleaned_ctx = _prepare_numbered_source_context(
+                    ctx_text,
+                    preserve_native_word_boundaries=not scan_profile.get("scan_like"),
+                )
                 if cleaned_ctx[:30] not in formatted_enunciado:
                     formatted_enunciado = f"📖 **Texto de Apoio (Questões {q_min} a {q_max}):**\n\n{cleaned_ctx}\n\n---\n\n{formatted_enunciado}"
 
             formatted_enunciado, has_latex_enunciado = format_latex_formulas(formatted_enunciado)
-            formatted_enunciado = restore_exam_typography(formatted_enunciado)
+            formatted_enunciado = restore_exam_typography(
+                formatted_enunciado,
+                preserve_native_word_boundaries=not scan_profile.get("scan_like"),
+            )
             formatted_enunciado = format_markdown_tables_in_text(formatted_enunciado)
             
             raw_options = rq.get('opcoes', {})
@@ -1625,40 +2573,94 @@ def parse_exam_document(
             # Reavalie sempre o bloco OCR quando ele não contém uma sequência
             # explícita A..D/A..E; caso contrário a quantidade de opções
             # mascararia uma extração incorreta.
-            m_curr = re.search(
-                rf'(?:^|\n)\s*(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+|ITEM\s+)0*{q_num}\b',
-                full_text,
-                re.IGNORECASE,
-            )
-            if not m_curr:
+            chunk_q = None
+            # Use the same physical span selected by the global Rust chain.
+            # This is essential when the document contains numbered
+            # paragraphs, years or instruction pages before the real item.
+            try:
+                anchored_start = int(rq.get('start_char'))
+                anchored_end = min(
+                    len(full_text),
+                    max(anchored_start + 1, int(rq.get('end_char'))),
+                )
+                if 0 <= anchored_start < anchored_end <= len(full_text):
+                    later_starts = []
+                    for candidate in rust_questions:
+                        candidate_start = candidate.get('start_char')
+                        if candidate_start is None:
+                            continue
+                        candidate_start = int(candidate_start)
+                        if candidate_start > anchored_start:
+                            later_starts.append(candidate_start)
+                    if later_starts:
+                        anchored_end = min(later_starts)
+                    # The span must still begin with this question header;
+                    # otherwise retain the defensive regex fallback below.
+                    probe = full_text[anchored_start:anchored_start + 80]
+                    if re.match(
+                        rf'\s*(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+|ITEM\s+)?0*{q_num}\b',
+                        probe,
+                        re.IGNORECASE,
+                    ):
+                        chunk_q = full_text[anchored_start:anchored_end]
+            except (TypeError, ValueError):
+                chunk_q = None
+
+            if chunk_q is None:
                 m_curr = re.search(
-                    rf'(?:^|\n)\s*(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+|ITEM\s+|0*)0*{q_num}\b',
+                    rf'(?:^|\n)\s*(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+|ITEM\s+)0*{q_num}\b',
                     full_text,
                     re.IGNORECASE,
                 )
-            if m_curr:
-                m_next = re.search(
-                    rf'(?:^|\n)\s*(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+|ITEM\s+)0*{q_num + 1}\b',
-                    full_text[m_curr.end():],
-                    re.IGNORECASE,
-                )
-                if not m_next:
+                if not m_curr:
+                    m_curr = re.search(
+                        rf'(?:^|\n)\s*(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+|ITEM\s+|0*)0*{q_num}\b',
+                        full_text,
+                        re.IGNORECASE,
+                    )
+                if m_curr:
                     m_next = re.search(
-                        rf'(?:^|\n)\s*(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+|ITEM\s+|0*)0*{q_num + 1}\b',
+                        rf'(?:^|\n)\s*(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+|ITEM\s+)0*{q_num + 1}\b',
                         full_text[m_curr.end():],
                         re.IGNORECASE,
                     )
-                chunk_q = (
-                    full_text[m_curr.start():m_curr.end() + m_next.start()]
-                    if m_next
-                    else full_text[m_curr.start():]
+                    if not m_next:
+                        m_next = re.search(
+                            rf'(?:^|\n)\s*(?:QUEST[AÃ\u00C3\ufffd\?]?O\s+|ITEM\s+|0*)0*{q_num + 1}\b',
+                            full_text[m_curr.end():],
+                            re.IGNORECASE,
+                        )
+                    chunk_q = (
+                        full_text[m_curr.start():m_curr.end() + m_next.start()]
+                        if m_next
+                        else full_text[m_curr.start():]
+                    )
+
+            if chunk_q is not None:
+                recovered_opts, clean_stmt = extract_options_from_chunk(
+                    chunk_q,
+                    preserve_native_word_boundaries=not scan_profile.get("scan_like"),
                 )
-                recovered_opts, clean_stmt = extract_options_from_chunk(chunk_q)
                 heuristic_opts, heuristic_stmt = extract_heuristic_options(chunk_q)
                 candidates = [
                     (recovered_opts, clean_stmt),
                     (heuristic_opts or {}, heuristic_stmt),
                 ]
+
+                native_text_candidate = None
+                native_text_chunk = native_text_question_chunks.get(q_num)
+                if native_text_chunk:
+                    text_opts, text_stmt = extract_options_from_chunk(
+                        native_text_chunk,
+                        preserve_native_word_boundaries=True,
+                    )
+                    if (
+                        set(text_opts) == set("ABCDE")
+                        and all(str(text_opts.get(label) or "").strip() for label in "ABCDE")
+                        and len(str(text_stmt or "").strip()) > 15
+                    ):
+                        native_text_candidate = (text_opts, text_stmt)
+                        candidates.append(native_text_candidate)
 
                 native_candidate = None
                 # A camada nativa deste scan contém texto completo em várias
@@ -1683,13 +2685,38 @@ def parse_exam_document(
                     for candidate in candidates
                     if candidate[0]
                 )
-                if native_candidate and native_candidate_score >= 80.0 and has_five_option_candidate:
+                if native_text_candidate:
+                    # Em PDFs textuais, as alternativas completas do bloco
+                    # nativo preservam melhor colunas e marcadores tabulados
+                    # do que o texto linear remontado pelo detector de layout.
+                    selected_opts, selected_stmt = native_text_candidate
+                    uses_native_text_candidate = True
+                elif (
+                    not scan_profile.get("scan_like")
+                    and set(recovered_opts) == set("ABCDE")
+                    and all(
+                        str(recovered_opts.get(label) or "").strip()
+                        for label in "ABCDE"
+                    )
+                ):
+                    # Em PDFs textuais, a primeira sequência explícita A--E
+                    # dentro do span ancorado é a sequência da própria
+                    # questão. A heurística por cauda pode encontrar outra
+                    # sequência A--E em um texto de apoio que começa antes da
+                    # questão seguinte e deslocar todo o conteúdo.
+                    selected_opts, selected_stmt = recovered_opts, clean_stmt
+                elif (
+                    native_candidate
+                    and native_candidate_score >= 80.0
+                    and has_five_option_candidate
+                    and scan_profile.get("scan_like")
+                ):
                     # Em scans de provas com quatro alternativas, a
                     # heurística às vezes cruza o enunciado seguinte e cria
                     # uma quinta opção. Um bloco nativo completo de quatro é
                     # mais confiável nesse caso.
                     selected_opts, selected_stmt = native_candidate
-                elif native_candidate and (
+                elif native_candidate and scan_profile.get("scan_like") and (
                     len(raw_options) != 4
                     or needs_recovery
                     or len(formatted_enunciado.strip()) < 25
@@ -1708,8 +2735,7 @@ def parse_exam_document(
                     or len(raw_options) < 4
                 )
                 if should_replace and (
-                    len(selected_opts) >= 4
-                    or len(selected_opts) >= len(raw_options)
+                    len(selected_opts) >= max(4, len(raw_options))
                 ):
                     if len(selected_opts) >= 4:
                         raw_options = selected_opts
@@ -1724,12 +2750,22 @@ def parse_exam_document(
                         formatted_enunciado = selected_stmt
                         if matching_context:
                             q_min, q_max, ctx_text = matching_context
-                            cleaned_ctx = restore_exam_typography(ctx_text)
+                            cleaned_ctx = _prepare_numbered_source_context(
+                                ctx_text,
+                                preserve_native_word_boundaries=not scan_profile.get("scan_like"),
+                            )
                             if cleaned_ctx[:30] not in formatted_enunciado:
                                 formatted_enunciado = f"📖 **Texto de Apoio (Questões {q_min} a {q_max}):**\n\n{cleaned_ctx}\n\n---\n\n{formatted_enunciado}"
                         formatted_enunciado, has_latex_enunciado = format_latex_formulas(formatted_enunciado)
-                        formatted_enunciado = restore_exam_typography(formatted_enunciado)
-                        formatted_enunciado = format_markdown_tables_in_text(formatted_enunciado)
+                        formatted_enunciado = restore_exam_typography(
+                            formatted_enunciado,
+                            preserve_native_word_boundaries=(
+                                not scan_profile.get("scan_like")
+                                or uses_native_text_candidate
+                            ),
+                        )
+            formatted_enunciado = format_markdown_tables_in_text(formatted_enunciado)
+            formatted_enunciado = _unprotect_source_paragraph_markers(formatted_enunciado)
 
             options = {}
             for let, opt_text in raw_options.items():
@@ -1743,7 +2779,14 @@ def parse_exam_document(
                 opt_clean = '\n'.join(opt_lines).strip()
                 opt_clean = _normalize_roman_list_option(opt_clean)
                 opt_clean = re.sub(r'\s*(?:<[^\s>]+>|\*{1,3}|_{1,3})+\s*(?:Conhecimentos\s+Espec[íi\ufffd\?]?ficos|Conhecimentos\s+Gerais|Conhecimentos\s+B[áa\ufffd\?]?sicos|L[íi\ufffd\?]?ngua\s+Portuguesa|Portugu[êe]s|Matem[áa]tica|No[çc\ufffd\?][õo\ufffd\?]?es\s+de\s+[^\n<]+|Racioc[íi\ufffd\?]?nio\s+L[óo\ufffd\?]?gico[^\n<]*|Legisla[çc\ufffd\?][ãa\ufffd\?]?o\s+Espec[íi\ufffd\?]?fica|Inform[áa\ufffd\?]?tica|Direito\s+[^\n<]+|TEXTO:\s*[^\n<]+)(?:<[^\s>]+>|\*{1,3}|_{1,3})+\s*$', '', opt_clean, flags=re.IGNORECASE)
-                opt_clean = restore_exam_typography(opt_clean, is_option=True)
+                opt_clean = restore_exam_typography(
+                    opt_clean,
+                    is_option=True,
+                    preserve_native_word_boundaries=(
+                        not scan_profile.get("scan_like")
+                        or uses_native_text_candidate
+                    ),
+                )
                 opt_formatted, _ = format_latex_formulas(opt_clean)
                 options[let] = opt_formatted
 
@@ -1771,6 +2814,26 @@ def parse_exam_document(
                 '_y': q_y
             })
         
+        # Remove artefatos de rodapé antes de decidir se alternativas nativas
+        # estão completas. Alguns cadernos deixam o código PCI na posição de E,
+        # o que ocultava a falta real da alternativa no gate de recuperação.
+        for question in questions:
+            question["enunciado"] = _strip_exam_watermark_token(
+                _strip_trailing_pdf_section_header(
+                    _strip_pdf_page_code_tail(
+                        strip_embedded_answer_marker(question.get("enunciado", ""))
+                    )
+                )
+            )
+            question["opcoes"] = {
+                label: _strip_trailing_exam_banner(
+                    _strip_trailing_pdf_section_header(
+                        _strip_pdf_page_code_tail(value)
+                    ).strip()
+                )
+                for label, value in (question.get("opcoes") or {}).items()
+            }
+
         # Última recuperação direcionada para alternativas curtas de scans.
         # Executa antes do fechamento do documento e antes do vínculo de
         # diagramas, preservando o restante da extração já validada.
@@ -1787,6 +2850,78 @@ def parse_exam_document(
                 q_spatial_map=q_spatial_map,
             )
 
+        native_ocr_unresolved: List[int] = []
+        if not scan_profile.get("scan_like"):
+            option_count_distribution = Counter(
+                len(question.get("opcoes") or {})
+                for question in questions
+                if len(question.get("opcoes") or {}) in (4, 5)
+            )
+            expected_option_count = (
+                max((5, 4), key=lambda count: option_count_distribution[count])
+                if option_count_distribution
+                else 0
+            )
+            for question in questions:
+                options = question.get("opcoes") or {}
+                math_issue = _looks_like_split_numeric_formula_options(options)
+                missing_expected_options = bool(
+                    expected_option_count == 5
+                    and (
+                        set(options) != set("ABCDE")
+                        or any(
+                            not str(options.get(label) or "").strip()
+                            for label in "ABCDE"
+                        )
+                    )
+                )
+                if not math_issue and not missing_expected_options:
+                    continue
+                try:
+                    question_number = int(question.get("numero_questao"))
+                except (TypeError, ValueError):
+                    continue
+                marker_target = _native_option_marker_rows(
+                    doc,
+                    question_number,
+                    q_spatial_map,
+                )
+                if not marker_target:
+                    continue
+                page, marker_rows, clip = marker_target
+                recovered = _recover_native_geometric_options(
+                    marker_rows,
+                    page.get_text("words"),
+                    clip.x1,
+                )
+                if not recovered:
+                    continue
+                formatted_options = {}
+                for label, value in recovered.items():
+                    formatted_options[label], _ = format_latex_formulas(value)
+                question["opcoes"] = formatted_options
+                print(
+                    f"[Texto nativo] Alternativas reconstruídas por posição na "
+                    f"questão {question_number} (página {page.number + 1}).",
+                    flush=True,
+                )
+            if allow_ocr:
+                native_ocr_unresolved = _recover_native_text_options_with_local_ocr(
+                    doc=doc,
+                    questions=questions,
+                    q_spatial_map=q_spatial_map,
+                    expected_option_count=expected_option_count,
+                )
+        if native_ocr_unresolved:
+            print(
+                "[OCR local] Gate de integridade não aprovado: "
+                f"fórmulas não recuperadas nas questões {native_ocr_unresolved}.",
+                flush=True,
+            )
+            timing.finish(pages=total_pages, questions=0)
+            doc.close()
+            return []
+
         # Anexamento espacial de imagens/diagramas em 2 fases
         if extract_images and page_diagrams:
             questions = image_extractor.attach_images_to_questions(
@@ -1796,10 +2931,47 @@ def parse_exam_document(
                 exam_id=exam_id or 0
             )
         for question in questions:
-            question["enunciado"] = strip_embedded_answer_marker(
-                question.get("enunciado", "")
+            question["enunciado"] = _strip_exam_watermark_token(
+                _strip_trailing_pdf_section_header(
+                    _strip_pdf_page_code_tail(
+                        strip_embedded_answer_marker(question.get("enunciado", ""))
+                    )
+                )
             )
+            question["opcoes"] = {
+                label: _strip_trailing_exam_banner(
+                    _strip_trailing_pdf_section_header(
+                        _strip_pdf_page_code_tail(value)
+                    ).strip()
+                )
+                for label, value in (question.get("opcoes") or {}).items()
+            }
             _repair_image_only_option_question(question)
+
+        if (
+            not scan_profile.get("scan_like")
+            and re.search(r"\bTRANSPETRO\b", document_native_text, re.IGNORECASE)
+        ):
+            transpetro_integrity = _strict_native_question_integrity(
+                questions,
+                expected_count=native_declared_count or 70,
+                expected_option_labels="ABCDE",
+            )
+            if transpetro_integrity:
+                print(
+                    "[Transpetro] Gate de integridade textual não aprovado: "
+                    f"{transpetro_integrity}",
+                    flush=True,
+                )
+                timing.finish(pages=total_pages, questions=0)
+                doc.close()
+                return []
+            print(
+                f"[Transpetro] Integridade textual aprovada: "
+                f"{len(questions)}/{native_declared_count or 70} questões; "
+                "5/5 alternativas por questão.",
+                flush=True,
+            )
 
         if quality_gate_required:
             from .media.scan_pipeline import assess_question_text_integrity
@@ -1960,6 +3132,18 @@ def parse_exam_document(
 
     # 6. Mapeia textos de apoio compartilhados com base nas posições exatas das questões
     context_blocks = extract_context_blocks(full_text, found_positions)
+    numbered_context_blocks = _extract_numbered_source_context_blocks(
+        full_text,
+        found_positions,
+    )
+    for numbered_context in numbered_context_blocks:
+        if not any(
+            numbered_context[0] == existing[0]
+            and numbered_context[1] == existing[1]
+            and numbered_context[3] == existing[3]
+            for existing in context_blocks
+        ):
+            context_blocks.append(numbered_context)
 
     # 7. Estruturação das Questões, Alternativas e Fórmulas
     questions = []
@@ -2107,13 +3291,14 @@ def parse_exam_document(
 
         if matching_context:
             q_min, q_max, ctx_text = matching_context
-            cleaned_ctx = restore_exam_typography(ctx_text)
+            cleaned_ctx = _prepare_numbered_source_context(ctx_text)
             if cleaned_ctx[:30] not in formatted_enunciado:
                 formatted_enunciado = f"📖 **Texto de Apoio (Questões {q_min} a {q_max}):**\n\n{cleaned_ctx}\n\n---\n\n{formatted_enunciado}"
 
         # Restauração Tipográfica e de Parágrafos Editorial
         formatted_enunciado = restore_exam_typography(formatted_enunciado)
         formatted_enunciado = format_markdown_tables_in_text(formatted_enunciado)
+        formatted_enunciado = _unprotect_source_paragraph_markers(formatted_enunciado)
 
         # Determinação da Resposta Oficial
         final_answer = normalize_answer_or_empty(

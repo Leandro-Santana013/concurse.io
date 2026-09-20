@@ -73,6 +73,16 @@ fn test_poem_stanza_preservation() {
 }
 
 #[test]
+fn test_numbered_source_prose_is_not_classified_as_poem() {
+    let raw = "### À moda brasileira\n\n@@P1 Estou me vendo debaixo de uma árvore, lendo a pequena história da literatura brasileira.\n\n@@P2 Olavo Bilac! – eu disse em voz alta e de repente parei quase num susto.\n\n@@P3 O tal de Lácio eu não sabia onde ficava, mas de sepultura eu entendia bem.";
+    let res = restore_exam_typography_native(raw, false);
+    assert!(!res.contains("> @@P1"));
+    assert!(!res.contains("> @@P2"));
+    assert!(res.contains("@@P1 Estou me vendo"));
+    assert!(res.contains("@@P2 Olavo Bilac!"));
+}
+
+#[test]
 fn test_idempotence() {
     let raw = "1. Cabeça; 2. Pé\n\n*(Fonte: https://ifg.edu.br/teste.pdf)*\n\n(__) ACENDER a luz. / ASCENDER socialmente";
     let first_pass = restore_exam_typography_native(raw, false);
