@@ -11,6 +11,7 @@ from sqlalchemy.pool import StaticPool
 from models.database import Base, Exam, ExamAttempt, Question, User, UserExam, get_db
 from routes.api_v1 import exam_api, exam_media
 from routes.api_v1.user_context import get_current_user
+from services.object_storage import StoredObject
 
 
 @pytest.fixture()
@@ -172,6 +173,29 @@ def test_exam_media_requires_login_ownership_and_question_reference(secured_exam
 
     app.dependency_overrides.pop(get_current_user)
     assert client.get("/api/v1/exams/41/media/private.png").status_code == 401
+
+
+def test_exam_media_prefers_configured_object_storage(secured_exam_app, monkeypatch):
+    client, _active_user, _session, _app = secured_exam_app
+    requested_keys = []
+
+    def fake_get_object(key):
+        requested_keys.append(key)
+        return StoredObject(
+            content=b"remote-image",
+            content_type="image/png",
+            etag='"remote-etag"',
+        )
+
+    monkeypatch.setattr(exam_media, "get_object", fake_get_object)
+
+    response = client.get("/api/v1/exams/41/media/private.png")
+
+    assert response.status_code == 200
+    assert response.content == b"remote-image"
+    assert response.headers["content-type"] == "image/png"
+    assert response.headers["etag"] == '"remote-etag"'
+    assert requested_keys == ["questions/private.png"]
 
 
 def test_status_mutation_is_admin_only_and_closed_by_default(secured_exam_app):

@@ -5,6 +5,8 @@ import json
 import asyncio
 import threading
 import requests
+import mimetypes
+import os
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, Any, Tuple
@@ -33,6 +35,7 @@ from services.gabarito import (
 )
 from services.search import standardize_card_title, interpret_search_query_deterministic
 from services.exam_library import register_exam_source_alias
+from services.exam_assets import question_media_filename
 from services.exam_files import (
     canonical_answer_key_pdf_path,
     canonical_exam_pdf_path,
@@ -41,6 +44,78 @@ from services.exam_files import (
     find_local_exam_pdf,
     is_pdf_file,
 )
+from services.object_storage import (
+    ObjectStorageError,
+    ObjectStorageSettings,
+    exam_pdf_object_key,
+    put_file,
+    question_object_key,
+)
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+QUESTION_MEDIA_DIR = (PROJECT_ROOT / "static" / "images" / "questions").resolve()
+
+
+def _sync_exam_artifacts_to_object_storage(
+    exam_id: int,
+    exam_pdf_path: str | os.PathLike[str] | None,
+    answer_key_pdf_path: str | os.PathLike[str] | None,
+    questions: list[dict[str, Any]],
+) -> None:
+    """Copy approved PDFs and extracted images into the private OCI bucket.
+
+    Local files remain in place as a fallback.  A storage outage therefore
+    does not corrupt an already parsed exam, while the API can serve the same
+    object from OCI as soon as the upload succeeds.
+    """
+
+    if not ObjectStorageSettings.from_environment().configured:
+        return
+
+    artifacts: list[tuple[str, Path, str]] = []
+    if exam_pdf_path and is_pdf_file(Path(exam_pdf_path)):
+        artifacts.append((exam_pdf_object_key(exam_id, "prova"), Path(exam_pdf_path), "application/pdf"))
+    if answer_key_pdf_path and is_pdf_file(Path(answer_key_pdf_path)):
+        artifacts.append((exam_pdf_object_key(exam_id, "gabarito"), Path(answer_key_pdf_path), "application/pdf"))
+
+    seen_images: set[str] = set()
+    for question in questions:
+        values: list[object] = []
+        raw_images = question.get("images")
+        if isinstance(raw_images, list):
+            values.extend(raw_images)
+        raw_option_images = question.get("option_images")
+        if isinstance(raw_option_images, dict):
+            for option_values in raw_option_images.values():
+                values.extend(option_values if isinstance(option_values, list) else [option_values])
+        for raw_value in values:
+            filename = question_media_filename(raw_value)
+            if not filename or filename in seen_images:
+                continue
+            seen_images.add(filename)
+            path = (QUESTION_MEDIA_DIR / filename).resolve()
+            if path.parent == QUESTION_MEDIA_DIR and path.is_file():
+                artifacts.append(
+                    (
+                        question_object_key(filename),
+                        path,
+                        mimetypes.guess_type(filename)[0] or "application/octet-stream",
+                    )
+                )
+
+    uploaded = 0
+    for object_key, path, content_type in artifacts:
+        try:
+            put_file(object_key, path, content_type=content_type)
+            uploaded += 1
+        except (OSError, ObjectStorageError) as exc:
+            print(
+                f"[Object Storage] upload ignorado para {object_key}: {type(exc).__name__}",
+                flush=True,
+            )
+    if uploaded:
+        print(f"[Object Storage] {uploaded} artefato(s) sincronizado(s) para a prova {exam_id}.", flush=True)
 
 
 def run_structural_rollout(pdf_path, **kwargs):
@@ -358,6 +433,7 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
         set_exam_progress(exam_id, f"{len(extracted_questions)} questões lidas! Processando gabarito...", 70)
 
         # 4. Processamento do Gabarito
+        gab_pdf_path = None
         if gabarito_override:
             gabarito_dict = parse_gabarito_from_text(gabarito_override)
             answer_source = "manual_text"
@@ -666,6 +742,13 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
         if not db_save_success:
             set_exam_progress(exam_id, "Falha ao gravar questões no banco de dados.", -1, "DATABASE_ERROR")
             return
+
+        _sync_exam_artifacts_to_object_storage(
+            exam_id,
+            pdf_path if not is_html_source else None,
+            gab_pdf_path if not is_html_source else None,
+            sorted_questions,
+        )
 
         if allow_idcap_without_answer_key:
             completion_message = f"Prova concluída com sucesso! ({len(updated_questions)} questões)"

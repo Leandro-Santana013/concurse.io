@@ -7,15 +7,18 @@ from pathlib import Path
 from urllib.parse import quote, unquote, urlparse
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 
 from models.database import Exam, get_db, resolve_exam_questions
 from routes.api_v1.user_context import get_accessible_exam_or_404, get_current_user
+from services.object_storage import ObjectStorageError, get_object, question_object_key
+from services.object_storage import exam_pdf_object_key
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 QUESTION_MEDIA_DIR = (PROJECT_ROOT / "static" / "images" / "questions").resolve()
+PDF_DIR = (PROJECT_ROOT / "pdfs").resolve()
 LEGACY_QUESTION_MEDIA_PREFIX = "/static/images/questions/"
 router = APIRouter()
 
@@ -137,10 +140,65 @@ def get_exam_question_media(
     """Entrega apenas arquivos referenciados por uma prova acessível ao usuário."""
     exam = get_accessible_exam_or_404(db, user_id=current_user.id, exam_id=exam_id)
     normalized_filename = unquote(str(filename or "").strip())
-    media_path = resolve_question_media_path(normalized_filename)
-    if media_path is None or not exam_references_question_media(db, exam, normalized_filename):
+    if not exam_references_question_media(db, exam, normalized_filename):
         raise HTTPException(status_code=404, detail="Mídia da prova não encontrada.")
-    return FileResponse(
-        media_path,
-        headers={"Cache-Control": "private, no-store"},
-    )
+
+    # Object Storage is the canonical media plane in production.  The local
+    # file is retained as a development/fallback path so an existing database
+    # can be migrated gradually without breaking old exams.
+    try:
+        remote = get_object(question_object_key(normalized_filename))
+    except (ObjectStorageError, ValueError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="O armazenamento de mídia está temporariamente indisponível.",
+        ) from exc
+    if remote is not None:
+        headers = {"Cache-Control": "private, no-store"}
+        if remote.etag:
+            headers["ETag"] = remote.etag
+        return Response(remote.content, media_type=remote.content_type, headers=headers)
+
+    media_path = resolve_question_media_path(normalized_filename)
+    if media_path is None:
+        raise HTTPException(status_code=404, detail="Mídia da prova não encontrada.")
+    return FileResponse(media_path, headers={"Cache-Control": "private, no-store"})
+
+
+@router.get("/exams/{exam_id}/pdf/{kind}", include_in_schema=False)
+def get_exam_pdf(
+    exam_id: int,
+    kind: str,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Entrega o caderno ou gabarito por uma rota autorizada.
+
+    O nome canônico no Object Storage é ``exams/{id}/{kind}.pdf``.  O arquivo
+    local é mantido como fallback durante a migração dos artefatos existentes.
+    """
+
+    exam = get_accessible_exam_or_404(db, user_id=current_user.id, exam_id=exam_id)
+    try:
+        object_key = exam_pdf_object_key(exam.id, kind)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="PDF da prova não encontrado.") from exc
+
+    try:
+        remote = get_object(object_key)
+    except ObjectStorageError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="O armazenamento de provas está temporariamente indisponível.",
+        ) from exc
+    if remote is not None:
+        headers = {"Cache-Control": "private, no-store"}
+        if remote.etag:
+            headers["ETag"] = remote.etag
+        return Response(remote.content, media_type="application/pdf", headers=headers)
+
+    suffix = "prova" if kind.strip().lower() == "prova" else "gab"
+    local_path = (PDF_DIR / f"{int(exam.id)}_{suffix}.pdf").resolve()
+    if local_path.parent != PDF_DIR or not local_path.is_file():
+        raise HTTPException(status_code=404, detail="PDF da prova não encontrado.")
+    return FileResponse(local_path, media_type="application/pdf", headers={"Cache-Control": "private, no-store"})
