@@ -3291,12 +3291,21 @@ def parse_exam_document(
 
         if matching_context:
             q_min, q_max, ctx_text = matching_context
-            cleaned_ctx = _prepare_numbered_source_context(ctx_text)
+            preserve_native_word_boundaries = "@@P" in str(ctx_text or "")
+            cleaned_ctx = _prepare_numbered_source_context(
+                ctx_text,
+                preserve_native_word_boundaries=preserve_native_word_boundaries,
+            )
             if cleaned_ctx[:30] not in formatted_enunciado:
                 formatted_enunciado = f"📖 **Texto de Apoio (Questões {q_min} a {q_max}):**\n\n{cleaned_ctx}\n\n---\n\n{formatted_enunciado}"
 
         # Restauração Tipográfica e de Parágrafos Editorial
-        formatted_enunciado = restore_exam_typography(formatted_enunciado)
+        formatted_enunciado = restore_exam_typography(
+            formatted_enunciado,
+            preserve_native_word_boundaries=bool(
+                matching_context and "@@P" in str(matching_context[2] or "")
+            ),
+        )
         formatted_enunciado = format_markdown_tables_in_text(formatted_enunciado)
         formatted_enunciado = _unprotect_source_paragraph_markers(formatted_enunciado)
 
