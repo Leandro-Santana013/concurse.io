@@ -80,6 +80,70 @@ def test_google_id_token_validation_tolerates_clock_skew(monkeypatch):
     assert captured["clock_skew"] == 60
 
 
+def test_supabase_session_exchange_creates_internal_session(auth_client, monkeypatch):
+    client, session_factory = auth_client
+    monkeypatch.setattr(auth_api, "supabase_auth_configured", lambda: True)
+    monkeypatch.setattr(
+        auth_api,
+        "verify_supabase_access_token",
+        lambda token: {
+            "sub": "supabase-user-123",
+            "email": "estudante@example.com",
+            "name": "Pessoa Supabase",
+            "picture": "https://example.test/supabase-avatar.png",
+        },
+    )
+
+    response = client.post(
+        "/api/v1/auth/supabase/exchange",
+        json={"access_token": "supabase-access-token-123456"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["user"]["email"] == "estudante@example.com"
+    assert response.json()["session_token"].startswith("v2.")
+    assert client.get("/api/v1/auth/me").json()["name"] == "Pessoa Supabase"
+
+    with session_factory() as db:
+        stored = db.query(User).one()
+        assert stored.supabase_auth_id.startswith("hmac:v1:")
+        assert stored.email == "estudante@example.com"
+
+
+def test_supabase_session_exchange_reuses_legacy_account_by_email(auth_client, monkeypatch):
+    client, session_factory = auth_client
+    with session_factory() as db:
+        db.add(User(
+            google_id="legacy-google-subject",
+            email="same@example.com",
+            name="Conta antiga",
+        ))
+        db.commit()
+
+    monkeypatch.setattr(auth_api, "supabase_auth_configured", lambda: True)
+    monkeypatch.setattr(
+        auth_api,
+        "verify_supabase_access_token",
+        lambda _token: {
+            "sub": "supabase-same-account",
+            "email": "same@example.com",
+            "name": "Conta sincronizada",
+            "picture": "",
+        },
+    )
+
+    response = client.post(
+        "/api/v1/auth/supabase/exchange",
+        json={"access_token": "supabase-access-token-123456"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["user"]["id"] == 1
+    with session_factory() as db:
+        assert db.query(User).count() == 1
+        assert db.query(User).one().supabase_auth_id.startswith("hmac:v1:")
+
+
 @pytest.fixture()
 def auth_client(monkeypatch):
     monkeypatch.setenv("SESSION_SECRET", "test-secret-with-enough-entropy")

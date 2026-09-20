@@ -8,4 +8,5 @@ export interface AuthUser {
 
 export interface AuthConfig {
   google_enabled: boolean;
+  supabase_enabled?: boolean;
 }

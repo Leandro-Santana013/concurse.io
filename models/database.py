@@ -75,6 +75,10 @@ class User(Base):
     __tablename__ = 'users'
     id = Column(Integer, primary_key=True)
     google_subject_hash = Column("google_id", String(200), unique=True, nullable=False, index=True)
+    # Identificador estável emitido pelo Supabase Auth. Ele permite que o
+    # mesmo usuário seja reconciliado com a conta interna sem armazenar o
+    # token de acesso nem depender do e-mail em texto puro.
+    supabase_auth_id = Column(String(200), unique=True, nullable=True, index=True)
     _email_legacy = Column("email", String(200), nullable=False)
     _name_legacy = Column("name", String(200), nullable=True)
     _picture_legacy = Column("picture", String(500), nullable=True)
@@ -409,7 +413,7 @@ def _ensure_user_security_columns():
     existing = {column["name"] for column in inspector.get_columns("users")}
     missing = [
         column
-        for column in ("email_encrypted", "name_encrypted", "picture_encrypted")
+        for column in ("email_encrypted", "name_encrypted", "picture_encrypted", "supabase_auth_id")
         if column not in existing
     ]
     if not missing:
@@ -417,7 +421,13 @@ def _ensure_user_security_columns():
 
     with engine.begin() as connection:
         for column in missing:
-            connection.execute(text(f"ALTER TABLE users ADD COLUMN {column} TEXT"))
+            column_type = "VARCHAR(200)" if column == "supabase_auth_id" else "TEXT"
+            connection.execute(text(f"ALTER TABLE users ADD COLUMN {column} {column_type}"))
+        if "supabase_auth_id" in missing:
+            connection.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_supabase_auth_id "
+                "ON users (supabase_auth_id) WHERE supabase_auth_id IS NOT NULL"
+            ))
 
 
 def _migrate_user_security_rows() -> int:

@@ -52,6 +52,27 @@ O OCID do usuário, o fingerprint e a PEM ficam apenas no host da API. O
 desktop e o mobile recebem somente `VITE_API_ORIGIN` e nunca acessam o bucket
 com uma chave de serviço.
 
+## Login Supabase
+
+O projeto Supabase também está configurado como provedor Google. No servidor da
+API, preencha a URL do projeto e a chave publicável:
+
+```dotenv
+SUPABASE_URL=https://pvojiokewtteroaraykk.supabase.co
+SUPABASE_PUBLISHABLE_KEY=<chave-publicável>
+```
+
+O frontend web inicia o OAuth pelo Supabase e envia o access token ao endpoint
+`POST /api/v1/auth/supabase/exchange`. A API valida o token no endpoint oficial
+do Supabase, vincula o UUID protegido à tabela `users` e emite a sessão interna
+que já autoriza biblioteca, atribuições e mídia. O token não é persistido.
+
+Antes de ativar o bridge em um banco existente, aplique
+`supabase/migrations/20260920000000_add_supabase_auth_id.sql` no SQL Editor ou
+deixe a migração aditiva do `init_db()` executá-la no primeiro start da API.
+Os builds desktop e mobile mantêm o callback privado já existente; a conta
+Google continua apontando para o mesmo usuário interno.
+
 O pacote `oci` é instalado junto com a API. Sem essas variáveis, o projeto
 continua funcionando com os arquivos locais, o que permite migrar os artefatos
 sem interromper as provas existentes.

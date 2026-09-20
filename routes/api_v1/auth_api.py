@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from models.database import DesktopOAuthCode, User, get_db
 from routes.api_v1.user_context import get_current_user
-from app_security import identifier_lookup_values
+from app_security import identifier_lookup_values, protect_identifier
 from services.auth import (
     GoogleOAuthError,
     DESKTOP_OAUTH_CODE_MAX_AGE_SECONDS,
@@ -29,6 +29,11 @@ from services.auth import (
     normalize_desktop_return,
     normalize_return_path,
     session_token_needs_rotation,
+)
+from services.auth.supabase_auth import (
+    SupabaseAuthError,
+    supabase_auth_configured,
+    verify_supabase_access_token,
 )
 
 router = APIRouter()
@@ -75,7 +80,103 @@ def _oauth_error_redirect(
 
 @router.get("/auth/config")
 def get_auth_config():
-    return {"google_enabled": google_oauth_configured()}
+    return {
+        "google_enabled": google_oauth_configured(),
+        "supabase_enabled": supabase_auth_configured(),
+    }
+
+
+def _find_user_by_supabase_email(db: Session, email: str) -> User | None:
+    """Reaproveita uma conta antiga sem consultar PII em SQL.
+
+    O e-mail legado é pseudonimizado na coluna indexada e o valor em claro só
+    existe dentro do campo criptografado. Essa busca ocorre apenas na primeira
+    vinculação da conta Supabase; depois o UUID fica indexado em
+    ``supabase_auth_id``.
+    """
+
+    normalized = str(email or "").strip().casefold()
+    if not normalized:
+        return None
+    for candidate in db.query(User).yield_per(100):
+        try:
+            candidate_email = str(candidate.email or "").strip().casefold()
+        except Exception:
+            continue
+        if candidate_email == normalized:
+            return candidate
+    return None
+
+
+@router.post("/auth/supabase/exchange")
+def exchange_supabase_session(
+    request: Request,
+    payload: dict = Body(default_factory=dict),
+    db: Session = Depends(get_db),
+):
+    """Troca um access token Supabase por uma sessão compatível com a API.
+
+    O token recebido nunca é persistido. A resposta mantém o formato do
+    login Google existente para que web, desktop e mobile possam compartilhar
+    as mesmas rotas de biblioteca e atribuição.
+    """
+
+    if not supabase_auth_configured():
+        raise HTTPException(status_code=503, detail="Supabase Auth não está configurado no servidor.")
+    access_token = str(payload.get("access_token") or "").strip()
+    try:
+        identity = verify_supabase_access_token(access_token)
+    except SupabaseAuthError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+    subject = identity["sub"]
+    subject_index = protect_identifier(subject)
+    user = db.query(User).filter(
+        User.supabase_auth_id.in_(identifier_lookup_values(subject))
+    ).first()
+    if user is None:
+        user = _find_user_by_supabase_email(db, identity["email"])
+    if user is None:
+        user = User(
+            # O identificador do Supabase é protegido da mesma forma que o
+            # identificador Google; o valor bruto não fica no banco.
+            google_id=f"supabase:{subject}",
+            supabase_auth_id=subject_index,
+            email=identity["email"],
+            name=identity.get("name") or "Concurseiro",
+            picture=identity.get("picture") or None,
+        )
+        db.add(user)
+    else:
+        user.supabase_auth_id = subject_index
+        user.email = identity["email"]
+        user.name = identity.get("name") or user.name or "Concurseiro"
+        user.picture = identity.get("picture") or user.picture or None
+    db.commit()
+    db.refresh(user)
+
+    session_token = create_session_token(int(user.id))
+    response = JSONResponse({
+        "session_token": session_token,
+        "user": {
+            "id": int(user.id),
+            "email": user.email,
+            "name": user.name or "Concurseiro",
+            "picture": user.picture or "",
+            "is_authenticated": True,
+        },
+    })
+    response.set_cookie(
+        SESSION_COOKIE,
+        session_token,
+        max_age=SESSION_MAX_AGE_SECONDS,
+        httponly=True,
+        secure=is_cookie_secure(request),
+        samesite="lax",
+        path="/",
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @router.get("/auth/google/login")

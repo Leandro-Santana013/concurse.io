@@ -33,7 +33,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshSession = useCallback(async () => {
     setError(null);
     try {
-      const currentUser = await api.getCurrentUser();
+      // O callback do Supabase Auth chega com uma sessão própria. Trocamos
+      // essa sessão primeiro para que a conta Google recém-selecionada não
+      // seja mascarada por um cookie antigo da API.
+      let currentUser: AuthUser | null = null;
+      try {
+        currentUser = await api.exchangeSupabaseSession();
+      } catch {
+        // O fluxo Google legado continua válido enquanto o bridge Supabase
+        // não estiver configurado no servidor.
+      }
+      if (!currentUser) currentUser = await api.getCurrentUser();
       if (currentUser) {
         useExamStore.getState().bindToUser(currentUser.id);
       } else {

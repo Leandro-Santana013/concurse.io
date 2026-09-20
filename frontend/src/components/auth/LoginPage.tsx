@@ -3,6 +3,7 @@ import { BookOpen, Bookmark, Check, ShieldCheck } from 'lucide-react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../services/api';
+import { supabaseAuthConfigured } from '../../services/supabase';
 
 const DESKTOP_APP = import.meta.env.VITE_DESKTOP_APP === '1';
 const OFFLINE_DESKTOP = import.meta.env.VITE_OFFLINE_DESKTOP === '1';
@@ -35,6 +36,7 @@ export const LoginPage: React.FC = () => {
   const { error: sessionError, refreshSession, status } = useAuth();
   const [searchParams] = useSearchParams();
   const [googleEnabled, setGoogleEnabled] = useState<boolean | null>(null);
+  const [supabaseEnabled, setSupabaseEnabled] = useState<boolean | null>(null);
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [desktopLoginError, setDesktopLoginError] = useState<string | null>(null);
   const nextPath = safeNextPath(searchParams.get('next'));
@@ -48,10 +50,16 @@ export const LoginPage: React.FC = () => {
     let active = true;
     void api.getAuthConfig()
       .then((config) => {
-        if (active) setGoogleEnabled(config.google_enabled);
+        if (active) {
+          setGoogleEnabled(config.google_enabled);
+          setSupabaseEnabled(config.supabase_enabled === true);
+        }
       })
       .catch(() => {
-        if (active) setGoogleEnabled(false);
+        if (active) {
+          setGoogleEnabled(false);
+          setSupabaseEnabled(false);
+        }
       });
     return () => {
       active = false;
@@ -122,7 +130,12 @@ export const LoginPage: React.FC = () => {
     return <Navigate to={nextPath} replace />;
   }
 
-  const loginDisabled = googleEnabled !== true || isRedirecting;
+  const useSupabaseLogin = supabaseEnabled === true
+    && supabaseAuthConfigured
+    && !DESKTOP_APP
+    && !TAURI_MOBILE_APP
+    && !OFFLINE_DESKTOP;
+  const loginDisabled = (!useSupabaseLogin && googleEnabled !== true) || isRedirecting;
 
   return (
     <main className="login-page" id="main-content">
@@ -150,7 +163,7 @@ export const LoginPage: React.FC = () => {
             )}
 
             <a
-              href={api.getGoogleLoginUrl(nextPath)}
+              href={useSupabaseLogin ? '#' : api.getGoogleLoginUrl(nextPath)}
               className={`google-login-button${loginDisabled ? ' is-disabled' : ''}`}
               aria-disabled={loginDisabled}
               aria-busy={isRedirecting}
@@ -160,7 +173,13 @@ export const LoginPage: React.FC = () => {
                   return;
                 }
                 setIsRedirecting(true);
-                if (DESKTOP_APP || TAURI_MOBILE_APP) {
+                if (useSupabaseLogin) {
+                  event.preventDefault();
+                  void api.beginSupabaseLogin(nextPath).catch((error) => {
+                    setIsRedirecting(false);
+                    setDesktopLoginError(error instanceof Error ? error.message : 'Não foi possível abrir o login Supabase.');
+                  });
+                } else if (DESKTOP_APP || TAURI_MOBILE_APP) {
                   event.preventDefault();
                   void api.beginGoogleLogin(nextPath).catch((error) => {
                     setIsRedirecting(false);
@@ -177,7 +196,7 @@ export const LoginPage: React.FC = () => {
               <span>
                 {googleEnabled === null
                   ? 'Verificando acesso…'
-                  : googleEnabled
+                  : useSupabaseLogin || googleEnabled
                     ? isRedirecting ? 'Abrindo o Google…' : 'Continuar com Google'
                     : 'Google indisponível'}
               </span>

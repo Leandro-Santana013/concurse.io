@@ -12,6 +12,7 @@ const apiMocks = vi.hoisted(() => ({
   getActiveDownloads: vi.fn(async () => []),
   getAuthConfig: vi.fn(async () => ({ google_enabled: true })),
   getCurrentUser: vi.fn(async () => null),
+  exchangeSupabaseSession: vi.fn(async () => null),
   getGoogleLoginUrl: vi.fn((nextPath: string) => `/api/v1/auth/google/login?next=${encodeURIComponent(nextPath)}`),
   logout: vi.fn(async () => undefined),
 }));

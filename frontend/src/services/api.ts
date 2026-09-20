@@ -17,6 +17,11 @@ import {
   CustomSimulationSummary,
 } from '../types/exam';
 import { AuthConfig, AuthUser } from '../types/auth';
+import {
+  supabase,
+  supabaseAuthConfigured,
+  supabaseRedirectUrl,
+} from './supabase';
 
 export const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN || '').trim().replace(/\/+$/, '');
 export const OFFLINE_DESKTOP = import.meta.env.VITE_OFFLINE_DESKTOP === '1';
@@ -135,6 +140,29 @@ export const api = {
     }
   },
 
+  async exchangeSupabaseSession(): Promise<AuthUser | null> {
+    if (!supabaseAuthConfigured || !supabase) return null;
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw new Error('Falha ao ler a sessão do Supabase.');
+    const accessToken = data.session?.access_token;
+    if (!accessToken) return null;
+
+    const res = await apiFetch(`${API_BASE}/auth/supabase/exchange`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ access_token: accessToken }),
+    });
+    if (res.status === 401) {
+      await supabase.auth.signOut();
+      return null;
+    }
+    if (!res.ok) throw new Error('Não foi possível sincronizar a conta Supabase.');
+    const payload: { user?: AuthUser; session_token?: string } = await res.json();
+    if (!payload.user) throw new Error('O servidor não retornou um usuário válido.');
+    if (DESKTOP_APP && payload.session_token) setDesktopSessionToken(payload.session_token);
+    return payload.user;
+  },
+
   async getCurrentUser(): Promise<AuthUser | null> {
     if (OFFLINE_DESKTOP) return invokeOffline<AuthUser>('offline_current_user');
     try {
@@ -174,6 +202,20 @@ export const api = {
       return;
     }
     window.location.assign(this.getGoogleLoginUrl(nextPath));
+  },
+
+  async beginSupabaseLogin(nextPath: string = '/'): Promise<void> {
+    if (!supabaseAuthConfigured || !supabase) {
+      throw new Error('O login Supabase não está configurado neste build.');
+    }
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: supabaseRedirectUrl(nextPath),
+        queryParams: { access_type: 'offline', prompt: 'select_account' },
+      },
+    });
+    if (error) throw new Error('Não foi possível abrir o login Google pelo Supabase.');
   },
 
   async takeDesktopOAuthCode(): Promise<string | null> {
@@ -221,10 +263,9 @@ export const api = {
 
   async logout(): Promise<void> {
     if (OFFLINE_DESKTOP) return;
-    const res = await apiFetch(`${API_BASE}/auth/logout`, {
-      method: 'POST',
-    });
+    const res = await apiFetch(`${API_BASE}/auth/logout`, { method: 'POST' });
     if (!res.ok) throw new Error('Não foi possível encerrar a sessão');
+    if (supabase) await supabase.auth.signOut();
     setDesktopSessionToken('');
   },
 
@@ -234,6 +275,7 @@ export const api = {
       method: 'DELETE',
     });
     if (!res.ok) throw new Error('Não foi possível excluir a sua conta');
+    if (supabase) await supabase.auth.signOut();
     setDesktopSessionToken('');
   },
 
