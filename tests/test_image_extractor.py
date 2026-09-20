@@ -50,6 +50,30 @@ def test_caption_regex():
     print("  -> OK: CAPTION_REGEX validado!")
 
 
+def test_idcap_panel_transcription_is_not_added_to_hagar_crop():
+    """A transcrição dos quadros do Hagar fica fora do recorte da tirinha."""
+
+    pdf_path = os.path.join("pdfs", "2_prova.pdf")
+    if not os.path.exists(pdf_path):
+        return
+
+    with fitz.open(pdf_path) as doc:
+        page = doc[2]
+        extractor = ExamImageExtractor(output_dir="static/images/questions_test", dpi=160)
+        clusters = extractor.find_diagram_clusters(
+            page,
+            extractor.detect_watermarks_and_headers(doc),
+            text_blocks=page.get_text("blocks"),
+        )
+
+    assert clusters, "A tirinha do Hagar deve ser detectada como imagem"
+    hagar = min(clusters, key=lambda rect: rect.y0)
+    # A imagem termina em ~376pt; os blocos QUADRO começam em ~392pt. Se eles
+    # voltarem ao cluster, o recorte inclui a transcrição e fica visualmente
+    # desleixado.
+    assert hagar.y1 < 390, f"Transcrição incluída no crop: y1={hagar.y1}"
+
+
 def test_ibam_scan_visual_is_not_duplicated_into_next_question():
     """A figura da Q15 do IBAM 2020 fica dentro de uma página com Q16 logo abaixo."""
 
