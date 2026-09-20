@@ -4,15 +4,16 @@
   "version": "0.1.0",
   "description": "Aplicativo desktop concurse.io local-first com biblioteca centralizada.",
   "scripts": {
+    "tauri": "tauri",
     "dev": "tauri dev",
-    "build": "tauri build",
+    "build": "npm run icons && tauri build",
     "icons": "tauri icon icon-source.svg",
     "android:init": "tauri android init",
     "android:dev": "tauri android dev",
-    "android:build": "tauri android build --apk",
+    "android:build": "npm run icons && tauri android build --apk --target aarch64",
     "ios:init": "tauri ios init",
     "ios:dev": "tauri ios dev",
-    "ios:build": "tauri ios build"
+    "ios:build": "npm run icons && tauri ios build"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0"
