@@ -320,7 +320,12 @@ def restore_ocr_lexical_spacing(
     return t
 
 
-def restore_exam_typography(text: str, is_option: bool = False) -> str:
+def restore_exam_typography(
+    text: str,
+    is_option: bool = False,
+    *,
+    preserve_native_word_boundaries: bool = False,
+) -> str:
     """
     Restaura a tipografia, parágrafos e pontuação de enunciados e textos de prova.
     Transforma texto cru ou quebrado em formatação editorial limpa e legível.
@@ -330,10 +335,16 @@ def restore_exam_typography(text: str, is_option: bool = False) -> str:
 
     # Faz a desaglutinação antes do caminho Rust e novamente no retorno para
     # que a implementação nativa não esconda palavras que ela não conhece.
-    lexical_text = restore_ocr_lexical_spacing(text)
+    lexical_text = (
+        str(text or "")
+        if preserve_native_word_boundaries
+        else restore_ocr_lexical_spacing(text)
+    )
     if rust_restore_typography:
         res = rust_restore_typography(lexical_text, is_option)
         if res is not None:
+            if preserve_native_word_boundaries:
+                return res.strip()
             return restore_ocr_lexical_spacing(res).strip()
 
     t = lexical_text

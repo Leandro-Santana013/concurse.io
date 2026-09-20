@@ -80,6 +80,259 @@ MULTI_FIGURE_REGEX = re.compile(
 )
 
 
+def _two_column_option_grid_crop_rects(
+    native_words: List[Tuple[Any, ...]],
+    page_rect: fitz.Rect,
+    question_y: float,
+    next_question_y: float,
+    padding: float = 8.0,
+) -> Optional[Dict[str, fitz.Rect]]:
+    """Localiza cinco rótulos A--E organizados em uma grade visual de duas colunas."""
+
+    markers: List[Dict[str, Any]] = []
+    lower_y = float(question_y) + 100.0
+    upper_y = min(float(next_question_y), float(page_rect.height)) - 8.0
+    for word in native_words:
+        if len(word) < 5:
+            continue
+        label = str(word[4] or "").strip().upper()
+        if label not in "ABCDE" or len(label) != 1:
+            continue
+        try:
+            x0, y0, x1, y1 = (float(value) for value in word[:4])
+        except (TypeError, ValueError):
+            continue
+        mid_y = (y0 + y1) / 2.0
+        if lower_y <= mid_y <= upper_y:
+            markers.append({
+                "label": label,
+                "x0": x0,
+                "x1": x1,
+                "mid_x": (x0 + x1) / 2.0,
+                "mid_y": mid_y,
+            })
+    markers.sort(key=lambda item: (item["mid_y"], item["x0"]))
+    if len(markers) < 5:
+        return None
+
+    rows: List[List[Dict[str, Any]]] = []
+    for marker in markers:
+        matching_row = next(
+            (
+                row
+                for row in rows
+                if abs(
+                    marker["mid_y"]
+                    - sum(item["mid_y"] for item in row) / len(row)
+                ) <= 14.0
+            ),
+            None,
+        )
+        if matching_row is None:
+            rows.append([marker])
+        else:
+            matching_row.append(marker)
+
+    for start_index in range(max(0, len(rows) - 2)):
+        candidate_rows = rows[start_index:start_index + 3]
+        candidate = [marker for row in candidate_rows for marker in row]
+        labels = [marker["label"] for marker in candidate]
+        if (
+            sorted(labels) != list("ABCDE")
+            or any(len(row) not in (1, 2) for row in candidate_rows)
+        ):
+            continue
+
+        x_positions = sorted(marker["mid_x"] for marker in candidate)
+        x_gaps = [
+            (x_positions[index + 1] - x_positions[index], index)
+            for index in range(len(x_positions) - 1)
+        ]
+        column_gap, split_index = max(x_gaps, key=lambda item: item[0])
+        if column_gap < 80.0:
+            continue
+        left_positions = x_positions[:split_index + 1]
+        right_positions = x_positions[split_index + 1:]
+        if len(left_positions) < 2 or len(right_positions) < 2:
+            continue
+        left_center = sum(left_positions) / len(left_positions)
+        right_center = sum(right_positions) / len(right_positions)
+        if right_center - left_center < 80.0:
+            continue
+        if any(
+            sum(marker["mid_x"] < (left_center + right_center) / 2.0 for marker in row) > 1
+            or sum(marker["mid_x"] >= (left_center + right_center) / 2.0 for marker in row) > 1
+            for row in candidate_rows
+        ):
+            continue
+
+        row_centers = [
+            sum(marker["mid_y"] for marker in row) / len(row)
+            for row in candidate_rows
+        ]
+        row_gaps = [
+            row_centers[index + 1] - row_centers[index]
+            for index in range(len(row_centers) - 1)
+        ]
+        if any(gap < 35.0 or gap > 180.0 for gap in row_gaps):
+            continue
+        if max(row_gaps) - min(row_gaps) > max(30.0, min(row_gaps) * 0.7):
+            continue
+
+        crop_width = min(220.0, max(145.0, (right_center - left_center) * 0.78))
+        half_height = min(76.0, max(32.0, min(row_gaps) / 2.0 - padding))
+        crops: Dict[str, fitz.Rect] = {}
+        for marker in candidate:
+            center_y = row_centers[
+                min(
+                    range(len(candidate_rows)),
+                    key=lambda index: abs(row_centers[index] - marker["mid_y"]),
+                )
+            ]
+            crop = fitz.Rect(
+                max(float(page_rect.x0), marker["x1"] + padding + 1.0),
+                max(float(page_rect.y0), center_y - half_height),
+                min(float(page_rect.x1), marker["x1"] + 1.0 + crop_width),
+                min(float(page_rect.y1), center_y + half_height),
+            )
+            if crop.width < 80.0 or crop.height < 80.0:
+                crops = {}
+                break
+            crops[marker["label"]] = crop
+        if set(crops) == set("ABCDE"):
+            return crops
+    return None
+
+
+def _linear_option_row_crop_rects(
+    native_words: List[Tuple[Any, ...]],
+    page_rect: fitz.Rect,
+    question_x: float,
+    question_y: float,
+    next_question_y: float,
+    padding: float = 8.0,
+) -> Optional[Dict[str, fitz.Rect]]:
+    """Monta recortes para alternativas-imagem A--E dispostas em linhas."""
+
+    by_label: Dict[str, List[Dict[str, float]]] = {label: [] for label in "ABCDE"}
+    lower_y = float(question_y) + 100.0
+    upper_y = min(float(next_question_y), float(page_rect.height)) - 8.0
+    for word in native_words:
+        if len(word) < 5 or str(word[4] or "").strip().upper() not in by_label:
+            continue
+        try:
+            x0, y0, x1, y1 = (float(value) for value in word[:4])
+        except (TypeError, ValueError):
+            continue
+        if abs(x0 - float(question_x)) > 14.0:
+            continue
+        mid_y = (y0 + y1) / 2.0
+        if lower_y <= mid_y <= upper_y:
+            by_label[str(word[4]).strip().upper()].append({
+                "x0": x0,
+                "x1": x1,
+                "mid_y": mid_y,
+            })
+    if any(not by_label[label] for label in "ABCDE"):
+        return None
+
+    sequences: List[List[Dict[str, float]]] = []
+    for start in by_label["A"]:
+        sequence = [start]
+        for label in "BCDE":
+            prior_y = sequence[-1]["mid_y"]
+            candidates = [
+                marker
+                for marker in by_label[label]
+                if 8.0 <= marker["mid_y"] - prior_y <= 180.0
+                and abs(marker["x0"] - start["x0"]) <= 14.0
+            ]
+            if not candidates:
+                sequence = []
+                break
+            sequence.append(min(candidates, key=lambda marker: marker["mid_y"]))
+        if len(sequence) == 5:
+            gaps = [
+                sequence[index + 1]["mid_y"] - sequence[index]["mid_y"]
+                for index in range(4)
+            ]
+            if max(gaps) - min(gaps) <= max(30.0, min(gaps) * 0.7):
+                sequences.append(sequence)
+    if not sequences:
+        return None
+
+    markers = min(sequences, key=lambda sequence: sequence[0]["mid_y"])
+    gaps = [
+        markers[index + 1]["mid_y"] - markers[index]["mid_y"]
+        for index in range(4)
+    ]
+    half_height = min(
+        55.0,
+        max(8.0, min(gaps) / 2.0 - 2.0 - padding),
+    )
+    if float(question_x) < float(page_rect.width) * 0.35:
+        right_edge = float(page_rect.width) / 2.0 - 8.0
+    else:
+        right_edge = float(page_rect.x1) - 5.0
+
+    crops: Dict[str, fitz.Rect] = {}
+    for label, marker in zip("ABCDE", markers):
+        crop = fitz.Rect(
+            max(float(page_rect.x0), marker["x1"] + padding + 1.0),
+            max(float(page_rect.y0), marker["mid_y"] - half_height),
+            min(float(page_rect.x1), right_edge),
+            min(float(page_rect.y1), marker["mid_y"] + half_height),
+        )
+        if crop.width < 80.0 or crop.height < 20.0:
+            return None
+        crops[label] = crop
+    return crops
+
+
+def _has_dense_vector_content(page: fitz.Page, crop: fitz.Rect) -> bool:
+    drawings = page.get_drawings()
+    local_drawings = 0
+    local_items = 0
+    for drawing in drawings:
+        rect = fitz.Rect(drawing.get("rect") or (0.0, 0.0, 0.0, 0.0))
+        page_scale = (
+            rect.width >= float(page.rect.width) * 0.8
+            and rect.height >= float(page.rect.height) * 0.8
+        )
+        if not page_scale and rect.intersects(crop):
+            local_drawings += 1
+            local_items += len(drawing.get("items") or [])
+    return local_drawings >= 5 or local_items >= 12
+
+
+def _option_text_needs_visual_repair(
+    question: Dict[str, Any],
+    page: fitz.Page,
+    crop_rects: Dict[str, fitz.Rect],
+) -> bool:
+    options = question.get("opcoes") or {}
+    if (
+        not isinstance(options, dict)
+        or set(options) != set("ABCDE")
+        or any(not str(options.get(label) or "").strip() for label in "ABCDE")
+    ):
+        return True
+
+    native_words = page.get_text("words")
+    for crop in crop_rects.values():
+        substantive = [
+            str(word[4]).strip()
+            for word in native_words
+            if len(word) >= 5
+            and len(str(word[4]).strip()) > 2
+            and crop.x0 <= float(word[0]) <= crop.x1
+            and crop.y0 <= (float(word[1]) + float(word[3])) / 2.0 <= crop.y1
+        ]
+        if len(substantive) > 1:
+            return False
+    return True
+
+
 # =============================================================================
 # CLASSE PRINCIPAL: EXAM IMAGE EXTRACTOR
 # =============================================================================
@@ -445,7 +698,7 @@ class ExamImageExtractor:
         3. Prioriza a questão que contém a imagem espacialmente no seu corpo ou
            que tem palavra-gatilho explícita na vizinhança imediata.
         """
-        if not page_diagrams or not questions:
+        if not questions:
             return questions
 
         total_pages = len(doc)
@@ -608,6 +861,133 @@ class ExamImageExtractor:
                                 q_images.append(rel_url)
                             target_q['images'] = q_images
                         used_diagrams.add(diag_key)
+
+            # Alguns gráficos simples, como uma reta horizontal, não formam
+            # um cluster vetorial com área suficiente. Quando quatro opções já
+            # foram reconhecidas como imagens e os rótulos nativos formam uma
+            # grade A--E, recorta cada célula para recuperar também o gráfico
+            # que ficou fora do detector de clusters.
+            for _q_idx, question in page_qs:
+                existing_option_images = question.get("option_images") or {}
+                if not isinstance(existing_option_images, dict) or len(existing_option_images) < 3:
+                    continue
+                try:
+                    question_y = float(question.get("_y", 0.0))
+                    question_x = float(question.get("_x", 0.0))
+                except (TypeError, ValueError):
+                    continue
+                next_question_y = min(
+                    (
+                        float(other.get("_y", 0.0))
+                        for _other_idx, other in page_qs
+                        if other is not question
+                        and float(other.get("_y", 0.0)) > question_y
+                        and abs(float(other.get("_x", 0.0)) - question_x) <= 40.0
+                    ),
+                    default=float(page_obj.rect.height),
+                )
+                grid_crops = _two_column_option_grid_crop_rects(
+                    page_obj.get_text("words"),
+                    page_obj.rect,
+                    question_y,
+                    next_question_y,
+                )
+                if not grid_crops:
+                    continue
+
+                q_images = question.get("images") or []
+                q_num = question.get("numero_questao", "0")
+                base_index = len(q_images) + len(existing_option_images) + 1
+                recovered_images: Dict[str, str] = {}
+                for offset, label in enumerate("ABCDE"):
+                    rel_url = self.render_and_save_crop(
+                        page_obj=page_obj,
+                        cluster=grid_crops[label],
+                        exam_id=exam_id,
+                        q_num=q_num,
+                        img_index=base_index + offset,
+                        clamp_to_text=False,
+                    )
+                    if rel_url:
+                        recovered_images[label] = rel_url
+
+                if set(recovered_images) == set("ABCDE"):
+                    question["option_images"] = recovered_images
+                    current_options = question.get("opcoes") or {}
+                    if (
+                        not isinstance(current_options, dict)
+                        or set(current_options) != set("ABCDE")
+                        or any(
+                            not str(current_options.get(label) or "").strip()
+                            for label in "ABCDE"
+                        )
+                    ):
+                        question["opcoes"] = {label: "" for label in "ABCDE"}
+
+        # Alternativas vetoriais em linhas podem não gerar clusters individuais
+        # (por exemplo, pares de recipientes formados por traços simples). O
+        # vínculo usa rótulos alinhados e evidência vetorial repetida em A--E.
+        questions_by_page: Dict[int, List[Dict[str, Any]]] = collections.defaultdict(list)
+        for question in questions:
+            try:
+                question_page = int(question.get("_page"))
+            except (TypeError, ValueError):
+                continue
+            if 0 <= question_page < total_pages:
+                questions_by_page[question_page].append(question)
+
+        for p_idx, page_questions in questions_by_page.items():
+            page_obj = doc[p_idx]
+            for question in page_questions:
+                try:
+                    question_x = float(question.get("_x", 0.0))
+                    question_y = float(question.get("_y", 0.0))
+                except (TypeError, ValueError):
+                    continue
+                next_question_y = min(
+                    (
+                        float(other.get("_y", 0.0))
+                        for other in page_questions
+                        if other is not question
+                        and float(other.get("_y", 0.0)) > question_y
+                        and abs(float(other.get("_x", 0.0)) - question_x) <= 40.0
+                    ),
+                    default=float(page_obj.rect.height),
+                )
+                crop_rects = _linear_option_row_crop_rects(
+                    page_obj.get_text("words"),
+                    page_obj.rect,
+                    question_x,
+                    question_y,
+                    next_question_y,
+                )
+                if not crop_rects or not all(
+                    _has_dense_vector_content(page_obj, crop)
+                    for crop in crop_rects.values()
+                ):
+                    continue
+
+                q_images = question.get("images") or []
+                existing_option_images = question.get("option_images") or {}
+                q_num = question.get("numero_questao", "0")
+                base_index = len(q_images) + len(existing_option_images) + 1
+                recovered_images: Dict[str, str] = {}
+                for offset, label in enumerate("ABCDE"):
+                    rel_url = self.render_and_save_crop(
+                        page_obj=page_obj,
+                        cluster=crop_rects[label],
+                        exam_id=exam_id,
+                        q_num=q_num,
+                        img_index=base_index + offset,
+                        clamp_to_text=False,
+                    )
+                    if rel_url:
+                        recovered_images[label] = rel_url
+                if set(recovered_images) != set("ABCDE"):
+                    continue
+                question["option_images"] = recovered_images
+                if _option_text_needs_visual_repair(question, page_obj, crop_rects):
+                    question["opcoes"] = {label: "" for label in "ABCDE"}
 
         # Limpeza temporária
         for q in questions:

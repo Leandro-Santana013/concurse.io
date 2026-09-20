@@ -99,7 +99,10 @@ pub fn solve_dp_chain_with_sections(candidates: &[QuestionCandidate], section_bo
 /// falso (ex: DATAPREV 1..12,1..4,14..70 = 69 únicos, com duplicatas) perde
 /// para a cadeia contínua verdadeira (1..70 = 70 únicos). Em provas com
 /// reinício legítimo por disciplina (ex: 1..10,1..10), a cadeia com seções
-/// é mais longa e vence no desempate por comprimento total.
+/// é mais longa e vence no desempate por comprimento, desde que as duas
+/// cadeias comecem no mesmo cabeçalho. Esse último requisito evita que
+/// números de página/rodapé anteriores à primeira questão sejam interpretados
+/// como uma seção válida (ex: 2, 12, 1..70 na Transpetro).
 pub fn select_best_chain(
     strict_chain: Vec<QuestionCandidate>,
     section_chain: Vec<QuestionCandidate>,
@@ -113,9 +116,66 @@ pub fn select_best_chain(
     if strict_unique.len() > section_unique.len() {
         return strict_chain;
     }
+
+    // Se a cadeia com seções começa antes da primeira questão da cadeia
+    // estrita, o suposto reinício foi alimentado por ruído de paginação ou
+    // instruções. A cadeia contínua é a evidência global mais forte nesse
+    // cenário, mesmo que a alternativa contaminada tenha o mesmo conjunto de
+    // números únicos e seja dois itens maior.
+    if strict_chain.first().map(|item| item.number)
+        != section_chain.first().map(|item| item.number)
+    {
+        return strict_chain;
+    }
+
     // Empate em únicos: prefere a cadeia mais longa (cobertura), depois a estrita.
     if section_chain.len() > strict_chain.len() {
         return section_chain;
     }
     strict_chain
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{select_best_chain, QuestionCandidate};
+
+    fn candidate(number: usize, start: usize) -> QuestionCandidate {
+        QuestionCandidate {
+            start,
+            end: start + 1,
+            number,
+            is_explicit: false,
+        }
+    }
+
+    #[test]
+    fn rejects_noise_before_a_complete_contiguous_chain() {
+        let strict: Vec<_> = (1..=70)
+            .map(|number| candidate(number, number * 10))
+            .collect();
+        let mut section = vec![candidate(2, 1), candidate(12, 2)];
+        section.extend(strict.iter().cloned());
+
+        let selected = select_best_chain(strict.clone(), section);
+
+        assert_eq!(selected.len(), 70);
+        assert_eq!(selected.first().map(|item| item.number), Some(1));
+        assert_eq!(selected.last().map(|item| item.number), Some(70));
+    }
+
+    #[test]
+    fn keeps_a_real_section_reset_when_the_anchor_is_the_same() {
+        let strict = vec![candidate(1, 10), candidate(2, 20)];
+        let section = vec![
+            candidate(1, 10),
+            candidate(2, 20),
+            candidate(1, 30),
+            candidate(2, 40),
+        ];
+
+        let selected = select_best_chain(strict, section);
+
+        assert_eq!(selected.len(), 4);
+        assert_eq!(selected.first().map(|item| item.number), Some(1));
+    }
 }

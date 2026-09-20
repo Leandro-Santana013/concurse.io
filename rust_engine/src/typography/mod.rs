@@ -103,7 +103,13 @@ pub fn restore_exam_typography_native(raw_text: &str, is_option: bool) -> String
 fn reconstruct_paragraph_flow(text: &str) -> String {
     let raw_blocks: Vec<&str> = text.split("\n\n").map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
     let mut final_paras: Vec<String> = Vec::new();
-    let has_global_poetic_context = poetry::POEM_CUES_REGEX.is_match(text) || poetry::FAMOUS_POETS_REGEX.is_match(text);
+    // Textos narrativos com parágrafos numerados podem mencionar ``soneto``
+    // ou ``poeta`` sem serem poemas. O marcador interno ``@@P`` vem do
+    // detector geométrico e é a evidência de que o bloco deve permanecer em
+    // prosa, sem a formatação Markdown de citação ``>``.
+    let has_numbered_source_context = Regex::new(r"(?m)^@@P\d{1,3}\b").unwrap().is_match(text);
+    let has_global_poetic_context = !has_numbered_source_context
+        && (poetry::POEM_CUES_REGEX.is_match(text) || poetry::FAMOUS_POETS_REGEX.is_match(text));
 
     for (block_idx, block) in raw_blocks.iter().enumerate() {
         if block.starts_with("---")

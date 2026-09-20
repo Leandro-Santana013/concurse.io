@@ -489,6 +489,76 @@ def detect_watermarks(doc: fitz.Document) -> Set[Tuple[int, int, int, int]]:
 
     return {k for k, pages in rect_pages.items() if len(pages) >= 3}
 
+_SOURCE_PARAGRAPH_TOKEN_RE = re.compile(r"^@@P(?P<number>\d{1,3})(?=\s|$)")
+
+
+def _is_source_paragraph_marker_line(line: Dict[str, Any], line_text: str) -> bool:
+    """Identifica o algarismo editorial na margem de um texto de apoio.
+
+    Em alguns cadernos nativos (notadamente a Transpetro), ``1`` a ``9`` são
+    desenhados em uma fonte Times itálica estreita, separados do corpo. Eles
+    não são cabeçalhos de questões. A marca interna ``@@P`` mantém essa
+    informação durante a etapa linear sem expor um número nu ao scanner global.
+    Cabeçalhos reais usam a fonte regular/bold do caderno e continuam intactos.
+    """
+    value = str(line_text or "").strip()
+    if not re.fullmatch(r"\d{1,3}", value):
+        return False
+    spans = line.get("spans") or line.get("_raw_spans") or []
+    if not spans:
+        return False
+    return all(
+        (
+            (int(span.get("flags", 0)) & 2) != 0
+            or "italic" in str(span.get("font", "")).lower()
+            or "oblique" in str(span.get("font", "")).lower()
+        )
+        for span in spans
+        if str(span.get("text", "")).strip()
+    )
+
+
+def _reposition_source_paragraph_markers(raw_lines: List[str]) -> List[str]:
+    """Reassocia um marcador que caiu na segunda linha de um parágrafo.
+
+    Na coluna direita do PDF da Transpetro, o ``8`` está no gutter entre a
+    primeira e a segunda linha visual do parágrafo. A ordenação por faixas de
+    dez pontos o colocava antes de ``ria``. Se a linha anterior termina com
+    hífen e a seguinte começa em minúscula, o marcador pertence ao início da
+    linha anterior.
+    """
+    result: List[str] = []
+    index = 0
+    while index < len(raw_lines):
+        line = raw_lines[index]
+        marker = _SOURCE_PARAGRAPH_TOKEN_RE.fullmatch(line)
+        if not marker:
+            result.append(line)
+            index += 1
+            continue
+
+        number = marker.group("number")
+        next_line = raw_lines[index + 1] if index + 1 < len(raw_lines) else ""
+        previous = result[-1] if result else ""
+        if (
+            previous
+            and next_line
+            and previous.rstrip().endswith("-")
+            and next_line[:1].islower()
+        ):
+            result[-1] = f"@@P{number} {previous}"
+            index += 1
+            continue
+
+        if next_line:
+            result.append(f"@@P{number} {next_line}")
+            index += 2
+        else:
+            result.append(f"@@P{number}")
+            index += 1
+    return result
+
+
 def clean_marginal_line_numbers(text_str: str) -> str:
     """
     Remove números de linha verticais que são comuns nas margens de textos de apoio
@@ -547,6 +617,7 @@ def normalize_paragraph_flow(text_str: str) -> str:
     # Normaliza quebras de linha com espaços excessivos entre palavras
     text_str = re.sub(r'[ \t]+', ' ', text_str)
     raw_lines = [l.strip() for l in text_str.splitlines() if l.strip()]
+    raw_lines = _reposition_source_paragraph_markers(raw_lines)
     if not raw_lines:
         return ""
 
@@ -557,6 +628,7 @@ def normalize_paragraph_flow(text_str: str) -> str:
         r'ITEM\s+\d+|'
         r'\d{1,3}\s*[\.\-\–\—\:\)]|'
         r'\d{1,3}\s+[A-Z\u00C0-\u00DC\"“\'‘\(]|'
+        r'@@P\d{1,3}\b|'
         r'^\d{1,3}$|'
         r'\(?[A-Ea-e]\s*[\.\-\–\—\:\)]|'
         r'\([A-Ea-e]\)|'
@@ -884,7 +956,16 @@ def detect_layout_and_ordered_blocks(
                     if re.match(r'^\s*\d+\s*$', line_text.strip()):
                         continue
 
+                is_source_paragraph_marker = _is_source_paragraph_marker_line(
+                    line,
+                    line_text,
+                )
                 cleaned = clean_marginal_line_numbers(line_text)
+                if is_source_paragraph_marker:
+                    # Protege o marcador editorial contra o scanner de
+                    # cabeçalhos. Ele será convertido de volta em ``1``...
+                    # ``9`` somente depois que o texto de apoio for isolado.
+                    cleaned = f"@@P{line_text.strip()}"
                 if not cleaned.strip():
                     continue
 
@@ -897,7 +978,7 @@ def detect_layout_and_ordered_blocks(
                     'x0': lx0, 'y0': ly0, 'x1': lx1, 'y1': ly1,
                     'mid_x': mid_x,
                     'width': lx1 - lx0,
-                    'text': cleaned
+                    'text': cleaned,
                 })
 
         # Insere as tabelas detectadas como blocos estruturados
