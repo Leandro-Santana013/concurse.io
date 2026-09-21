@@ -1,0 +1,23 @@
+{
+  "name": "concurse.io",
+  "short_name": "concurse",
+  "description": "Provas e simulados para estudar com constância.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#863bff",
+  "theme_color": "#863bff",
+  "icons": [
+    {
+      "src": "/concurse-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/concurse-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

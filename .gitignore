@@ -83,5 +83,7 @@ yarn-debug.log*
 .coverage
 htmlcov/
 scratch/
+tmp/
+.worktrees/
 .codex-backups/
 

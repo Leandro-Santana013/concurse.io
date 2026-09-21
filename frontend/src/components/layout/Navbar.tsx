@@ -26,6 +26,7 @@ const getPageTitle = (pathname: string) => {
   if (pathname === '/perfil') return 'Perfil & Configurações';
   if (pathname === '/biblioteca') return 'Biblioteca';
   if (pathname === '/buscar') return 'Buscar provas';
+  if (pathname === '/progresso/ibam') return 'Análise IBAM';
   if (pathname === '/progresso/erros') return 'Caderno de erros';
   if (pathname === '/progresso/ranking') return 'Ranking';
   if (pathname.startsWith('/progresso')) return 'Progresso';
@@ -48,7 +49,7 @@ export const Navbar: React.FC = () => {
     <>
       <header className="app-navbar">
         <div className="navbar-title-group">
-          <span className="mobile-brand" aria-hidden="true">C</span>
+          <img className="mobile-brand brand-logo-image" src="/concurse-icon-64.png" alt="" width={28} height={28} />
           <p>{getPageTitle(location.pathname)}</p>
         </div>
 

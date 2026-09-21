@@ -96,6 +96,14 @@ def test_stats_overview():
     assert "global_accuracy" in data
     assert "streak" in data
 
+def test_ibam_category_analysis_contract():
+    response = client.get("/api/v1/stats/ibam")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["available"] is False
+    assert data["exam_count"] == 0
+    assert data["category_averages"] == []
+
 def test_auth_me():
     response = client.get("/api/v1/auth/me")
     assert response.status_code == 200

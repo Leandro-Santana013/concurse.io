@@ -25,6 +25,7 @@ const FoldersView = React.lazy(() => import('./components/dashboard/FoldersView'
 const SearchHub = React.lazy(() => import('./components/dashboard/SearchHub').then((module) => ({ default: module.SearchHub })));
 const ExamSimulator = React.lazy(() => import('./components/exam/ExamSimulator').then((module) => ({ default: module.ExamSimulator })));
 const AnalyticsView = React.lazy(() => import('./components/stats/AnalyticsView').then((module) => ({ default: module.AnalyticsView })));
+const IbamAnalysisView = React.lazy(() => import('./components/stats/IbamAnalysisView').then((module) => ({ default: module.IbamAnalysisView })));
 const ErrorNotebookView = React.lazy(() => import('./components/stats/ErrorNotebookView').then((module) => ({ default: module.ErrorNotebookView })));
 const RankingView = React.lazy(() => import('./components/stats/RankingView').then((module) => ({ default: module.RankingView })));
 const ProfileView = React.lazy(() => import('./components/profile/ProfileView').then((module) => ({ default: module.ProfileView })));
@@ -71,7 +72,7 @@ const ProtectedRoute: React.FC = () => {
   if (status === 'loading') {
     return (
       <main className="auth-load-state" aria-busy="true">
-        <span className="brand-symbol" aria-hidden="true">C</span>
+        <img className="brand-symbol brand-logo-image" src="/concurse-icon-64.png" alt="" width={28} height={28} />
         <span className="ui-loader" aria-hidden="true" />
         <p>Preparando seu espaço de estudo…</p>
       </main>
@@ -228,6 +229,7 @@ export const App: React.FC = () => {
             <Route path="progresso" element={<ProgressLayout />}>
 
               <Route index element={<LazyPage><AnalyticsView /></LazyPage>} />
+              <Route path="ibam" element={<LazyPage><IbamAnalysisView /></LazyPage>} />
               <Route path="erros" element={<LazyPage><ErrorNotebookView onStartExam={openCurrentExam} /></LazyPage>} />
               <Route path="ranking" element={<LazyPage><RankingView /></LazyPage>} />
             </Route>

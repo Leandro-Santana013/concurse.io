@@ -6,6 +6,7 @@ from services.gabarito import (
     match_gabarito_from_pdf,
     parse_gabarito_from_pdf,
 )
+from services.gabarito.gabarito_service import extract_all_matrix_gabaritos
 
 
 RIGHT_TYPE_1 = {number: "ABCDE"[(number - 1) % 5] for number in range(1, 71)}
@@ -25,6 +26,31 @@ def _add_plain_block(doc, cargo, answers):
     lines = [cargo]
     lines.extend(f"{number} {answers[number]}" for number in range(1, 71))
     page.insert_text((50, 30), "\n".join(lines), fontsize=4)
+
+
+def _add_transpetro_matrix_fixture(doc, answers):
+    common_page = doc.new_page()
+    common_lines = ["TRANSPETRO", "GABARITO"]
+    common_lines.extend(
+        f"{number} - {answers[number]}" for number in range(1, 21)
+    )
+    common_page.insert_text((40, 30), "\n".join(common_lines), fontsize=8)
+
+    matrix_page = doc.new_page()
+    matrix_page.insert_text((470, 30), "TRANSPETRO GABARITO", fontsize=8)
+    matrix_page.insert_text((50, 160), "PROVA 1 ADMINISTRACAO NIVEL SUPERIOR", fontsize=8)
+    for index, number in enumerate(range(21, 46)):
+        matrix_page.insert_text(
+            (50, 220 + index * 15),
+            f"{number} - {answers[number]}",
+            fontsize=8,
+        )
+    for index, number in enumerate(range(46, 71)):
+        matrix_page.insert_text(
+            (125, 220 + index * 15),
+            f"{number} - {answers[number]}",
+            fontsize=8,
+        )
 
 
 def _profile(title="Analista de Tecnologia da Informacao - Comunicacao Social", tipo="1"):
@@ -125,3 +151,19 @@ def test_plain_cargo_blocks_select_the_matching_cargo_without_tipo_header():
     assert result.candidate["cargo_text"] == "ATI - COMUNICACAO SOCIAL"
     assert result.answers == RIGHT_TYPE_2
     doc.close()
+
+
+def test_transpetro_matrix_keeps_common_and_two_column_question_ranges():
+    answers = RIGHT_TYPE_1
+    doc = fitz.open()
+    try:
+        _add_transpetro_matrix_fixture(doc, answers)
+
+        matrices = extract_all_matrix_gabaritos(doc)
+
+        assert len(matrices) == 1
+        assert matrices[0]["tipo"] == "1"
+        assert matrices[0]["total_q"] == 70
+        assert matrices[0]["gabarito"] == answers
+    finally:
+        doc.close()

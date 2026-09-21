@@ -526,6 +526,26 @@
   font-family: "Source Serif 4", Georgia, serif;
 }
 
+.source-paragraph-number {
+  display: inline-flex;
+  min-width: 1.4em;
+  height: 1.4em;
+  align-items: center;
+  justify-content: center;
+  margin-inline-end: 0.35em;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.4em;
+  background: var(--surface-subtle);
+  color: var(--text);
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 0.72em;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: 0.08em;
+  white-space: nowrap;
+}
+
 .font-mono,
 .font-mono-data {
   font-family: "JetBrains Mono", Consolas, monospace;
@@ -957,6 +977,22 @@
   color: var(--on-primary);
   font-size: 0.82rem;
   font-weight: 800;
+}
+
+.brand-logo-image {
+  display: block;
+  flex: 0 0 auto;
+  object-fit: cover;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: transparent;
+}
+
+.brand-symbol.brand-logo-image,
+.mobile-brand.brand-logo-image,
+.login-brand-symbol.brand-logo-image {
+  border-radius: 0.45rem;
 }
 
 .brand-name {
@@ -2507,5 +2543,190 @@ progress::-moz-progress-bar { background: var(--primary); }
   /* Este indicador comunica que o processamento ainda está ativo. */
   .ingest-progress-loader {
     animation: ui-spin 1.6s linear infinite !important;
+  }
+}
+
+.ibam-analysis-intro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  padding: 1.25rem;
+}
+
+.ibam-analysis-intro-mark {
+  display: flex;
+  width: 4.25rem;
+  height: 4.25rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 1.25rem;
+  background: var(--surface-subtle);
+  color: var(--primary);
+}
+
+.ibam-analysis-intro-mark svg {
+  width: 2rem;
+  height: 2rem;
+}
+
+.ibam-leader-card {
+  min-width: 0;
+}
+
+.ibam-leader-card strong {
+  font-size: 1.25rem;
+}
+
+.ibam-leader-card small {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 650;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ibam-analysis-panel,
+.ibam-methodology {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  padding: 1.25rem;
+}
+
+.ibam-chart {
+  width: 100%;
+  height: 19rem;
+  margin: 1.25rem 0 1rem;
+}
+
+.ibam-exam-card {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.ibam-exam-card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--border);
+  padding: 1.1rem 1.25rem;
+}
+
+.ibam-exam-card-heading h3 {
+  margin-top: 0.35rem;
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 720;
+  line-height: 1.35;
+}
+
+.ibam-category-list {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1.1rem 1.25rem;
+}
+
+.ibam-category-row {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.ibam-category-row-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.ibam-category-row-heading h4 {
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.ibam-category-row-heading p {
+  margin-top: 0.18rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.ibam-category-row-heading > strong {
+  flex: 0 0 auto;
+  color: var(--primary);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.9rem;
+}
+
+.ibam-rank-badge {
+  display: inline-flex;
+  width: 1.65rem;
+  height: 1.65rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface-subtle);
+  color: var(--text-muted);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.ibam-weight-progress {
+  width: 100%;
+  height: 0.5rem;
+}
+
+.ibam-methodology {
+  display: grid;
+  gap: 0.55rem;
+  background: var(--surface-subtle);
+}
+
+.ibam-methodology p {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+@media (max-width: 639px) {
+  .ibam-analysis-intro {
+    align-items: flex-start;
+  }
+
+  .ibam-analysis-intro-mark {
+    display: none;
+  }
+
+  .ibam-analysis-panel,
+  .ibam-methodology {
+    padding: 1rem;
+  }
+
+  .ibam-exam-card-heading {
+    flex-direction: column;
+    padding: 1rem;
+  }
+
+  .ibam-category-list {
+    padding: 1rem;
+  }
+
+  .ibam-chart {
+    height: 22rem;
   }
 }

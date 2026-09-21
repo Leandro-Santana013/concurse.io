@@ -5,6 +5,7 @@ import {
   AttemptSubmission,
   AttemptResult,
   GlobalStats,
+  IbamAnalysis,
   NotebookSubjectStat,
   RankingEntry,
   ExamProgress,
@@ -172,6 +173,13 @@ export const api = {
   async getGlobalStats(): Promise<GlobalStats> {
     const res = await apiFetch(`${API_BASE}/stats/overview`);
     if (!res.ok) throw new Error('Falha ao obter estatísticas de desempenho');
+    return res.json();
+  },
+
+  async getIbamAnalysis(): Promise<IbamAnalysis> {
+    const res = await apiFetch(`${API_BASE}/stats/ibam`);
+    if (res.status === 401) throw new AuthRequiredError();
+    if (!res.ok) throw new Error('Falha ao obter a análise das provas IBAM');
     return res.json();
   },
 

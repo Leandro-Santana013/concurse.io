@@ -2,15 +2,41 @@ venv/
 __pycache__/
 .git/
 .env
+**/.env
+**/.env.*
 .agents/
 scratch/
 skills-lock.json
+**/__pycache__/
+**/*.py[cod]
+**/node_modules/
+**/.pytest_cache/
+**/.vite/
+.worktrees/
+.codex/
+.codex-backups/
 
 # Arquivos locais de banco e logs
 concurse.db
+*.db-*
+*.sqlite
+*.sqlite3
 *.log
 out_*.txt
 
 # Arquivos temporários / testes
-*.pdf
+static/pdfs/
+# PDFs e imagens de questões ficam no build para inicializar os volumes
+# persistentes vazios no primeiro deploy.
+training_corpus/
+checkpoints/
+tmp/
 temp/
+tests/
+scripts/
+docs/
+frontend/dist/
+frontend/tmp/
+frontend/e2e/
+frontend/test-results/
+frontend/playwright-report/

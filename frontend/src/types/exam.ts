@@ -165,6 +165,62 @@ export interface GlobalStats {
   rank: string;
 }
 
+export interface IbamExamCategory {
+  name: string;
+  category_group: string;
+  question_count: number;
+  percentage: number;
+  question_range: string;
+  rank: number;
+}
+
+export interface IbamExamCategoryWeight {
+  exam_id: number;
+  question_count: number;
+  percentage: number;
+}
+
+export interface IbamCategoryAverage {
+  name: string;
+  exam_count: number;
+  average_question_count: number;
+  average_weight_percentage: number;
+  question_count: number;
+  aggregate_percentage: number;
+  exam_weights: IbamExamCategoryWeight[];
+  rank: number;
+}
+
+export interface IbamExamAnalysis {
+  exam_id: number;
+  title: string;
+  source_title: string;
+  year: number | null;
+  question_count: number;
+  classified_question_count: number;
+  unclassified_question_count: number;
+  coverage_percentage: number;
+  top_category: IbamExamCategory | null;
+  categories: IbamExamCategory[];
+}
+
+export interface IbamAnalysis {
+  available: boolean;
+  exam_count: number;
+  question_count: number;
+  classified_question_count: number;
+  unclassified_question_count: number;
+  coverage_percentage: number;
+  dominant_category: IbamCategoryAverage | null;
+  category_averages: IbamCategoryAverage[];
+  exams: IbamExamAnalysis[];
+  methodology: {
+    category_source: string;
+    average_definition: string;
+    ranking_definition: string;
+  };
+}
+
 export interface NotebookSubjectStat {
   subject: string;
   count: number;

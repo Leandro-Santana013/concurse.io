@@ -281,6 +281,34 @@ const renderInlineMarkdown = (text: string) => {
   });
 };
 
+const LEADING_PARAGRAPH_NUMBER = /^(\s*)(\d{1,3})(?=\s+\S)/u;
+
+const getLeadingParagraphNumber = (text: string) => text.match(LEADING_PARAGRAPH_NUMBER);
+
+const renderParagraphContent = (
+  text: string,
+  keyPrefix: string,
+  showParagraphNumber: boolean,
+) => {
+  const match = showParagraphNumber ? getLeadingParagraphNumber(text) : null;
+  if (!match) return renderInlineMarkdown(text);
+
+  const [matchedPrefix, leadingWhitespace, paragraphNumber] = match;
+  return (
+    <React.Fragment key={keyPrefix}>
+      {leadingWhitespace && <span className="whitespace-pre-wrap">{leadingWhitespace}</span>}
+      <span
+        className="source-paragraph-number"
+        title={`Parágrafo ${paragraphNumber}`}
+        data-paragraph-number={paragraphNumber}
+      >
+        {paragraphNumber}
+      </span>
+      {renderInlineMarkdown(text.slice(matchedPrefix.length))}
+    </React.Fragment>
+  );
+};
+
 // Renderiza blocos estruturais (Divisores, Texto de Apoio, Parágrafos)
 const renderFormattedBlock = (rawText: string, keyPrefix: string | number) => {
   if (!rawText) return null;
@@ -305,6 +333,8 @@ const renderFormattedBlock = (rawText: string, keyPrefix: string | number) => {
   // Bloco de Texto de Apoio Compartilhado
   if (rawText.trim().startsWith('📖')) {
     const paras = rawText.trim().split('\n\n').filter(p => p.trim());
+    const numberedParagraphCount = paras.filter(para => getLeadingParagraphNumber(para)).length;
+    const showParagraphNumbers = numberedParagraphCount >= 2;
     return (
       <div
         key={keyPrefix}
@@ -312,7 +342,7 @@ const renderFormattedBlock = (rawText: string, keyPrefix: string | number) => {
       >
         {paras.map((para, pIdx) => (
           <div key={pIdx} className="text-base leading-[1.7] sm:text-[1.0625rem]">
-            {renderInlineMarkdown(para)}
+            {renderParagraphContent(para, `${keyPrefix}_support_${pIdx}`, showParagraphNumbers)}
           </div>
         ))}
       </div>
@@ -322,6 +352,8 @@ const renderFormattedBlock = (rawText: string, keyPrefix: string | number) => {
   // Parágrafos regulares e Estrofes de Poema
   const paragraphs = rawText.split('\n\n').filter(p => p.trim());
   if (paragraphs.length > 1) {
+    const numberedParagraphCount = paragraphs.filter(para => getLeadingParagraphNumber(para)).length;
+    const showParagraphNumbers = numberedParagraphCount >= 2;
     return (
       <span key={keyPrefix} className="inline-block w-full space-y-4">
         {paragraphs.map((p, pIdx) => {
@@ -334,7 +366,7 @@ const renderFormattedBlock = (rawText: string, keyPrefix: string | number) => {
               >
                 {lines.map((line, lIdx) => (
                   <span key={lIdx} className="block whitespace-pre-wrap">
-                    {renderInlineMarkdown(line)}
+                    {renderParagraphContent(line, `${keyPrefix}_${pIdx}_quote_${lIdx}`, showParagraphNumbers)}
                   </span>
                 ))}
               </blockquote>
@@ -342,7 +374,7 @@ const renderFormattedBlock = (rawText: string, keyPrefix: string | number) => {
           }
           return (
             <span key={pIdx} className="block leading-relaxed">
-              {renderInlineMarkdown(p)}
+              {renderParagraphContent(p, `${keyPrefix}_${pIdx}`, showParagraphNumbers)}
             </span>
           );
         })}
@@ -352,6 +384,8 @@ const renderFormattedBlock = (rawText: string, keyPrefix: string | number) => {
 
   if (rawText.trim().startsWith('>')) {
     const lines = rawText.trim().split('\n').map(l => l.replace(/^>\s?/, ''));
+    const numberedParagraphCount = lines.filter(line => getLeadingParagraphNumber(line)).length;
+    const showParagraphNumbers = numberedParagraphCount >= 2;
     return (
       <blockquote
         key={keyPrefix}
@@ -359,7 +393,7 @@ const renderFormattedBlock = (rawText: string, keyPrefix: string | number) => {
       >
         {lines.map((line, lIdx) => (
           <span key={lIdx} className="block whitespace-pre-wrap">
-            {renderInlineMarkdown(line)}
+            {renderParagraphContent(line, `${keyPrefix}_quote_${lIdx}`, showParagraphNumbers)}
           </span>
         ))}
       </blockquote>

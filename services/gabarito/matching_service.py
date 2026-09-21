@@ -161,6 +161,7 @@ class AnswerKeyCandidate:
     cargo_text: str = ""
     block_index: Optional[int] = None
     raw_text: str = field(default="", repr=False)
+    source_pages: List[int] = field(default_factory=list)
 
     def snapshot(self) -> Dict[str, Any]:
         return {
@@ -171,6 +172,7 @@ class AnswerKeyCandidate:
             "has_header": self.has_header,
             "cargo_text": self.cargo_text[:300],
             "block_index": self.block_index,
+            "pages": self.source_pages or ([self.page] if self.page is not None else []),
             "metadata": asdict(self.metadata),
         }
 
@@ -436,6 +438,12 @@ def build_exam_answer_key_profile(
             doc.close()
 
     metadata = _extract_identity_metadata(f"{title}\n{header_text}")
+    if not metadata.exam_types:
+        for identity_text in (title, header_text):
+            type_match = re.search(r"\bprova\s*0*(\d{1,2})\b", identity_text or "", re.IGNORECASE)
+            if type_match:
+                metadata.exam_types = [str(int(type_match.group(1)))]
+                break
     if code_ranges is None and pdf_input:
         try:
             code_ranges = extract_exam_code_ranges_from_pdf(pdf_input, max_pages=max_pages)
@@ -671,7 +679,13 @@ def _extract_candidates(
 
 
 def _sets_conflict(expected: Sequence[str], actual: Sequence[str]) -> bool:
-    return bool(expected and actual and set(expected).isdisjoint(actual))
+    normalized_expected = {_normalize_variant(value) for value in expected}
+    normalized_actual = {_normalize_variant(value) for value in actual}
+    return bool(
+        normalized_expected
+        and normalized_actual
+        and normalized_expected.isdisjoint(normalized_actual)
+    )
 
 
 def _range_sets_match(
@@ -935,23 +949,249 @@ def _confidence(score: float, reasons: Sequence[str]) -> float:
 def _strong_identity_compatible(
     profile: ExamAnswerKeyProfile,
     candidate: AnswerKeyCandidate,
+    *,
+    allow_exam_type_mismatch: bool = False,
 ) -> bool:
     expected = profile.metadata
     actual = candidate.metadata
     if expected.code_ranges and actual.code_ranges and not _range_sets_match(expected.code_ranges, actual.code_ranges):
         return False
-    for expected_values, actual_values in (
-        (expected.cargo_codes, actual.cargo_codes),
-        (expected.exam_types, actual.exam_types),
-        (expected.variants, actual.variants),
-        (expected.colors, actual.colors),
-        (expected.edital_ids, actual.edital_ids),
-        (expected.labeled_dates, actual.labeled_dates),
-        (expected.shifts, actual.shifts),
+    for field_name, expected_values, actual_values in (
+        ("cargo_codes", expected.cargo_codes, actual.cargo_codes),
+        ("exam_types", expected.exam_types, actual.exam_types),
+        ("variants", expected.variants, actual.variants),
+        ("colors", expected.colors, actual.colors),
+        ("edital_ids", expected.edital_ids, actual.edital_ids),
+        ("labeled_dates", expected.labeled_dates, actual.labeled_dates),
+        ("shifts", expected.shifts, actual.shifts),
     ):
+        if field_name == "exam_types" and allow_exam_type_mismatch:
+            continue
         if _sets_conflict(expected_values, actual_values):
             return False
     return True
+
+
+def _candidate_exam_day(candidate: AnswerKeyCandidate) -> Optional[int]:
+    text = _normalize_text(f"{candidate.cargo_text}\n{candidate.raw_text}")
+    days = {
+        int(match.group(1))
+        for match in re.finditer(r"\b(\d{1,2})\s*(?:[º°o])?\s*dia\b", text)
+    }
+    return next(iter(days)) if len(days) == 1 else None
+
+
+def _partitioned_identity_is_consistent(
+    profile: ExamAnswerKeyProfile,
+    candidates: Sequence[AnswerKeyCandidate],
+) -> bool:
+    expected_types = {_normalize_variant(value) for value in profile.metadata.exam_types}
+    candidate_types = [
+        {_normalize_variant(value) for value in candidate.metadata.exam_types}
+        for candidate in candidates
+    ]
+    has_type_conflict = any(
+        _sets_conflict(expected_types, actual_types)
+        for actual_types in candidate_types
+    )
+    for index, left_types in enumerate(candidate_types):
+        for right_types in candidate_types[index + 1 :]:
+            if _sets_conflict(left_types, right_types):
+                has_type_conflict = True
+
+    if not has_type_conflict:
+        return True
+
+    # A different booklet number is allowed only when an explicit day header
+    # and ascending, non-overlapping question ranges prove a combined exam.
+    if expected_types and all(
+        _sets_conflict(expected_types, actual_types)
+        for actual_types in candidate_types
+    ):
+        return False
+
+    grouped_numbers: Dict[int, set[int]] = {}
+    grouped_types: Dict[int, List[set[str]]] = {}
+    for candidate, actual_types in zip(candidates, candidate_types):
+        day = _candidate_exam_day(candidate)
+        if day is None:
+            return False
+        grouped_numbers.setdefault(day, set()).update(candidate.answers)
+        grouped_types.setdefault(day, []).append(actual_types)
+
+    previous_max: Optional[int] = None
+    for day in sorted(grouped_numbers):
+        question_numbers = grouped_numbers[day]
+        if not question_numbers:
+            return False
+        day_types = grouped_types[day]
+        for index, left_types in enumerate(day_types):
+            for right_types in day_types[index + 1 :]:
+                if _sets_conflict(left_types, right_types):
+                    return False
+        first_number = min(question_numbers)
+        last_number = max(question_numbers)
+        if previous_max is not None and first_number <= previous_max:
+            return False
+        previous_max = last_number
+    return True
+
+
+def _merge_partitioned_candidates(
+    profile: ExamAnswerKeyProfile,
+    candidates: Sequence[AnswerKeyCandidate],
+    source_relation: str,
+) -> List[AnswerKeyCandidate]:
+    """Join compatible answer-key pages only when they cover the full exam.
+
+    This supports exams published as multiple disjoint answer-key ranges while
+    keeping the normal exact-count and exact-sequence checks fail-closed.
+    """
+    target_numbers = set(profile.question_numbers)
+    if (
+        not profile.reliable_numbering
+        or profile.question_count < 5
+        or len(target_numbers) != profile.question_count
+        or source_relation not in {"paired", "same_document", "embedded"}
+    ):
+        return []
+
+    partial_candidates: List[AnswerKeyCandidate] = []
+    allowed_partial_conflicts = {
+        "question_count_mismatch",
+        "question_sequence_mismatch",
+    }
+    for candidate in candidates:
+        candidate_numbers = set(candidate.answers)
+        exam_type_conflict = _sets_conflict(
+            {_normalize_variant(value) for value in profile.metadata.exam_types},
+            {_normalize_variant(value) for value in candidate.metadata.exam_types},
+        )
+        if (
+            candidate.page is None
+            or not candidate.has_header
+            or candidate.metadata.publication_status == "errata"
+            or not candidate_numbers
+            or len(candidate_numbers) >= len(target_numbers)
+            or not candidate_numbers.issubset(target_numbers)
+            or (
+                exam_type_conflict and _candidate_exam_day(candidate) is None
+            )
+            or not _strong_identity_compatible(
+                profile,
+                candidate,
+                allow_exam_type_mismatch=exam_type_conflict,
+            )
+        ):
+            continue
+
+        _, _, _, conflicts = _score_candidate(profile, candidate, source_relation)
+        allowed_conflicts = set(allowed_partial_conflicts)
+        if exam_type_conflict:
+            allowed_conflicts.add("exam_type_mismatch")
+        if set(conflicts).difference(allowed_conflicts):
+            continue
+        partial_candidates.append(candidate)
+
+    if len(partial_candidates) < 2:
+        return []
+
+    partial_candidates.sort(
+        key=lambda candidate: (candidate.page or 0, -len(candidate.answers))
+    )
+    suffix_numbers: List[set[int]] = [set() for _ in range(len(partial_candidates) + 1)]
+    for index in range(len(partial_candidates) - 1, -1, -1):
+        suffix_numbers[index] = suffix_numbers[index + 1] | set(
+            partial_candidates[index].answers
+        )
+
+    merged_by_answers: Dict[Tuple[Tuple[int, str], ...], AnswerKeyCandidate] = {}
+    selected: List[AnswerKeyCandidate] = []
+    visited_nodes = 0
+    max_search_nodes = 20_000
+    max_pages = 8
+
+    def search(
+        start_index: int,
+        answers: Dict[int, str],
+        used_pages: set[int],
+    ) -> None:
+        nonlocal visited_nodes
+        visited_nodes += 1
+        if visited_nodes > max_search_nodes:
+            return
+
+        if set(answers) == target_numbers:
+            if len(selected) >= 2 and _partitioned_identity_is_consistent(profile, selected):
+                ordered = sorted(selected, key=lambda candidate: candidate.page or 0)
+                source_pages = sorted(
+                    {candidate.page for candidate in ordered if candidate.page is not None}
+                )
+                key = tuple(sorted(answers.items()))
+                anchor = next(
+                    (
+                        candidate
+                        for candidate in ordered
+                        if not _sets_conflict(
+                            {_normalize_variant(value) for value in profile.metadata.exam_types},
+                            {
+                                _normalize_variant(value)
+                                for value in candidate.metadata.exam_types
+                            },
+                        )
+                    ),
+                    ordered[0],
+                )
+                merged_by_answers.setdefault(
+                    key,
+                    AnswerKeyCandidate(
+                        answers=dict(answers),
+                        page=source_pages[0] if source_pages else None,
+                        method="partitioned_pages",
+                        metadata=anchor.metadata,
+                        has_header=True,
+                        cargo_text="\n".join(
+                            _unique(
+                                candidate.cargo_text
+                                for candidate in ordered
+                                if candidate.cargo_text
+                            )
+                        ),
+                        raw_text="\n\n".join(
+                            candidate.raw_text for candidate in ordered if candidate.raw_text
+                        ),
+                        source_pages=source_pages,
+                    ),
+                )
+            return
+
+        if len(selected) >= max_pages:
+            return
+        if not (target_numbers - set(answers)).issubset(suffix_numbers[start_index]):
+            return
+
+        for index in range(start_index, len(partial_candidates)):
+            candidate = partial_candidates[index]
+            page = int(candidate.page or 0)
+            if page in used_pages:
+                continue
+
+            overlap = set(answers).intersection(candidate.answers)
+            if any(answers[number] != candidate.answers[number] for number in overlap):
+                continue
+            if not set(candidate.answers).difference(answers):
+                continue
+
+            selected.append(candidate)
+            combined_answers = dict(answers)
+            combined_answers.update(candidate.answers)
+            search(index + 1, combined_answers, used_pages | {page})
+            selected.pop()
+
+    search(0, {}, set())
+    if visited_nodes > max_search_nodes:
+        return []
+    return list(merged_by_answers.values())
 
 
 def match_gabarito_from_pdf(
@@ -1012,6 +1252,20 @@ def match_gabarito_from_pdf(
                 errata_candidates.append(candidate)
                 continue
             scored.append((score, candidate, reasons, warnings, conflicts))
+
+        for candidate in _merge_partitioned_candidates(
+            profile,
+            candidates,
+            source_relation,
+        ):
+            score, reasons, warnings, conflicts = _score_candidate(
+                profile,
+                candidate,
+                source_relation,
+            )
+            if not conflicts:
+                reasons = _unique([*reasons, "partitioned_answer_key_merged"])
+                scored.append((score, candidate, reasons, warnings, conflicts))
 
         eligible = [item for item in scored if not item[4] and item[0] >= 70]
         eligible.sort(key=lambda item: (item[0], len(item[1].answers)), reverse=True)

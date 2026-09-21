@@ -13,7 +13,7 @@ const navigation = [
 export const Sidebar: React.FC = () => (
   <aside className="app-sidebar" aria-label="Navegação principal">
     <Link to="/" className="brand-mark" aria-label="concurse.io — Início">
-      <span className="brand-symbol" aria-hidden="true">C</span>
+      <img className="brand-symbol brand-logo-image" src="/concurse-icon-64.png" alt="" width={28} height={28} />
       <span className="brand-name">concurse.io</span>
     </Link>
 

@@ -3,6 +3,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 
 const tabs = [
   { to: '/progresso', label: 'Resumo', end: true },
+  { to: '/progresso/ibam', label: 'Análise IBAM' },
   { to: '/progresso/erros', label: 'Caderno de erros' },
   { to: '/progresso/ranking', label: 'Ranking' },
 ];

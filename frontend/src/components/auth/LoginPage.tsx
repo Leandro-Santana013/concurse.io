@@ -66,7 +66,7 @@ export const LoginPage: React.FC = () => {
         <section className="login-entry" aria-labelledby="login-title">
           <div className="login-card">
             <div className="login-mobile-brand" aria-hidden="true">
-              <span className="brand-symbol">C</span>
+              <img className="brand-symbol brand-logo-image" src="/concurse-icon-64.png" alt="" width={28} height={28} />
               <span>concurse.io</span>
             </div>
 
@@ -121,7 +121,7 @@ export const LoginPage: React.FC = () => {
 
         <aside className="login-story" aria-label="Benefícios da sua conta">
           <div className="login-brand">
-            <span className="login-brand-symbol" aria-hidden="true">C</span>
+            <img className="login-brand-symbol brand-logo-image" src="/concurse-icon-64.png" alt="" width={30} height={30} />
             <span>concurse.io</span>
           </div>
 

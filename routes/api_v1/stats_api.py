@@ -18,6 +18,8 @@ from models.database import (
 from schemas.exam_schemas import ExamDetailSchema, QuestionSchema
 from routes.api_v1.exam_media import secure_exam_image_urls, secure_exam_option_image_urls
 from routes.api_v1.user_context import get_current_user
+from services.exam_library import get_user_exam_ids
+from services.ibam_analysis import analyze_ibam_exams
 
 router = APIRouter()
 
@@ -123,6 +125,39 @@ def get_global_stats(
         "study_time": study_time,
         "rank": rank
     }
+
+
+@router.get("/stats/ibam")
+def get_ibam_category_analysis(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Retorna o índice de peso das categorias das provas IBAM da biblioteca."""
+
+    exam_ids = get_user_exam_ids(db, current_user.id)
+    if not exam_ids:
+        return analyze_ibam_exams((), {})
+
+    exams = (
+        db.query(Exam)
+        .filter(Exam.id.in_(exam_ids), Exam.status == "Aprovada")
+        .order_by(Exam.id.asc())
+        .all()
+    )
+    if not exams:
+        return analyze_ibam_exams((), {})
+
+    questions = (
+        db.query(Question)
+        .filter(Question.exam_id.in_([exam.id for exam in exams]))
+        .order_by(Question.exam_id.asc(), Question.id.asc())
+        .all()
+    )
+    questions_by_exam: Dict[int, List[Question]] = {}
+    for question in questions:
+        questions_by_exam.setdefault(question.exam_id, []).append(question)
+
+    return analyze_ibam_exams(exams, questions_by_exam)
 
 @router.get("/notebook/stats")
 def get_notebook_subject_stats(
