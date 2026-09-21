@@ -67,6 +67,16 @@ CAPTION_PATTERN = (
 
 CAPTION_REGEX = re.compile(CAPTION_PATTERN, re.IGNORECASE)
 
+# Alguns PDFs colocam abaixo de uma tirinha a transcrição de cada quadro. O
+# texto começa com o mesmo marcador usado para legendas (``QUADRO 01:``), mas
+# não faz parte da imagem e não deve aumentar o recorte visual. A regra é
+# aplicada somente quando há uma sequência de pelo menos dois quadros junto
+# da mesma imagem; uma legenda isolada continua sendo preservada.
+PANEL_TRANSCRIPTION_REGEX = re.compile(
+    r"^\s*quadro\s+(?:\d+|[ivxlcdm]+)\s*[:\-–—]\s*\S",
+    re.IGNORECASE,
+)
+
 # Algumas bancas usam figuras como alternativas. Nesses casos o rótulo fica
 # isolado imediatamente acima/à esquerda do desenho e não há texto para o
 # parser de alternativas capturar.
@@ -542,11 +552,36 @@ class ExamImageExtractor:
         if text_blocks:
             for index, rect in enumerate(useful_rects):
                 expanded = fitz.Rect(rect)
+                panel_caption_blocks = []
+                for block in text_blocks:
+                    if len(block) < 5 or not str(block[4] or "").strip():
+                        continue
+                    bx0, by0, bx1, by1 = map(float, block[:4])
+                    block_text = " ".join(str(block[4]).split())
+                    horizontal_overlap = not (
+                        bx1 < rect.x0 - 15 or bx0 > rect.x1 + 15
+                    )
+                    vertical_gap = by0 - rect.y1
+                    if (
+                        PANEL_TRANSCRIPTION_REGEX.match(block_text)
+                        and horizontal_overlap
+                        and 0 <= vertical_gap <= 220
+                    ):
+                        panel_caption_blocks.append((by0, block_text))
+
+                has_panel_transcription = bool(
+                    len(panel_caption_blocks) >= 2
+                    and min(y0 for y0, _ in panel_caption_blocks) - rect.y1 <= 28
+                )
                 for block in text_blocks:
                     if len(block) < 5 or not str(block[4] or "").strip():
                         continue
                     bx0, by0, bx1, by1 = map(float, block[:4])
                     block_text = str(block[4]).strip()
+                    if has_panel_transcription and PANEL_TRANSCRIPTION_REGEX.match(
+                        " ".join(block_text.split())
+                    ):
+                        continue
                     horizontal_overlap = not (
                         bx1 < rect.x0 - 15 or bx0 > rect.x1 + 15
                     )
