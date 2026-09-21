@@ -1,0 +1,6 @@
+[target.aarch64-linux-android]
+# Android 15/16 devices may use 16 KiB memory pages. 16 KiB ELF
+# segments remain compatible with devices using the traditional 4 KiB pages.
+# Keep the linker options as separate arguments.  This form is understood by
+# rustc's Android linker invocation and emits 16 KiB-aligned ELF LOAD segments.
+rustflags = ["-C", "link-arg=-z", "-C", "link-arg=max-page-size=16384"]

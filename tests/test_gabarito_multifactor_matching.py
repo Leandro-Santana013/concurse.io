@@ -93,6 +93,113 @@ def test_exact_question_count_and_option_alphabet_are_hard_constraints():
     alphabet_doc.close()
 
 
+def test_matcher_merges_disjoint_answer_ranges_across_compatible_pages():
+    questions = _questions(count=20)
+    profile = build_exam_answer_key_profile(
+        None,
+        questions,
+        title="ENEM 2018 CADERNO 1 AZUL",
+    )
+    expected = {number: "ABCD"[(number - 1) % 4] for number in range(1, 21)}
+    answer_doc = fitz.open()
+    _add_answer_page(
+        answer_doc,
+        ["ENEM 2018", "CADERNO 1 AZUL", "1o DIA"],
+        {number: expected[number] for number in range(1, 11)},
+    )
+    _add_answer_page(
+        answer_doc,
+        ["ENEM 2018", "CADERNO 7 AZUL", "2o DIA"],
+        {number: expected[number] for number in range(11, 21)},
+    )
+
+    result = match_gabarito_from_pdf(answer_doc, profile, source_relation="paired")
+
+    assert result.accepted is True
+    assert result.answers == expected
+    assert result.method == "partitioned_pages"
+    assert result.candidate["pages"] == [1, 2]
+    assert "question_count_exact" in result.reasons
+    assert "question_sequence_exact" in result.reasons
+    assert "partitioned_answer_key_merged" in result.reasons
+    answer_doc.close()
+
+
+def test_matcher_does_not_merge_ranges_from_different_booklet_colors():
+    profile = build_exam_answer_key_profile(
+        None,
+        _questions(count=20),
+        title="ENEM 2018 CADERNO 1 AZUL",
+    )
+    answer_doc = fitz.open()
+    _add_answer_page(
+        answer_doc,
+        ["ENEM 2018", "CADERNO 1 AZUL", "1o DIA"],
+        {number: "A" for number in range(1, 11)},
+    )
+    _add_answer_page(
+        answer_doc,
+        ["ENEM 2018", "CADERNO 7 AMARELO", "2o DIA"],
+        {number: "A" for number in range(11, 21)},
+    )
+
+    result = match_gabarito_from_pdf(answer_doc, profile, source_relation="paired")
+
+    assert result.accepted is False
+    assert result.answers == {}
+    answer_doc.close()
+
+
+def test_matcher_does_not_merge_partitioned_keys_with_conflicting_overlap():
+    profile = build_exam_answer_key_profile(
+        None,
+        _questions(count=20),
+        title="ENEM 2018 CADERNO 1 AZUL",
+    )
+    answer_doc = fitz.open()
+    _add_answer_page(
+        answer_doc,
+        ["ENEM 2018", "CADERNO 1 AZUL", "1o DIA"],
+        {number: "A" for number in range(1, 11)},
+    )
+    _add_answer_page(
+        answer_doc,
+        ["ENEM 2018", "CADERNO 7 AZUL", "2o DIA"],
+        {number: "B" for number in range(10, 21)},
+    )
+
+    result = match_gabarito_from_pdf(answer_doc, profile, source_relation="paired")
+
+    assert result.accepted is False
+    assert result.answers == {}
+    answer_doc.close()
+
+
+def test_matcher_does_not_merge_mismatched_caderno_numbers_without_day_headers():
+    profile = build_exam_answer_key_profile(
+        None,
+        _questions(count=20),
+        title="ENEM 2018 CADERNO 1 AZUL",
+    )
+    answer_doc = fitz.open()
+    _add_answer_page(
+        answer_doc,
+        ["ENEM 2018", "CADERNO 1 AZUL"],
+        {number: "A" for number in range(1, 11)},
+    )
+    _add_answer_page(
+        answer_doc,
+        ["ENEM 2018", "CADERNO 7 AZUL"],
+        {number: "A" for number in range(11, 21)},
+    )
+
+    result = match_gabarito_from_pdf(answer_doc, profile, source_relation="paired")
+
+    assert result.accepted is False
+    assert result.answers == {}
+    answer_doc.close()
+
+
 def test_type_version_color_cargo_edital_date_and_shift_select_exact_candidate():
     exam_doc = _exam_doc(
         "TIPO 2",

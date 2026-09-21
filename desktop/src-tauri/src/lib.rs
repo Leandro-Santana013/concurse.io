@@ -1,5 +1,8 @@
 mod offline;
 
+#[cfg(desktop)]
+use tauri::Manager;
+
 #[tauri::command]
 fn offline_auth_config() -> serde_json::Value {
     offline::auth_config()
@@ -32,19 +35,6 @@ fn offline_import_file(
     title: String,
 ) -> Result<serde_json::Value, String> {
     offline::import_file(filename, data_base64, title)
-}
-
-#[tauri::command]
-fn desktop_begin_google_login(
-    api_origin: String,
-    next_path: String,
-) -> Result<serde_json::Value, String> {
-    offline::begin_google_login(api_origin, next_path)
-}
-
-#[tauri::command]
-fn desktop_take_oauth_result() -> Result<Option<String>, String> {
-    offline::take_oauth_result()
 }
 
 #[tauri::command]
@@ -93,13 +83,39 @@ fn offline_custom_exam(count: usize) -> Result<serde_json::Value, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+
+    // Windows and Linux deliver a custom-scheme callback by launching the
+    // executable again. The single-instance integration forwards that URL to
+    // the existing process, so OAuth never creates a second login window.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+    }));
+
+    let builder = builder
         .plugin(tauri_plugin_deep_link::init())
-        .plugin(tauri_plugin_opener::init())
-        .setup(|app| {
-            offline::init(app.handle()).map_err(|error| std::io::Error::other(error))?;
-            Ok(())
-        })
+        .plugin(tauri_plugin_opener::init());
+
+    // The mobile build is configured for the Supabase-backed flow
+    // (`VITE_OFFLINE_DESKTOP=0`). Initialising the local desktop runtime here
+    // can fail before the WebView is created on some Android/MIUI releases,
+    // which makes Tauri abort in `__start_app`. Keep that runtime for desktop,
+    // where the offline commands are used, and let mobile start directly in
+    // the remote mode it was built for.
+    #[cfg(desktop)]
+    let builder = builder.setup(|app| {
+        offline::init(app.handle()).map_err(|error| std::io::Error::other(error))?;
+        Ok(())
+    });
+
+    #[cfg(not(desktop))]
+    let builder = builder.setup(|_app| Ok(()));
+
+    builder
         .invoke_handler(tauri::generate_handler![
             offline_auth_config,
             offline_current_user,
@@ -107,8 +123,6 @@ pub fn run() {
             offline_folders,
             offline_get_exam,
             offline_import_file,
-            desktop_begin_google_login,
-            desktop_take_oauth_result,
             offline_search,
             offline_submit_attempt,
             offline_stats,

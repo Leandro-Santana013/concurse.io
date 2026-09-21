@@ -1,11 +1,11 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "concurse.io",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "identifier": "io.concurse.desktop",
   "build": {
     "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "set VITE_OFFLINE_DESKTOP=1&& npm --prefix ../frontend run dev -- --host 127.0.0.1",
+    "beforeDevCommand": "npm --prefix ../frontend run dev -- --mode desktop --host 127.0.0.1",
     "beforeBuildCommand": "npm --prefix ../frontend run build:desktop",
     "frontendDist": "../../frontend/dist"
   },
@@ -27,6 +27,19 @@
       "csp": null
     }
   },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["concurse"]
+      },
+      "mobile": [
+        {
+          "scheme": ["concurse"],
+          "appLink": false
+        }
+      ]
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",
@@ -39,6 +52,9 @@
     ],
     "category": "Education",
     "shortDescription": "Provas e simulados de concursos",
-    "longDescription": "Aplicativo desktop local-first para acessar a biblioteca centralizada de provas da sua conta Google."
+    "longDescription": "Aplicativo desktop local-first para acessar a biblioteca centralizada de provas da sua conta Google.",
+    "android": {
+      "versionCode": 3
+    }
   }
 }

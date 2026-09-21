@@ -1,70 +1,52 @@
-# Aplicativo desktop concurse.io
+# Aplicativo concurse.io para Windows e Android
 
-Este diretório empacota uma aplicação Tauri 2 local-first. A interface e o
-cache de provas ficam no computador, enquanto o login Google, a biblioteca de
-cada usuário e o compartilhamento de provas usam o fluxo central do projeto,
-com dados persistidos no Supabase por meio da API da aplicação.
+O diretório `desktop` empacota a interface React em Tauri 2. O login é feito
+com Google pelo Supabase Auth; a biblioteca e as provas atribuídas à conta são
+sincronizadas pelas Edge Functions do próprio projeto. O Oracle Object Storage
+guarda PDFs e imagens, mas suas credenciais ficam apenas nos secrets do
+Supabase.
 
-Quando o origin está disponível, a conta Google determina quais provas estão
-atribuídas ao usuário. O aplicativo consulta a biblioteca central e mantém uma
-cópia local para reabrir provas sincronizadas sem repetir o download. Não há
-descoberta de pares, broadcast UDP, servidor TCP local ou endpoint `/mesh/*`.
-
-O importador desktop continua aceitando PDF para guardar localmente e JSON de
-prova extraída para abrir as questões. A extração de PDF/OCR continua sendo
-uma etapa separada; o aplicativo não executa OCR em segundo plano.
+O aplicativo mantém cache local para leitura rápida e reabertura offline das
+provas que já foram sincronizadas. Não há descoberta de pares, broadcast,
+servidor local, VM ou domínio externo. A ingestão de PDF/OCR continua sendo
+executada fora do aplicativo, e o importador aceita um PDF ou um JSON já
+extraído.
 
 ## Desenvolvimento
 
-Pré-requisitos no Windows: Rust com o alvo MSVC, Node.js e WebView2. Na pasta
-`desktop`, instale a CLI uma vez e inicie:
+No Windows, instale Node.js, Rust/MSVC e WebView2. Depois:
 
 ```powershell
 npm install
 npm run dev
 ```
 
-O perfil normal usa `frontend/.env.desktop` e o origin configurado em
-`VITE_API_ORIGIN`. Para testar sem rede, use o perfil local com
-`npm run build:desktop:offline`; nesse modo o login e o compartilhamento entre
-usuários ficam indisponíveis, mas o cache e a importação local continuam.
+O modo normal usa `frontend/.env.desktop` e as Edge Functions do Supabase. Para
+testar apenas a biblioteca local, use `npm run build:desktop:offline`; esse
+perfil não faz login nem sincroniza a conta.
 
-## Instalador
-
-```powershell
-npm run build
-```
-
-O Tauri gera o executável e os instaladores em
-`desktop/src-tauri/target/release/bundle/`. O instalador não contém credenciais
-de serviço. No Windows, a interface React é renderizada pelo WebView2 local;
-isso não abre o site como tela principal.
-
-## Android e iOS
-
-O mesmo aplicativo pode ser empacotado para Android e iOS. O perfil móvel
-mantém o login Google, a biblioteca central da conta e o cache local, mas usa
-o navegador do sistema para autenticação e retorna ao aplicativo por
-`concurse://oauth/callback`.
-
-Na pasta `desktop`, os comandos Android são:
+## Builds
 
 ```powershell
-npm run android:init
-npm run android:dev
-npm run android:build
+npm run build                 # MSI e NSIS para Windows x64
+npm run android:init          # uma vez por checkout
+npm run android:build         # APK arm64
 ```
 
-Para iOS, a geração e a assinatura precisam ser executadas em um Mac com
-Xcode:
+Os instaladores Windows aparecem em
+`src-tauri/target/release/bundle/`. O APK aparece em
+`src-tauri/gen/android/app/build/outputs/apk/`. Os arquivos que podem ser
+baixados diretamente estão em [`../downloads/`](../downloads/).
 
-```bash
-npm run ios:init
-npm run ios:dev
-npm run ios:build
-```
+O Android usa o esquema `concurse://oauth/callback` para retornar do navegador
+do sistema após o login Google. O APK atualmente publicado é experimental: em
+alguns Redmi com Android 16/HyperOS o runtime nativo aborta durante a criação do
+WebView. Essa limitação está registrada no README raiz e não é escondida do
+usuário.
 
-Android exige JDK, Android SDK/NDK, Gradle e um dispositivo ou emulador. No
-Windows, habilite também o Developer Mode para que o Tauri possa criar os
-links nativos usados pelo Gradle. Depois disso, `npm run android:build` gera o
-APK em `desktop/src-tauri/gen/android/app/build/outputs/apk/`.
+## Integração de mídia
+
+O frontend chama `app-gateway` para a biblioteca e `media-gateway` para ler ou
+enviar objetos. O app nunca recebe a service role key, a chave privada OCI ou a
+URL completa de um PAR de escrita. Configure os PARs nos secrets do Supabase e
+gere novos PARs quando a validade terminar.

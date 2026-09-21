@@ -7,7 +7,7 @@
     "tauri": "tauri",
     "dev": "tauri dev",
     "build": "npm run icons && tauri build",
-    "icons": "tauri icon icon-source.svg",
+    "icons": "tauri icon concurse-icon.png",
     "android:init": "tauri android init",
     "android:dev": "tauri android dev",
     "android:build": "npm run icons && tauri android build --apk --target aarch64",

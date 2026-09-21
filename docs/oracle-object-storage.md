@@ -1,71 +1,57 @@
 # Oracle Object Storage para mídia de provas
 
-O bucket `concurseio-media` é mantido privado. O desktop e o mobile chamam a
-API autenticada do concurse.io; nenhum aplicativo recebe OCID, fingerprint ou
-chave privada da OCI.
+O bucket `concurseio-media` é mantido privado. O desktop e o mobile chamam as
+Edge Functions autenticadas do Supabase; nenhum aplicativo recebe OCID,
+fingerprint ou chave privada da OCI. Não é necessário criar VM, DNS ou API
+FastAPI para este fluxo.
 
 ## Fluxo
 
-1. O usuário entra com Google e a API resolve a sessão.
-2. `UserExam` decide quais provas aparecem na biblioteca.
-3. A API consulta `questions` e valida a referência da imagem antes de servir
-   `GET /api/v1/exams/{exam_id}/media/{filename}`.
-4. Se o objeto existir em OCI, a API o lê do bucket. Enquanto a migração não
-   terminar, o arquivo local em `static/images/questions/` continua como
-   fallback.
-5. O worker de ingestão sincroniza PDFs canônicos em
-   `exams/{exam_id}/prova.pdf` e `exams/{exam_id}/gabarito.pdf`, e imagens em
-   `questions/{filename}`.
+1. O usuário entra com Google pelo Supabase Auth.
+2. `app-gateway` resolve a sessão e decide quais provas aparecem na biblioteca.
+3. A `media-gateway` valida o mesmo token antes de ler ou gravar no bucket.
+4. Um PDF selecionado no aplicativo é gravado em `exams/uploads/<sha256>.pdf`.
+5. O JSON extraído é gravado no banco; imagens incorporadas como Data URL são
+   convertidas e gravadas em `questions/` antes de salvar as referências.
+6. Artefatos locais que ainda usam `/static/images/questions/<arquivo>` devem
+   ser enviados junto com o JSON para o prefixo `questions/` para que a
+   referência fique disponível em todos os dispositivos.
 
-O endpoint de PDF segue o mesmo controle de acesso em
-`/api/v1/exams/{exam_id}/pdf/prova` e
-`/api/v1/exams/{exam_id}/pdf/gabarito`.
+Links `oci://exams/...` persistidos pelo importador são convertidos pelo
+`app-gateway` para o PAR de leitura do prefixo `exams/`.
 
 ## Configuração do servidor
 
-Preencha os valores em `deploy/oracle/.env` ou no secret manager do host da
-API. O namespace aparece nos detalhes do bucket. A PEM deve ficar somente no
-servidor; é possível informar `OCI_OBJECT_STORAGE_PRIVATE_KEY_FILE` em vez de
-colocar o conteúdo em uma variável.
+As Edge Functions usam PARs escopadas e guardadas como secrets do projeto
+Supabase. Uma PAR de leitura não permite upload; por isso a ingestão requer
+PARs de escrita separadas. O namespace aparece nos detalhes do bucket.
 
 ```dotenv
-OCI_OBJECT_STORAGE_NAMESPACE=<namespace-da-tenancy>
-OCI_OBJECT_STORAGE_BUCKET=concurseio-media
-OCI_OBJECT_STORAGE_REGION=sa-saopaulo-1
-OCI_OBJECT_STORAGE_TENANCY=<ocid-da-tenancy>
-OCI_OBJECT_STORAGE_USER=<ocid-do-usuario-de-api>
-OCI_OBJECT_STORAGE_FINGERPRINT=<fingerprint-da-chave>
-OCI_OBJECT_STORAGE_PRIVATE_KEY_FILE=/run/secrets/oci_api_key.pem
-OCI_OBJECT_STORAGE_QUESTION_PREFIX=questions
+OCI_MEDIA_READ_QUESTIONS_PAR_URL=<PAR-somente-leitura-questions>
+OCI_MEDIA_READ_EXAMS_PAR_URL=<PAR-somente-leitura-exams>
+OCI_MEDIA_WRITE_QUESTIONS_PAR_URL=<PAR-escrita-questions>
+OCI_MEDIA_WRITE_EXAMS_PAR_URL=<PAR-escrita-exams>
+OCI_MEDIA_ALLOWED_PREFIXES=questions/,exams/
 ```
 
-Crie um usuário técnico com uma chave de API e coloque-o em um grupo que tenha
-acesso somente a esse bucket. Na política do compartimento, use o nome real do
-compartimento e do grupo:
-
-```text
-Allow group concurseio-storage to read buckets in compartment <compartimento>
-Allow group concurseio-storage to manage objects in compartment <compartimento> where target.bucket.name='concurseio-media'
-```
-
-O OCID do usuário, o fingerprint e a PEM ficam apenas no host da API. O
-desktop e o mobile recebem somente `VITE_API_ORIGIN` e nunca acessam o bucket
-com uma chave de serviço.
+Crie quatro PARs no bucket `concurseio-media`, limitando cada uma ao prefixo e
+à operação indicada pelo nome. Cole as quatro URLs somente na tela **Edge
+Function Secrets** do projeto Supabase. O OCID, fingerprint e qualquer chave
+privada da OCI não entram nos aplicativos.
 
 ## Login Supabase
 
-O projeto Supabase também está configurado como provedor Google. No servidor da
-API, preencha a URL do projeto e a chave publicável:
+O projeto Supabase também está configurado como provedor Google. Nos builds,
+preencha a URL do projeto e a chave publicável:
 
 ```dotenv
 SUPABASE_URL=https://pvojiokewtteroaraykk.supabase.co
 SUPABASE_PUBLISHABLE_KEY=<chave-publicável>
 ```
 
-O frontend web inicia o OAuth pelo Supabase e envia o access token ao endpoint
-`POST /api/v1/auth/supabase/exchange`. A API valida o token no endpoint oficial
-do Supabase, vincula o UUID protegido à tabela `users` e emite a sessão interna
-que já autoriza biblioteca, atribuições e mídia. O token não é persistido.
+O frontend inicia o OAuth diretamente pelo Supabase. O access token é enviado
+às Edge Functions `app-gateway` e `media-gateway`, que validam a sessão e
+consultam a biblioteca ou o bucket. Não há troca por cookie de uma API externa.
 
 Antes de ativar o bridge em um banco existente, aplique
 `supabase/migrations/20260920000000_add_supabase_auth_id.sql` no SQL Editor ou
@@ -73,9 +59,10 @@ deixe a migração aditiva do `init_db()` executá-la no primeiro start da API.
 Os builds desktop e mobile mantêm o callback privado já existente; a conta
 Google continua apontando para o mesmo usuário interno.
 
-O pacote `oci` é instalado junto com a API. Sem essas variáveis, o projeto
-continua funcionando com os arquivos locais, o que permite migrar os artefatos
-sem interromper as provas existentes.
+Sem as PARs de escrita, uma tentativa de upload retorna `503` e não cria um
+registro incompleto. Sem as PARs de leitura, as referências permanecem
+privadas e os aplicativos não conseguem exibi-las até que os secrets sejam
+configurados.
 
 Para migrar os arquivos já extraídos, execute primeiro o plano:
 
@@ -88,13 +75,14 @@ API e não abre uma porta de upload pública.
 
 ## Aplicativos
 
-Os builds Tauri usam somente `VITE_API_ORIGIN`, por exemplo:
+Os builds Tauri usam as Edge Functions do projeto:
 
 ```dotenv
-VITE_API_ORIGIN=https://api.exemplo.com
+VITE_SUPABASE_URL=https://pvojiokewtteroaraykk.supabase.co
+VITE_SUPABASE_FUNCTIONS_URL=https://pvojiokewtteroaraykk.supabase.co/functions/v1
 ```
 
 O desktop mantém o cache local para leitura offline; o mobile usa o diretório
-privado do aplicativo. O login Google e a atribuição de provas continuam no
-servidor, portanto uma prova atribuída em outro dispositivo aparece após a
+privado do aplicativo. O login Google e a atribuição de provas ficam no
+Supabase, portanto uma prova atribuída em outro dispositivo aparece após a
 sincronização da biblioteca.

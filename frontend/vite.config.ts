@@ -5,7 +5,7 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig(({ mode }) => ({
   // O instalador Tauri carrega os arquivos do dist pelo protocolo local.
   // O build web continua usando caminhos absolutos para preservar o deploy HTTP.
-  base: mode === 'desktop' ? './' : '/',
+  base: mode === 'desktop' || mode === 'mobile' ? './' : '/',
   plugins: [
     react(),
     tailwindcss(),

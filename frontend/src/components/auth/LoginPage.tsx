@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { BookOpen, Bookmark, Check, ShieldCheck } from 'lucide-react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { api } from '../../services/api';
+import { api, OAuthDeepLinkResult } from '../../services/api';
 import { supabaseAuthConfigured } from '../../services/supabase';
 
 const DESKTOP_APP = import.meta.env.VITE_DESKTOP_APP === '1';
@@ -39,11 +39,13 @@ export const LoginPage: React.FC = () => {
   const [supabaseEnabled, setSupabaseEnabled] = useState<boolean | null>(null);
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [desktopLoginError, setDesktopLoginError] = useState<string | null>(null);
+  const [hasLoginAttempt, setHasLoginAttempt] = useState(false);
+  const loginAttemptRef = useRef(false);
   const nextPath = safeNextPath(searchParams.get('next'));
   const errorCode = searchParams.get('error') || '';
   const visibleError = useMemo(
-    () => errorMessages[errorCode] || desktopLoginError || sessionError,
-    [desktopLoginError, errorCode, sessionError],
+    () => errorMessages[errorCode] || desktopLoginError || (hasLoginAttempt ? sessionError : null),
+    [desktopLoginError, errorCode, hasLoginAttempt, sessionError],
   );
 
   useEffect(() => {
@@ -70,16 +72,21 @@ export const LoginPage: React.FC = () => {
     if ((!DESKTOP_APP && !TAURI_MOBILE_APP) || OFFLINE_DESKTOP) return;
     let active = true;
     let stopMobileListener: (() => void) | undefined;
-    const completeLogin = async (code: string) => {
+    const completeLogin = async ({ code, error, errorDescription, flowId }: OAuthDeepLinkResult) => {
       if (!active) return;
-      if (code.startsWith('__oauth_error__:')) {
+      if (error) {
+        api.clearPendingSupabaseOAuth();
         setIsRedirecting(false);
-        const errorCode = code.slice('__oauth_error__:'.length);
-        setDesktopLoginError(errorMessages[errorCode] || 'O login Google não foi concluído.');
+        setDesktopLoginError(
+          errorMessages[error]
+            || errorDescription
+            || 'O login Google não foi concluído.',
+        );
         return;
       }
+      if (!code) return;
       try {
-        await api.exchangeDesktopOAuthCode(code);
+        await api.exchangeSupabaseOAuthCode(code, flowId);
         await refreshSession();
       } catch (error) {
         if (active) {
@@ -88,40 +95,22 @@ export const LoginPage: React.FC = () => {
         }
       }
     };
-    if (TAURI_MOBILE_APP) {
-      void api.listenMobileOAuth((code) => { void completeLogin(code); })
-        .then((stop) => {
-          if (!active) {
-            stop();
-            return;
-          }
-          stopMobileListener = stop;
-        })
-        .catch((error) => {
-          if (active) {
-            setIsRedirecting(false);
-            setDesktopLoginError(error instanceof Error ? error.message : 'Não foi possível receber o retorno do Google.');
-          }
-        });
-      return () => {
-        active = false;
-        stopMobileListener?.();
-      };
-    }
-    const poll = window.setInterval(() => {
-      void api.takeDesktopOAuthCode().then(async (code) => {
-        if (!active || !code) return;
-        await completeLogin(code);
-      }).catch((error) => {
-        if (active) {
+    void api.listenMobileOAuth((result) => { void completeLogin(result); })
+      .then((stop) => {
+        if (!active) {
+          stop();
+          return;
+        }
+        stopMobileListener = stop;
+      })
+      .catch((error) => {
+        if (active && loginAttemptRef.current) {
           setIsRedirecting(false);
-          setDesktopLoginError(error instanceof Error ? error.message : 'Não foi possível consultar o retorno do Google.');
+          setDesktopLoginError(error instanceof Error ? error.message : 'Não foi possível receber o retorno do Google.');
         }
       });
-    }, 500);
     return () => {
       active = false;
-      window.clearInterval(poll);
       stopMobileListener?.();
     };
   }, [refreshSession]);
@@ -132,8 +121,6 @@ export const LoginPage: React.FC = () => {
 
   const useSupabaseLogin = supabaseEnabled === true
     && supabaseAuthConfigured
-    && !DESKTOP_APP
-    && !TAURI_MOBILE_APP
     && !OFFLINE_DESKTOP;
   const loginDisabled = (!useSupabaseLogin && googleEnabled !== true) || isRedirecting;
 
@@ -145,7 +132,7 @@ export const LoginPage: React.FC = () => {
         <section className="login-entry" aria-labelledby="login-title">
           <div className="login-card">
             <div className="login-mobile-brand" aria-hidden="true">
-              <span className="brand-symbol">C</span>
+              <img className="brand-symbol brand-logo-image" src="/concurse-icon-64.png" alt="" width={28} height={28} />
               <span>concurse.io</span>
             </div>
 
@@ -172,6 +159,9 @@ export const LoginPage: React.FC = () => {
                   event.preventDefault();
                   return;
                 }
+                loginAttemptRef.current = true;
+                setHasLoginAttempt(true);
+                setDesktopLoginError(null);
                 setIsRedirecting(true);
                 if (useSupabaseLogin) {
                   event.preventDefault();
@@ -213,7 +203,7 @@ export const LoginPage: React.FC = () => {
 
         <aside className="login-story" aria-label="Benefícios da sua conta">
           <div className="login-brand">
-            <span className="login-brand-symbol" aria-hidden="true">C</span>
+            <img className="login-brand-symbol brand-logo-image" src="/concurse-icon-64.png" alt="" width={30} height={30} />
             <span>concurse.io</span>
           </div>
 

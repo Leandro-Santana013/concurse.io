@@ -28,6 +28,22 @@ const validObjectPath = (value: string) => {
 
 const encodedPath = (value: string) => value.split("/").map(encodeURIComponent).join("/");
 
+const parFor = (objectPath: string, mode: "read" | "write") => {
+  const prefix = objectPath.split("/", 1)[0];
+  const specific = mode === "write"
+    ? prefix === "questions"
+      ? Deno.env.get("OCI_MEDIA_WRITE_QUESTIONS_PAR_URL")
+      : prefix === "exams"
+        ? Deno.env.get("OCI_MEDIA_WRITE_EXAMS_PAR_URL")
+        : undefined
+    : prefix === "questions"
+      ? Deno.env.get("OCI_MEDIA_READ_QUESTIONS_PAR_URL")
+      : prefix === "exams"
+        ? Deno.env.get("OCI_MEDIA_READ_EXAMS_PAR_URL")
+        : undefined;
+  return specific || Deno.env.get(mode === "write" ? "OCI_MEDIA_WRITE_PAR_URL" : "OCI_MEDIA_READ_PAR_URL") || "";
+};
+
 const parObjectUrl = (base: string, objectPath: string) => {
   const normalized = base.replace(/\/+$/, "");
   return `${normalized}/${encodedPath(objectPath)}`;
@@ -73,9 +89,7 @@ Deno.serve(async (request) => {
   if (!validObjectPath(objectPath)) return json({ error: "Caminho de mídia inválido." }, 400);
 
   const isWrite = request.method === "PUT";
-  const parBase = isWrite
-    ? Deno.env.get("OCI_MEDIA_WRITE_PAR_URL")
-    : Deno.env.get("OCI_MEDIA_READ_PAR_URL");
+  const parBase = parFor(objectPath, isWrite ? "write" : "read");
   if (!parBase) {
     return json({ error: isWrite ? "Upload de mídia não está configurado." : "Leitura de mídia não está configurada." }, 503);
   }

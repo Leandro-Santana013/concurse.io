@@ -51,6 +51,7 @@ dist/
 .vite/
 **/.vite/
 dist-ssr/
+frontend/dist.previous/
 
 # Scraping & Browser Temp (Playwright, Selenium)
 pw_dl_*/
@@ -74,6 +75,7 @@ desktop.ini
 rust_engine/target/
 **/target/
 desktop/src-tauri/gen/
+desktop/tauri.build.*.json
 *.pyd
 *.whl
 

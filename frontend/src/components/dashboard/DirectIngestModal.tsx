@@ -32,6 +32,7 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const [examUrl, setExamUrl] = useState('');
   const [localFile, setLocalFile] = useState<File | null>(null);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [gabaritoUrl, setGabaritoUrl] = useState('');
   const [customTitle, setCustomTitle] = useState('');
   const [stage, setStage] = useState<ImportStage>('form');
@@ -56,6 +57,7 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
     previousFocusRef.current = document.activeElement as HTMLElement | null;
     setExamUrl(initialExamUrl);
     setLocalFile(null);
+    setImageFiles([]);
     setGabaritoUrl(initialGabaritoUrl);
     setCustomTitle(initialTitle);
     setStage('form');
@@ -159,16 +161,11 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
   };
 
   const startImport = async () => {
-    if (OFFLINE_DESKTOP) {
-      if (!localFile) {
-        setErrorMessage('Escolha um PDF ou JSON de prova neste computador.');
-        setStage('error');
-        return;
-      }
+    if (localFile) {
       setStage('submitting');
       setProgress(15);
       setErrorMessage(null);
-      setStatusMessage('Guardando a prova no armazenamento local...');
+      setStatusMessage(OFFLINE_DESKTOP ? 'Guardando a prova no armazenamento local...' : 'Enviando a prova e as imagens para o Oracle...');
       try {
         const buffer = await localFile.arrayBuffer();
         const bytes = new Uint8Array(buffer);
@@ -181,16 +178,17 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
           localFile.name,
           btoa(binary),
           customTitle.trim() || localFile.name.replace(/\.[^.]+$/, ''),
+          imageFiles,
         );
         setProgress(100);
-        setStatusMessage(response.message || 'Prova disponível neste computador.');
+        setStatusMessage(response.message || (OFFLINE_DESKTOP ? 'Prova disponível neste computador.' : 'Prova sincronizada no Oracle.'));
         void refreshDownloads();
         setReadyExamId(response.exam_id);
         setStage('ready');
       } catch (error) {
         void refreshDownloads();
         setStage('error');
-        setErrorMessage(error instanceof Error ? error.message : 'Não foi possível guardar o arquivo local.');
+        setErrorMessage(error instanceof Error ? error.message : 'Não foi possível guardar e sincronizar o arquivo.');
       }
       return;
     }
@@ -241,7 +239,7 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
             <p id="import-description" className="mt-1 text-sm text-[var(--text-muted)]">
               {OFFLINE_DESKTOP
                 ? 'Escolha um arquivo que já esteja neste computador.'
-                : 'Cole o link da prova e, se tiver, o link do gabarito oficial.'}
+                : 'Cole o link da prova ou escolha um arquivo local; a ingestão fica sincronizada no Oracle.'}
             </p>
           </div>
           <button ref={closeButtonRef} type="button" className="icon-button" onClick={onClose} aria-label="Fechar importação"><X aria-hidden="true" /></button>
@@ -260,15 +258,49 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
                 onChange={(event) => setLocalFile(event.target.files?.[0] || null)}
               />
               <p className="mt-2 text-xs text-[var(--text-muted)]">
-                O PDF é guardado e compartilhado entre pares. Para abrir questões já extraídas, selecione o JSON da prova.
+                O PDF é guardado no Oracle. Para um JSON que usa caminhos como <code>/static/images/questions/...</code>, selecione também os arquivos de imagem abaixo.
               </p>
+              <label className="field-label mt-4" htmlFor="local-question-images">Imagens extraídas <span className="font-normal text-[var(--text-muted)]">(opcional, várias)</span></label>
+              <input
+                id="local-question-images"
+                type="file"
+                multiple
+                accept="image/*"
+                className="input-control mt-2 text-sm"
+                disabled={isBusy}
+                onChange={(event) => setImageFiles(Array.from(event.target.files || []))}
+              />
             </div>
           ) : (
             <>
               <div className="block">
+                <label className="field-label" htmlFor="local-exam-file">Arquivo local <span className="font-normal text-[var(--text-muted)]">(opcional)</span></label>
+                <input
+                  id="local-exam-file"
+                  type="file"
+                  accept=".pdf,.json,application/pdf,application/json"
+                  className="input-control mt-2 text-sm"
+                  disabled={isBusy}
+                  onChange={(event) => setLocalFile(event.target.files?.[0] || null)}
+                />
+                <p className="mt-2 text-xs text-[var(--text-muted)]">
+                  O PDF vai para <code>exams/</code>; Data URLs e imagens selecionadas vão para <code>questions/</code>. Sem arquivo, use os links abaixo.
+                </p>
+                <label className="field-label mt-4" htmlFor="local-question-images-online">Imagens extraídas <span className="font-normal text-[var(--text-muted)]">(opcional, várias)</span></label>
+                <input
+                  id="local-question-images-online"
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  className="input-control mt-2 text-sm"
+                  disabled={isBusy}
+                  onChange={(event) => setImageFiles(Array.from(event.target.files || []))}
+                />
+              </div>
+              <div className="block">
                 <label className="field-label" htmlFor="exam-url">Link da prova</label>
                 <div className="mt-2 flex gap-2">
-                  <input id="exam-url" type="url" required className="input-control font-mono text-sm" disabled={isBusy} value={examUrl} onChange={(event) => setExamUrl(event.target.value)} placeholder="https://.../prova.pdf" />
+                  <input id="exam-url" type="url" required={!localFile} className="input-control font-mono text-sm" disabled={isBusy} value={examUrl} onChange={(event) => setExamUrl(event.target.value)} placeholder="https://.../prova.pdf" />
                   <button type="button" className="button-secondary shrink-0" disabled={isBusy} onClick={() => void pasteInto(setExamUrl)}><Clipboard aria-hidden="true" /> Colar</button>
                 </div>
               </div>
@@ -320,7 +352,7 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
               {stage === 'ready' && readyExamId ? (
                 <button type="button" className="button-primary" onClick={() => { onClose(); onExamReady?.(readyExamId); }}><FileText aria-hidden="true" /> Iniciar simulado</button>
               ) : (
-                <button type="submit" className="button-primary" disabled={isBusy || (OFFLINE_DESKTOP ? !localFile : !examUrl.trim())}>{isBusy ? <Loader2 className="ingest-progress-loader" aria-hidden="true" /> : <FileText aria-hidden="true" />} {OFFLINE_DESKTOP ? 'Guardar prova' : 'Processar prova'}</button>
+                <button type="submit" className="button-primary" disabled={isBusy || (!localFile && !examUrl.trim())}>{isBusy ? <Loader2 className="ingest-progress-loader" aria-hidden="true" /> : <FileText aria-hidden="true" />} {OFFLINE_DESKTOP ? 'Guardar prova' : 'Processar prova'}</button>
               )}
             </div>
           </footer>

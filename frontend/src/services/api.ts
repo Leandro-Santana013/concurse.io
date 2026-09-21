@@ -23,11 +23,20 @@ import {
   supabaseRedirectUrl,
 } from './supabase';
 
-export const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN || '').trim().replace(/\/+$/, '');
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || '').trim().replace(/\/+$/, '');
+const SUPABASE_FUNCTIONS_URL = (import.meta.env.VITE_SUPABASE_FUNCTIONS_URL || `${SUPABASE_URL}/functions/v1`).replace(/\/+$/, '');
 export const OFFLINE_DESKTOP = import.meta.env.VITE_OFFLINE_DESKTOP === '1';
 export const DESKTOP_APP = import.meta.env.VITE_DESKTOP_APP === '1';
 export const TAURI_MOBILE_APP = import.meta.env.VITE_TAURI_MOBILE === '1';
 export const MOBILE_OAUTH_RETURN = 'concurse://oauth/callback';
+const SUPABASE_OAUTH_FLOW_KEY = 'concurse.supabase.oauth.flow.v1';
+
+export type OAuthDeepLinkResult = {
+  code?: string;
+  flowId?: string;
+  error?: string;
+  errorDescription?: string;
+};
 
 const DESKTOP_SESSION_KEY = 'concurse.desktop.session.v1';
 const API_REQUEST_TIMEOUT_MS = 8000;
@@ -47,6 +56,28 @@ const setDesktopSessionToken = (token: string) => {
     else window.localStorage.removeItem(DESKTOP_SESSION_KEY);
   } catch {
     // A sessão em memória ainda permite o uso desta execução do aplicativo.
+  }
+};
+
+const getPendingSupabaseOAuthFlow = (): string => {
+  try {
+    return typeof window === 'undefined'
+      ? ''
+      : window.localStorage.getItem(SUPABASE_OAUTH_FLOW_KEY) || '';
+  } catch {
+    return '';
+  }
+};
+
+const setPendingSupabaseOAuthFlow = (flowId: string | null | undefined) => {
+  try {
+    if (typeof window === 'undefined') return;
+    if (flowId) window.localStorage.setItem(SUPABASE_OAUTH_FLOW_KEY, flowId);
+    else window.localStorage.removeItem(SUPABASE_OAUTH_FLOW_KEY);
+  } catch {
+    // O retorno profundo ainda pode concluir o fluxo se o armazenamento local
+    // estiver indisponível: o callback também carrega o flow id quando o
+    // Supabase o acrescenta à URL.
   }
 };
 
@@ -75,11 +106,65 @@ const invokeLocalFallback = async <T>(command: string, args: Record<string, unkn
 };
 
 export const apiUrl = (path: string): string => {
-  if (!path || /^[a-z][a-z\d+.-]*:\/\//i.test(path) || !API_ORIGIN) return path;
-  return `${API_ORIGIN}${path.startsWith('/') ? path : `/${path}`}`;
+  if (!path || /^[a-z][a-z\d+.-]*:\/\//i.test(path)) return path;
+  const normalized = path.startsWith('/') ? path : `/${path}`;
+  if (normalized.startsWith('/api/v1')) return `${SUPABASE_FUNCTIONS_URL}/app-gateway${normalized}`;
+  return path;
 };
 
 const API_BASE = apiUrl('/api/v1');
+
+const base64Bytes = (value: string): Uint8Array => {
+  const binary = atob(value);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+};
+
+const utf8Base64 = (value: string): string => {
+  const bytes = new TextEncoder().encode(value);
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+  return btoa(binary);
+};
+
+const baseName = (value: string): string => {
+  const normalized = value.replace(/\\/g, '/');
+  const candidate = normalized.split('/').pop() || normalized;
+  try {
+    return decodeURIComponent(candidate).toLowerCase();
+  } catch {
+    return candidate.toLowerCase();
+  }
+};
+
+const rewriteQuestionMedia = (document: Record<string, unknown>, mediaByName: Map<string, string>) => {
+  const rewrite = (value: unknown): unknown => {
+    if (typeof value !== 'string' || /^data:/i.test(value) || /^https?:\/\//i.test(value)) return value;
+    return mediaByName.get(baseName(value)) || value;
+  };
+  const questions = Array.isArray(document.questions) ? document.questions : [];
+  for (const rawQuestion of questions) {
+    if (!rawQuestion || typeof rawQuestion !== 'object') continue;
+    const question = rawQuestion as Record<string, unknown>;
+    if (Array.isArray(question.images)) question.images = question.images.map(rewrite);
+    if (question.option_images && typeof question.option_images === 'object') {
+      const optionImages = question.option_images as Record<string, unknown>;
+      for (const [key, values] of Object.entries(optionImages)) {
+        if (Array.isArray(values)) optionImages[key] = values.map(rewrite);
+      }
+    }
+  }
+  return document;
+};
+
+const hexDigest = async (bytes: Uint8Array): Promise<string> => {
+  const stableBytes = new Uint8Array(bytes.byteLength);
+  stableBytes.set(bytes);
+  const digest = await crypto.subtle.digest('SHA-256', stableBytes.buffer);
+  return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('');
+};
 
 const resolveApiUrl = (value: string): string => {
   // A desktop proof must remain self-contained.  Remote media references from
@@ -105,17 +190,33 @@ const normalizeExam = (exam: ExamDetail): ExamDetail => ({
   })),
 });
 
-const apiFetch = (input: RequestInfo | URL, init: RequestInit = {}) => {
+const apiFetch = async (input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = API_REQUEST_TIMEOUT_MS) => {
   const headers = new Headers(init.headers);
-  if (desktopSessionToken && !headers.has('Authorization')) {
-    headers.set('Authorization', `Bearer ${desktopSessionToken}`);
+  if (!headers.has('Authorization')) {
+    const session = supabase ? (await supabase.auth.getSession()).data.session : null;
+    if (session?.access_token) headers.set('Authorization', `Bearer ${session.access_token}`);
+    else if (desktopSessionToken) headers.set('Authorization', `Bearer ${desktopSessionToken}`);
+  }
+  // Supabase Edge Functions use the bearer token above and intentionally return
+  // a wildcard CORS origin. Sending cookies with a wildcard origin makes the
+  // WebView reject the response as a generic "Failed to fetch" error after the
+  // Google callback. Keep credentials only for same-origin legacy development
+  // requests; the hosted Supabase gateway must be token-only.
+  let credentials = init.credentials;
+  try {
+    const requestUrl = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+    const pageOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+    const requestOrigin = new URL(requestUrl, pageOrigin || undefined).origin;
+    credentials = pageOrigin && requestOrigin !== pageOrigin ? 'omit' : (credentials || 'include');
+  } catch {
+    credentials = credentials || 'include';
   }
   const controller = new AbortController();
-  const timeout = globalThis.setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+  const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
   return fetch(input, {
     ...init,
     headers,
-    credentials: 'include',
+    credentials,
     signal: controller.signal,
   }).finally(() => globalThis.clearTimeout(timeout));
 };
@@ -130,14 +231,7 @@ export class AuthRequiredError extends Error {
 export const api = {
   async getAuthConfig(): Promise<AuthConfig> {
     if (OFFLINE_DESKTOP) return invokeOffline<AuthConfig>('offline_auth_config');
-    try {
-      const res = await apiFetch(`${API_BASE}/auth/config`);
-      if (!res.ok) throw new Error('Falha ao consultar a configuração de acesso');
-      return res.json();
-    } catch (error) {
-      if (DESKTOP_APP && isTransportFailure(error)) return { google_enabled: false };
-      throw error;
-    }
+    return { google_enabled: supabaseAuthConfigured, supabase_enabled: supabaseAuthConfigured };
   },
 
   async exchangeSupabaseSession(): Promise<AuthUser | null> {
@@ -147,20 +241,13 @@ export const api = {
     const accessToken = data.session?.access_token;
     if (!accessToken) return null;
 
-    const res = await apiFetch(`${API_BASE}/auth/supabase/exchange`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ access_token: accessToken }),
-    });
+    const res = await apiFetch(`${API_BASE}/auth/me`);
     if (res.status === 401) {
       await supabase.auth.signOut();
       return null;
     }
     if (!res.ok) throw new Error('Não foi possível sincronizar a conta Supabase.');
-    const payload: { user?: AuthUser; session_token?: string } = await res.json();
-    if (!payload.user) throw new Error('O servidor não retornou um usuário válido.');
-    if (DESKTOP_APP && payload.session_token) setDesktopSessionToken(payload.session_token);
-    return payload.user;
+    return res.json();
   },
 
   async getCurrentUser(): Promise<AuthUser | null> {
@@ -171,76 +258,88 @@ export const api = {
       if (!res.ok) throw new Error('Falha ao verificar sua sessão');
       return res.json();
     } catch (error) {
-      // A conta remota pode ficar temporariamente indisponível; o desktop
-      // continua abrindo a biblioteca já armazenada nesta máquina.
-      if (DESKTOP_APP && isTransportFailure(error)) {
+      // O modo remoto nunca cria uma sessão anônima quando a API fica
+      // indisponível. A identidade local só existe no perfil offline explícito.
+      if (DESKTOP_APP && OFFLINE_DESKTOP && isTransportFailure(error)) {
         return invokeLocalFallback<AuthUser>('offline_current_user');
       }
       throw error;
     }
   },
 
-  getGoogleLoginUrl(nextPath: string = '/'): string {
-    const safePath = nextPath.startsWith('/') && !nextPath.startsWith('//') ? nextPath : '/';
-    const mobileReturn = TAURI_MOBILE_APP
-      ? `&client=desktop&desktop_return=${encodeURIComponent(MOBILE_OAUTH_RETURN)}`
-      : '';
-    return `${API_BASE}/auth/google/login?next=${encodeURIComponent(safePath)}${mobileReturn}`;
+  getGoogleLoginUrl(_nextPath: string = '/'): string {
+    // O login remoto passa sempre pelo Supabase Auth; não há mais rota Google
+    // legada no aplicativo.
+    return '#';
   },
 
   async beginGoogleLogin(nextPath: string = '/'): Promise<void> {
-    if (DESKTOP_APP) {
-      await invokeDesktop('desktop_begin_google_login', {
-        apiOrigin: API_ORIGIN,
-        nextPath,
-      });
-      return;
-    }
-    if (TAURI_MOBILE_APP) {
-      const { openUrl } = await import('@tauri-apps/plugin-opener');
-      await openUrl(this.getGoogleLoginUrl(nextPath));
-      return;
-    }
-    window.location.assign(this.getGoogleLoginUrl(nextPath));
+    return this.beginSupabaseLogin(nextPath);
   },
 
   async beginSupabaseLogin(nextPath: string = '/'): Promise<void> {
     if (!supabaseAuthConfigured || !supabase) {
       throw new Error('O login Supabase não está configurado neste build.');
     }
-    const { error } = await supabase.auth.signInWithOAuth({
+    const nativeApp = DESKTOP_APP || TAURI_MOBILE_APP;
+    const redirectTo = nativeApp
+      ? MOBILE_OAUTH_RETURN
+      : supabaseRedirectUrl(nextPath);
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: supabaseRedirectUrl(nextPath),
+        redirectTo,
+        // Keep the Tauri window on the login screen while Google runs in the
+        // system browser. The callback returns through concurse://oauth/callback.
+        skipBrowserRedirect: nativeApp,
         queryParams: { access_type: 'offline', prompt: 'select_account' },
       },
     });
     if (error) throw new Error('Não foi possível abrir o login Google pelo Supabase.');
+    // O navegador do sistema não compartilha a sessão da WebView. Mantemos o
+    // flow id retornado pelo Supabase para selecionar o verifier PKCE correto
+    // quando o deep link voltar ao aplicativo.
+    if (nativeApp) setPendingSupabaseOAuthFlow(data?.flowId);
+    if (nativeApp && data?.url) {
+      const { openUrl } = await import('@tauri-apps/plugin-opener');
+      try {
+        await openUrl(data.url);
+      } catch (error) {
+        setPendingSupabaseOAuthFlow(null);
+        throw error;
+      }
+    }
   },
 
-  async takeDesktopOAuthCode(): Promise<string | null> {
-    if (!DESKTOP_APP) return null;
-    return invokeDesktop<string | null>('desktop_take_oauth_result');
+  async exchangeSupabaseOAuthCode(code: string, flowId?: string): Promise<AuthUser | null> {
+    if (!supabase) throw new Error('O login Supabase não está configurado neste build.');
+    const pendingFlowId = flowId || getPendingSupabaseOAuthFlow();
+    try {
+      const { error } = await supabase.auth.exchangeCodeForSession(
+        code,
+        pendingFlowId ? { flowId: pendingFlowId } : undefined,
+      );
+      if (error) {
+        throw new Error(`Não foi possível concluir o login Google no aplicativo: ${error.message}`);
+      }
+      return this.exchangeSupabaseSession();
+    } finally {
+      setPendingSupabaseOAuthFlow(null);
+    }
   },
 
-  async exchangeDesktopOAuthCode(code: string): Promise<AuthUser> {
-    const res = await fetch(`${API_BASE}/auth/google/desktop/exchange`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code }),
-    });
-    if (!res.ok) throw new Error('Não foi possível concluir o login Google no aplicativo.');
-    const payload: { session_token?: string; user?: AuthUser } = await res.json();
-    if (!payload.session_token || !payload.user) throw new Error('O servidor não retornou uma sessão válida.');
-    setDesktopSessionToken(payload.session_token);
-    return payload.user;
+  clearPendingSupabaseOAuth(): void {
+    setPendingSupabaseOAuthFlow(null);
   },
 
-  async listenMobileOAuth(onCode: (code: string) => void): Promise<() => void> {
-    if (!TAURI_MOBILE_APP) return () => undefined;
+  async listenMobileOAuth(onResult: (result: OAuthDeepLinkResult) => void): Promise<() => void> {
+    if (!DESKTOP_APP && !TAURI_MOBILE_APP) return () => undefined;
     const { getCurrent, onOpenUrl } = await import('@tauri-apps/plugin-deep-link');
+    let lastUrl = '';
     const consume = (urls: string[] | null | undefined) => {
       for (const value of urls || []) {
+        if (value === lastUrl) continue;
+        lastUrl = value;
         try {
           const parsed = new URL(value);
           if (
@@ -249,22 +348,30 @@ export const api = {
             || parsed.pathname !== '/callback'
           ) continue;
           const error = parsed.searchParams.get('error');
+          const errorDescription = parsed.searchParams.get('error_description') || undefined;
           const code = parsed.searchParams.get('code');
-          if (error) onCode(`__oauth_error__:${error}`);
-          else if (code) onCode(code);
+          const flowId = parsed.searchParams.get('sb_flow_id') || undefined;
+          if (error) onResult({ error, errorDescription });
+          else if (code) onResult({ code, flowId });
         } catch {
           // A deep link from another source is ignored.
         }
       }
     };
-    consume(await getCurrent());
-    return onOpenUrl(consume);
+    // Register first so a callback that arrives while the app is already open
+    // cannot race with the initial getCurrent() check on mobile.
+    const stop = await onOpenUrl(consume);
+    try {
+      consume(await getCurrent());
+    } catch (error) {
+      stop();
+      throw error;
+    }
+    return stop;
   },
 
   async logout(): Promise<void> {
     if (OFFLINE_DESKTOP) return;
-    const res = await apiFetch(`${API_BASE}/auth/logout`, { method: 'POST' });
-    if (!res.ok) throw new Error('Não foi possível encerrar a sessão');
     if (supabase) await supabase.auth.signOut();
     setDesktopSessionToken('');
   },
@@ -493,13 +600,58 @@ export const api = {
     return res.json();
   },
 
-  async ingestLocalFile(filename: string, dataBase64: string, title: string): Promise<ExamIngestResult> {
-    if (!OFFLINE_DESKTOP) throw new Error('Importação local disponível apenas no desktop.');
-    return invokeOffline<ExamIngestResult>('offline_import_file', {
-      filename,
-      dataBase64,
-      title,
+  async uploadMedia(objectPath: string, bytes: Uint8Array, contentType: string): Promise<void> {
+    if (OFFLINE_DESKTOP) throw new Error('O envio para o Oracle exige uma sessão Supabase online.');
+    const res = await apiFetch(`${SUPABASE_FUNCTIONS_URL}/media-gateway?path=${encodeURIComponent(objectPath)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': contentType },
+      body: bytes as BodyInit,
+    }, 120000);
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      throw new Error(detail || 'Não foi possível armazenar o arquivo no Oracle.');
+    }
+  },
+
+  async ingestLocalFile(filename: string, dataBase64: string, title: string, imageFiles: File[] = []): Promise<ExamIngestResult> {
+    if (OFFLINE_DESKTOP) {
+      return invokeOffline<ExamIngestResult>('offline_import_file', {
+        filename,
+        dataBase64,
+        title,
+      });
+    }
+    const bytes = base64Bytes(dataBase64);
+    let payload: Record<string, unknown> = { filename, title, data_base64: dataBase64 };
+    if (/\.pdf$/i.test(filename)) {
+      const objectPath = `exams/uploads/${await hexDigest(bytes)}.pdf`;
+      await this.uploadMedia(objectPath, bytes, 'application/pdf');
+      payload = { filename, title, source_object: objectPath };
+    } else if (/\.json$/i.test(filename)) {
+      try {
+        const parsed = JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>;
+        const mediaByName = new Map<string, string>();
+        for (const imageFile of imageFiles) {
+          const imageBytes = new Uint8Array(await imageFile.arrayBuffer());
+          const digest = await hexDigest(imageBytes);
+          const extension = imageFile.name.split('.').pop()?.replace(/[^a-z0-9]+/gi, '').toLowerCase() || 'bin';
+          const objectPath = `questions/import-assets-${digest}.${extension}`;
+          await this.uploadMedia(objectPath, imageBytes, imageFile.type || 'application/octet-stream');
+          mediaByName.set(imageFile.name.toLowerCase(), objectPath);
+        }
+        rewriteQuestionMedia(parsed, mediaByName);
+        payload = { filename, title, data_base64: utf8Base64(JSON.stringify(parsed)) };
+      } catch {
+        // The gateway returns the precise invalid-JSON error for a malformed file.
+      }
+    }
+    const res = await apiFetch(`${API_BASE}/exams/import-local`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
     });
+    if (!res.ok) throw new Error('Não foi possível sincronizar a prova e seus arquivos no Oracle.');
+    return res.json();
   },
 
 };

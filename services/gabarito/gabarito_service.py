@@ -473,10 +473,186 @@ def _compute_cargo_match_score(exam_title: str, candidate_cargo: str, target_tip
             return 0.0
     return score
 
+
+def _extract_transpetro_matrix_gabaritos(gab_doc) -> List[Dict[str, Any]]:
+    """Extrai o gabarito Terra/Transpetro diagramado em oito colunas.
+
+    O PDF oficial coloca quatro provas por página. Cada prova ocupa dois
+    grupos de colunas: questões 21--45 e 46--70. A leitura linear mistura os
+    quatro cargos e produz apenas 51 números distintos, por isso a seleção
+    precisa usar a posição X dos pares ``número - letra``.
+    """
+
+    if not hasattr(gab_doc, "__len__") or not hasattr(gab_doc, "__getitem__"):
+        return []
+
+    first_page_answers: Dict[int, str] = {}
+    if len(gab_doc) > 0:
+        first_page_text = gab_doc[0].get_text()
+        if re.search(r"\bTRANSPETRO\b", first_page_text, re.IGNORECASE):
+            parsed_common = parse_gabarito_from_text(first_page_text)
+            if set(parsed_common) == set(range(1, 21)):
+                first_page_answers = parsed_common
+
+    results: List[Dict[str, Any]] = []
+    for page_number, page in enumerate(gab_doc, start=1):
+        page_text = page.get_text()
+        if not (
+            re.search(r"\bTRANSPETRO\b", page_text, re.IGNORECASE)
+            and re.search(r"\bGABARITO\b", page_text, re.IGNORECASE)
+        ):
+            continue
+
+        words = page.get_text("words")
+        if not words:
+            continue
+
+        # Os pares do gabarito têm número, hífen e letra com distância
+        # horizontal estável. A coordenada vertical da letra pode variar
+        # alguns pontos entre colunas, então o vínculo é geométrico em vez de
+        # depender da ordem de blocos/linhas retornada pelo PDF.
+        dash_words = [
+            word
+            for word in words
+            if str(word[4] or "") in {"-", "–", "—"}
+        ]
+        answer_words = [
+            word
+            for word in words
+            if str(word[4] or "").upper() in {"A", "B", "C", "D", "E", "X", "N", "*"}
+        ]
+        grouped_by_x: List[Dict[str, Any]] = []
+        for number_word in words:
+            token = str(number_word[4] or "")
+            if not token.isascii() or not token.isdigit():
+                continue
+            number = int(token)
+            if not 21 <= number <= 70:
+                continue
+
+            number_center_y = (float(number_word[1]) + float(number_word[3])) / 2.0
+            dash_word = min(
+                (
+                    word
+                    for word in dash_words
+                    if 0.0 < float(word[0]) - float(number_word[0]) <= 28.0
+                    and abs(
+                        (float(word[1]) + float(word[3])) / 2.0 - number_center_y
+                    ) <= 6.0
+                ),
+                key=lambda word: float(word[0]),
+                default=None,
+            )
+            if dash_word is None:
+                continue
+
+            answer_word = min(
+                (
+                    word
+                    for word in answer_words
+                    if float(word[0]) > float(dash_word[0])
+                    and float(word[0]) - float(number_word[0]) <= 48.0
+                    and abs(
+                        (float(word[1]) + float(word[3])) / 2.0 - number_center_y
+                    ) <= 6.0
+                ),
+                key=lambda word: float(word[0]),
+                default=None,
+            )
+            if answer_word is None:
+                continue
+
+            anchor_x = float(number_word[0])
+            group = next(
+                (
+                    item
+                    for item in grouped_by_x
+                    if abs(float(item["x"]) - anchor_x) <= 12.0
+                ),
+                None,
+            )
+            if group is None:
+                group = {"x": anchor_x, "answers": {}}
+                grouped_by_x.append(group)
+            answer = str(answer_word[4] or "").upper()
+            group["answers"][number] = "X" if answer in {"*", "N"} else answer
+
+        column_groups = [
+            group
+            for group in sorted(grouped_by_x, key=lambda item: float(item["x"]))
+            if len(group["answers"]) >= 20
+            and min(group["answers"]) == 21
+            and max(group["answers"]) == 45
+        ]
+        right_groups = [
+            group
+            for group in sorted(grouped_by_x, key=lambda item: float(item["x"]))
+            if len(group["answers"]) >= 20
+            and min(group["answers"]) == 46
+            and max(group["answers"]) == 70
+        ]
+        if not column_groups or not right_groups:
+            continue
+
+        for left_index, left in enumerate(column_groups):
+            matching_right = min(
+                (
+                    right
+                    for right in right_groups
+                    if float(right["x"]) > float(left["x"])
+                    and 35.0 <= float(right["x"]) - float(left["x"]) <= 100.0
+                ),
+                key=lambda right: float(right["x"]),
+                default=None,
+            )
+            if matching_right is None:
+                continue
+
+            answers = dict(first_page_answers)
+            answers.update(left["answers"])
+            answers.update(matching_right["answers"])
+            if set(answers) != set(range(1, 71)):
+                continue
+
+            left_x = float(left["x"])
+            right_x = float(matching_right["x"])
+            header_words = [
+                word
+                for word in words
+                if 135.0 <= float(word[1]) <= 190.0
+                and left_x - 25.0 <= float(word[0]) <= right_x + 45.0
+            ]
+            header_words.sort(key=lambda word: (float(word[1]), float(word[0])))
+            header_text = " ".join(str(word[4] or "") for word in header_words)
+            type_match = re.search(r"\bPROVA\s*0*(\d{1,2})\b", header_text, re.IGNORECASE)
+            tipo = type_match.group(1) if type_match else str((page_number - 2) * 4 + left_index + 1)
+            cargo = re.sub(r"\bPROVA\s*0*\d{1,2}\b", "", header_text, flags=re.IGNORECASE)
+            cargo = re.sub(r"\b(?:TIPO|N[º°]?)\s*\d{1,2}\b", "", cargo, flags=re.IGNORECASE)
+            cargo = re.sub(r"\s+", " ", cargo).strip(" -–—:")
+            if not cargo:
+                cargo = f"PROVA {tipo}"
+
+            results.append(
+                {
+                    "cargo": cargo,
+                    "tipo": tipo,
+                    "page": page_number,
+                    "total_q": len(answers),
+                    "gabarito": answers,
+                }
+            )
+
+    return results
+
+
 def extract_all_matrix_gabaritos(gab_doc) -> List[Dict[str, Any]]:
     """
     Extrai todos os gabaritos em formato matricial horizontal (IBAM, Vunesp, etc.) de todas as páginas do PDF.
     """
+    transpetro_results = _extract_transpetro_matrix_gabaritos(gab_doc)
+    if transpetro_results:
+        return transpetro_results
+
     results = []
     for pno, page in enumerate(gab_doc):
         words = page.get_text("words")

@@ -75,7 +75,7 @@ const ProtectedRoute: React.FC = () => {
   if (status === 'loading') {
     return (
       <main className="auth-load-state" aria-busy="true">
-        <span className="brand-symbol" aria-hidden="true">C</span>
+        <img className="brand-symbol brand-logo-image" src="/concurse-icon-64.png" alt="" width={28} height={28} />
         <span className="ui-loader" aria-hidden="true" />
         <p>Preparando seu espaço de estudo…</p>
       </main>

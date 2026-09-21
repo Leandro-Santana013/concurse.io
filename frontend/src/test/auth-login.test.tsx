@@ -13,7 +13,7 @@ const apiMocks = vi.hoisted(() => ({
   getAuthConfig: vi.fn(async () => ({ google_enabled: true })),
   getCurrentUser: vi.fn(async () => null),
   exchangeSupabaseSession: vi.fn(async () => null),
-  getGoogleLoginUrl: vi.fn((nextPath: string) => `/api/v1/auth/google/login?next=${encodeURIComponent(nextPath)}`),
+  getGoogleLoginUrl: vi.fn(() => '#'),
   logout: vi.fn(async () => undefined),
 }));
 
@@ -51,7 +51,7 @@ describe('login com Google', () => {
     expect(screen.getByTestId('current-location')).toHaveTextContent('/login?next=%2Fbiblioteca');
 
     const googleLink = await screen.findByRole('link', { name: 'Continuar com Google' });
-    expect(googleLink).toHaveAttribute('href', '/api/v1/auth/google/login?next=%2Fbiblioteca');
+    expect(googleLink).toHaveAttribute('href', '#');
     expect(googleLink).toHaveAttribute('aria-disabled', 'false');
 
     const audit = await axe(container, {
@@ -65,6 +65,6 @@ describe('login com Google', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('A tentativa de login expirou por segurança');
     expect(await screen.findByRole('link', { name: 'Continuar com Google' }))
-      .toHaveAttribute('href', '/api/v1/auth/google/login?next=%2Fbuscar');
+      .toHaveAttribute('href', '#');
   });
 });
