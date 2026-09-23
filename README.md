@@ -21,6 +21,12 @@ usar os aplicativos. O Oracle fica como armazenamento de mídia; as credenciais
 privadas do bucket permanecem nos secrets das Edge Functions e nunca são
 embutidas nos instaladores.
 
+No desktop Windows, o perfil `desktop-local` é autocontido: o instalador inclui
+um sidecar FastAPI com o mesmo pipeline de extração/OCR, banco SQLite e mídia
+local. Assim, extração de provas, biblioteca, estatísticas, tentativas, caderno
+de erros e ranking local funcionam sem uma FastAPI externa. Supabase permanece
+opcional para login Google, sincronização entre dispositivos e ranking global.
+
 ## Downloads
 
 Os binários versionados ficam em [`downloads/`](downloads/). Cada arquivo é
@@ -71,9 +77,10 @@ npm --prefix frontend run build:mobile
 npm --prefix desktop run android:build
 ```
 
-O instalador Windows sai em `desktop/src-tauri/target/release/bundle/`. O APK
-Android sai em `desktop/src-tauri/gen/android/app/build/outputs/apk/`. Os
-comandos de build não executam OCR; a extração de provas é uma etapa separada.
+O instalador Windows sai em `desktop/src-tauri/target/release/bundle/`. O build
+desktop gera e embute o sidecar OCR antes de criar o instalador; a extração
+acontece localmente durante o uso. O APK Android sai em
+`desktop/src-tauri/gen/android/app/build/outputs/apk/`.
 
 ## Configuração
 

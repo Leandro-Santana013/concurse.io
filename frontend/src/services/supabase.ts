@@ -16,6 +16,22 @@ export const supabase: SupabaseClient | null = supabaseAuthConfigured
     })
   : null;
 
+// O desktop abre o provedor no navegador do sistema e recebe o retorno por
+// deep link. Nesse cenário não existe garantia de que o storage da WebView
+// preserve o verifier PKCE criado antes de abrir o navegador externo. O fluxo
+// implícito nativo transporta os tokens no retorno e evita essa dependência.
+export const supabaseNativeOAuth: SupabaseClient | null = supabaseAuthConfigured
+  ? createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+      auth: {
+        flowType: 'implicit',
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+        storageKey: 'concurse.desktop.oauth.native',
+      },
+    })
+  : null;
+
 export const supabaseRedirectUrl = (nextPath = '/'): string => {
   if (typeof window === 'undefined') return '';
   const safePath = nextPath.startsWith('/') && !nextPath.startsWith('//') ? nextPath : '/';

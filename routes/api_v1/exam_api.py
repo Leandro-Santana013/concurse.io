@@ -1,6 +1,9 @@
-import re
+import base64
 import json
 import asyncio
+import os
+import re
+import secrets
 from collections import Counter
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -333,6 +336,7 @@ def get_library_snapshot(
         exams=flat_exams,
         asset_manifests=manifests,
     )
+
 
 def _sort_questions_key(q):
     q_index = getattr(q, 'question_index', None) if not isinstance(q, dict) else q.get('question_index')
@@ -713,6 +717,131 @@ def ingest_exam_from_url(
         "message": message,
         "reused": claim.reused,
         "already_in_library": claim.already_in_library,
+    }
+
+
+@router.post("/exams/import-local", response_model=ExamIngestResponse)
+def import_local_exam(
+    payload: Dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Importa um JSON já estruturado diretamente no banco local do desktop."""
+    filename = str(payload.get("filename") or "prova.json").strip()
+    data_base64 = str(payload.get("data_base64") or "").strip()
+    title = str(payload.get("title") or "Prova importada").strip()
+    if not data_base64:
+        raise HTTPException(status_code=400, detail="O arquivo da prova está vazio.")
+    try:
+        raw_bytes = base64.b64decode(data_base64, validate=True)
+        document = json.loads(raw_bytes.decode("utf-8-sig"))
+    except (ValueError, TypeError, UnicodeDecodeError, json.JSONDecodeError):
+        raise HTTPException(status_code=400, detail="O JSON da prova é inválido.")
+    if not isinstance(document, dict):
+        raise HTTPException(status_code=400, detail="O JSON da prova precisa ser um objeto.")
+
+    raw_questions = document.get("questions")
+    if not isinstance(raw_questions, list):
+        raw_questions = []
+    title = str(document.get("title") or title or filename)[:300]
+    answer_count = 0
+    exam = Exam(
+        title=title,
+        source_url=f"local://{filename[:450]}",
+        gabarito_url=str(payload.get("gabarito_url") or "").strip() or None,
+        status="Aprovada" if raw_questions else "Arquivo recebido",
+        progress=100,
+        progress_message="Prova pronta" if raw_questions else "Arquivo recebido sem questões",
+        user_id=current_user.id,
+    )
+    db.add(exam)
+    db.flush()
+    for index, raw_question in enumerate(raw_questions):
+        if not isinstance(raw_question, dict):
+            continue
+        correct_answer = str(raw_question.get("correct_answer") or "").strip()
+        answer_count += int(bool(correct_answer))
+        options = raw_question.get("options")
+        option_images = raw_question.get("option_images")
+        images = raw_question.get("images")
+        question = Question(
+            exam_id=exam.id,
+            statement=str(raw_question.get("statement") or ""),
+            options=json.dumps(options if isinstance(options, dict) else {}, ensure_ascii=False),
+            correct_answer=correct_answer,
+            subject=_normalized_subject(raw_question.get("subject")),
+            images=json.dumps(images if isinstance(images, list) else [], ensure_ascii=False),
+            option_images=json.dumps(option_images if isinstance(option_images, dict) else {}, ensure_ascii=False),
+            numero_questao=str(raw_question.get("numero_questao") or index + 1),
+            question_index=index,
+            latex_support=int(bool(raw_question.get("latex_support"))),
+        )
+        db.add(question)
+    exam.has_official_answers = int(bool(raw_questions) and answer_count == len(raw_questions))
+    exam.answer_key_source = "imported" if answer_count else "none"
+    exam.gabarito_coverage = (answer_count * 100.0 / len(raw_questions)) if raw_questions else 0.0
+    db.commit()
+    return {
+        "exam_id": exam.id,
+        "title": exam.title,
+        "status": exam.status,
+        "progress": 100,
+        "message": "Prova importada localmente." if raw_questions else "Arquivo local recebido sem questões.",
+        "reused": False,
+        "already_in_library": True,
+    }
+
+
+@router.post("/exams/import-file", response_model=ExamIngestResponse)
+def import_exam_file(
+    payload: Dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Recebe um PDF do aplicativo desktop e executa o mesmo worker do link."""
+    from app_core.async_worker import dispatch_async_exam_task
+
+    filename = str(payload.get("filename") or "prova.pdf").strip()
+    data_base64 = str(payload.get("data_base64") or "").strip()
+    title = str(payload.get("title") or "Nova Prova de Concurso").strip()
+    gabarito_url = str(payload.get("gabarito_url") or "").strip() or None
+    if not data_base64:
+        raise HTTPException(status_code=400, detail="O arquivo da prova está vazio.")
+    try:
+        raw_bytes = base64.b64decode(data_base64, validate=True)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="O arquivo enviado é inválido.")
+    if len(raw_bytes) < 5_000 or raw_bytes[:4] != b"%PDF":
+        raise HTTPException(status_code=400, detail="O arquivo precisa ser um PDF válido.")
+
+    data_root = Path(os.environ.get("CONCURSE_DATA_ROOT") or os.getcwd()).resolve()
+    pdf_dir = data_root / "pdfs"
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    safe_stem = re.sub(r"[^A-Za-z0-9_-]+", "-", Path(filename).stem).strip("-") or "prova"
+    source_path = pdf_dir / f"upload-{safe_stem}-{secrets.token_hex(8)}.pdf"
+    source_path.write_bytes(raw_bytes)
+
+    exam = Exam(
+        title=title[:300],
+        source_url=str(source_path),
+        gabarito_url=gabarito_url[:500] if gabarito_url else None,
+        status="Processando",
+        progress=5,
+        progress_message="Iniciando processamento local...",
+        user_id=current_user.id,
+    )
+    db.add(exam)
+    db.commit()
+    db.refresh(exam)
+    dispatch_async_exam_task(exam.id)
+    return {
+        "exam_id": exam.id,
+        "title": exam.title,
+        "status": exam.status,
+        "progress": exam.progress or 0,
+        "message": "Extração local iniciada.",
+        "reused": False,
+        "already_in_library": True,
     }
 
 

@@ -1,4 +1,6 @@
 mod offline;
+#[cfg(desktop)]
+mod local_engine;
 
 #[cfg(desktop)]
 use tauri::Manager;
@@ -109,13 +111,14 @@ pub fn run() {
     #[cfg(desktop)]
     let builder = builder.setup(|app| {
         offline::init(app.handle()).map_err(|error| std::io::Error::other(error))?;
+        local_engine::start(app.handle()).map_err(|error| std::io::Error::other(error))?;
         Ok(())
     });
 
     #[cfg(not(desktop))]
     let builder = builder.setup(|_app| Ok(()));
 
-    builder
+    let app = builder
         .invoke_handler(tauri::generate_handler![
             offline_auth_config,
             offline_current_user,
@@ -132,6 +135,13 @@ pub fn run() {
             offline_custom_options,
             offline_custom_exam,
         ])
-        .run(tauri::generate_context!())
-        .expect("erro ao iniciar o aplicativo concurse.io");
+        .build(tauri::generate_context!())
+        .expect("erro ao construir o aplicativo concurse.io");
+
+    app.run(|_app_handle, event| {
+        if matches!(event, tauri::RunEvent::Exit) {
+            #[cfg(desktop)]
+            local_engine::stop();
+        }
+    });
 }

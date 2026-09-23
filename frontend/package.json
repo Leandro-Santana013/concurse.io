@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "build:desktop": "tsc && vite build --mode desktop",
+    "build:desktop:local": "tsc && vite build --mode desktop-local",
     "build:desktop:offline": "tsc && vite build --mode desktop-offline",
     "build:mobile": "tsc && vite build --mode mobile",
     "preview": "vite preview",

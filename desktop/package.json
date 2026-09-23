@@ -6,7 +6,8 @@
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",
-    "build": "npm run icons && tauri build",
+    "engine:build": "powershell -ExecutionPolicy Bypass -File scripts/build-engine.ps1",
+    "build": "npm run engine:build && npm run icons && tauri build",
     "icons": "tauri icon concurse-icon.png",
     "android:init": "tauri android init",
     "android:dev": "tauri android dev",

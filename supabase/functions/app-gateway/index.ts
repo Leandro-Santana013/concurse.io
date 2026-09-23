@@ -81,15 +81,23 @@ type InternalUser = {
 };
 
 const ensureInternalUser = async (db: ReturnType<typeof createClient>, authUser: User): Promise<InternalUser> => {
+  const metadata = authUser.user_metadata || {};
+  const displayName = String(metadata.full_name || metadata.name || "").trim();
+  const displayPicture = String(metadata.avatar_url || metadata.picture || "").trim();
   const { data: existing, error: lookupError } = await db
     .from("users")
     .select("id,email,name,picture,supabase_auth_id")
     .eq("supabase_auth_id", authUser.id)
     .maybeSingle();
   if (lookupError) throw new Error(`Não foi possível localizar a conta: ${lookupError.message}`);
-  if (existing) return existing as InternalUser;
+  if (existing) {
+    return {
+      ...(existing as InternalUser),
+      name: String(existing.name || displayName || "Concurseiro"),
+      picture: String(existing.picture || displayPicture || ""),
+    };
+  }
 
-  const metadata = authUser.user_metadata || {};
   const row = {
     google_id: `supabase:${authUser.id}`,
     supabase_auth_id: authUser.id,
@@ -197,6 +205,99 @@ const questionPayload = (row: Record<string, unknown>) => ({
   context_text: null,
 });
 
+const loadExamQuestions = async (db: ReturnType<typeof createClient>, examId: number) => {
+  const [{ data: session, error: sessionError }, { data: regularQuestions, error: questionsError }] = await Promise.all([
+    db.from("generated_exam_sessions").select("question_ids_json").eq("exam_id", examId).maybeSingle(),
+    db.from("questions").select("*").eq("exam_id", examId).order("question_index", { ascending: true, nullsFirst: false }).order("id", { ascending: true }),
+  ]);
+  if (sessionError || questionsError) throw new Error(sessionError?.message || questionsError?.message || "Falha ao carregar questoes.");
+
+  const questionIds = session
+    ? parseJson<unknown[]>(session.question_ids_json, []).map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0)
+    : [];
+  if (!session || !questionIds.length) return (regularQuestions || []) as Record<string, unknown>[];
+
+  const { data: sourceQuestions, error: sourceError } = await db.from("questions").select("*").in("id", questionIds);
+  if (sourceError) throw new Error(sourceError.message);
+  const byId = new Map((sourceQuestions || []).map((question) => [Number(question.id), question as Record<string, unknown>]));
+  return questionIds.map((questionId) => byId.get(questionId)).filter(Boolean) as Record<string, unknown>[];
+};
+
+const answerQuestion = (questions: Record<string, unknown>[], key: string) => {
+  const byIdOrNumber = questions.find((question) => (
+    String(question.id || "") === key || String(question.numero_questao || "") === key
+  ));
+  if (byIdOrNumber) return byIdOrNumber;
+  const ordinal = Number(key);
+  return Number.isInteger(ordinal) && ordinal > 0 ? questions[ordinal - 1] : undefined;
+};
+
+const loadWrongQuestions = async (db: ReturnType<typeof createClient>, userId: number) => {
+  const { data: attempts, error: attemptsError } = await db
+    .from("exam_attempts")
+    .select("exam_id,answers_json")
+    .eq("user_id", userId);
+  if (attemptsError) throw new Error(attemptsError.message);
+
+  const examIds = [...new Set((attempts || []).map((attempt) => Number(attempt.exam_id)).filter(Boolean))];
+  const questionLists = await Promise.all(examIds.map(async (examId) => [examId, await loadExamQuestions(db, examId)] as const));
+  const questionsByExam = new Map(questionLists);
+  const wrongBySubject = new Map<string, Set<number>>();
+  const wrongQuestions = new Map<number, Record<string, unknown>>();
+
+  for (const attempt of attempts || []) {
+    const questions = questionsByExam.get(Number(attempt.exam_id)) || [];
+    const answers = parseJson<Record<string, unknown>>(attempt.answers_json, {});
+    for (const [key, rawAnswer] of Object.entries(answers)) {
+      const question = answerQuestion(questions, String(key));
+      const correctAnswer = String(question?.correct_answer || "").trim().toUpperCase();
+      const givenAnswer = String(rawAnswer || "").trim().toUpperCase();
+      if (!question || !correctAnswer || givenAnswer === correctAnswer) continue;
+      const questionId = Number(question.id);
+      if (!Number.isInteger(questionId) || questionId <= 0) continue;
+      const subject = String(question.subject || "Geral");
+      wrongQuestions.set(questionId, question);
+      if (!wrongBySubject.has(subject)) wrongBySubject.set(subject, new Set<number>());
+      wrongBySubject.get(subject)!.add(questionId);
+    }
+  }
+
+  return { wrongBySubject, wrongQuestions };
+};
+
+const loadRanking = async (db: ReturnType<typeof createClient>, currentUser: InternalUser) => {
+  const [{ data: users, error: usersError }, { data: attempts, error: attemptsError }] = await Promise.all([
+    db.from("users").select("id,name,picture"),
+    db.from("exam_attempts").select("user_id,total,score"),
+  ]);
+  if (usersError || attemptsError) throw new Error(usersError?.message || attemptsError?.message || "Falha ao carregar ranking.");
+
+  const totals = new Map<number, { total: number; correct: number }>();
+  for (const attempt of attempts || []) {
+    const userId = Number(attempt.user_id);
+    if (!Number.isInteger(userId) || userId <= 0) continue;
+    const current = totals.get(userId) || { total: 0, correct: 0 };
+    current.total += Number(attempt.total || 0);
+    current.correct += Number(attempt.score || 0);
+    totals.set(userId, current);
+  }
+
+  return (users || [])
+    .map((user) => {
+      const userId = Number(user.id);
+      const totalsForUser = totals.get(userId) || { total: 0, correct: 0 };
+      return {
+        id: userId,
+        name: String(user.name || (userId === currentUser.id ? currentUser.name : "Concurseiro")),
+        picture: String(user.picture || (userId === currentUser.id ? currentUser.picture : "")),
+        total_questions: totalsForUser.total,
+        accuracy: totalsForUser.total ? Number(((totalsForUser.correct * 100) / totalsForUser.total).toFixed(1)) : 0,
+      };
+    })
+    .filter((entry) => entry.total_questions > 0)
+    .sort((left, right) => (right.total_questions - left.total_questions) || (right.accuracy - left.accuracy));
+};
+
 const summaryPayload = (exam: Record<string, unknown>, questions: Record<string, unknown>[], attempts: Record<string, unknown>[]) => {
   const scores = attempts.filter((attempt) => Number(attempt.exam_id) === Number(exam.id));
   const best = scores.length ? Math.max(...scores.map((attempt) => Number(attempt.percentage || 0))) : null;
@@ -266,12 +367,9 @@ const accessibleExam = async (db: ReturnType<typeof createClient>, userId: numbe
 };
 
 const examDetail = async (db: ReturnType<typeof createClient>, examId: number) => {
-  const [{ data: exam, error: examError }, { data: questions, error: questionsError }] = await Promise.all([
-    db.from("exams").select("*").eq("id", examId).single(),
-    db.from("questions").select("*").eq("exam_id", examId).order("question_index", { ascending: true, nullsFirst: false }).order("id", { ascending: true }),
-  ]);
+  const { data: exam, error: examError } = await db.from("exams").select("*").eq("id", examId).single();
   if (examError || !exam) throw new Error(examError?.message || "Prova não encontrada.");
-  if (questionsError) throw new Error(questionsError.message);
+  const questions = await loadExamQuestions(db, examId);
   return {
     id: Number(exam.id),
     title: String(exam.title || "Prova"),
@@ -457,12 +555,59 @@ Deno.serve(async (request) => {
       const totalQuestions = library.questions.length;
       const totalCorrect = attempts.reduce((sum, attempt) => sum + Number(attempt.score || 0), 0);
       const totalAnswered = attempts.reduce((sum, attempt) => sum + Number(attempt.total || 0), 0);
-      return json({ total_exams: library.exams.length, total_questions: totalQuestions, total_correct: totalCorrect, global_accuracy: totalAnswered ? Number(((totalCorrect * 100) / totalAnswered).toFixed(1)) : 0, streak: 0, study_time: "0m", rank: "—" });
+      const ranking = await loadRanking(db, internalUser);
+      const rankIndex = ranking.findIndex((entry) => entry.id === internalUser.id);
+      return json({ total_exams: library.exams.length, total_questions: totalQuestions, total_correct: totalCorrect, global_accuracy: totalAnswered ? Number(((totalCorrect * 100) / totalAnswered).toFixed(1)) : 0, streak: 0, study_time: "0m", rank: rankIndex >= 0 ? `${rankIndex + 1}º` : "-" });
     }
-    if (path === "api/v1/ranking" && request.method === "GET") return json([]);
+    if (path === "api/v1/ranking" && request.method === "GET") {
+      const ranking = await loadRanking(db, internalUser);
+      return json(ranking.map(({ id: _id, ...entry }) => entry));
+    }
     if (path === "api/v1/downloads/active" && request.method === "GET") return json([]);
-    if (path === "api/v1/notebook/stats" && request.method === "GET") return json([]);
-    if (path === "api/v1/notebook" && request.method === "GET") return notSupported("O caderno de erros ainda depende do processamento local das tentativas.");
+    if (path === "api/v1/notebook/stats" && request.method === "GET") {
+      const { wrongBySubject } = await loadWrongQuestions(db, internalUser.id);
+      return json([...wrongBySubject.entries()]
+        .map(([subject, questionIds]) => ({ subject, count: questionIds.size }))
+        .sort((left, right) => (right.count - left.count) || left.subject.localeCompare(right.subject)));
+    }
+    if (path === "api/v1/notebook" && request.method === "GET") {
+      const subject = new URL(request.url).searchParams.get("subject")?.trim() || "";
+      const { wrongQuestions } = await loadWrongQuestions(db, internalUser.id);
+      const questions = [...wrongQuestions.values()]
+        .filter((question) => !subject || String(question.subject || "Geral") === subject)
+        .sort((left, right) => Number(left.id) - Number(right.id))
+        .slice(0, 100);
+      const title = `Caderno de Erros Inteligente${subject ? ` - ${subject}` : " (Todas as Materias)"}`;
+      const { data: created, error: createError } = await db.from("exams").insert({
+        title,
+        status: "Sessao",
+        user_id: internalUser.id,
+        has_official_answers: 1,
+        answer_key_source: "generated",
+        doc_type: "generated_session",
+        gabarito_coverage: 100,
+        progress: 100,
+        progress_message: "Caderno pronto",
+      }).select("id").single();
+      if (createError || !created) return json({ error: createError?.message || "Nao foi possivel criar o caderno." }, 400);
+      const questionIds = questions.map((question) => Number(question.id));
+      const { error: sessionError } = await db.from("generated_exam_sessions").insert({ exam_id: created.id, kind: "notebook", question_ids_json: JSON.stringify(questionIds), created_at: nowIso() });
+      if (sessionError) return json({ error: sessionError.message }, 400);
+      const { error: linkError } = await db.from("user_exams").upsert({ user_id: internalUser.id, exam_id: Number(created.id), created_at: nowIso() }, { onConflict: "user_id,exam_id" });
+      if (linkError) return json({ error: linkError.message }, 400);
+      return json({
+        id: Number(created.id),
+        title,
+        status: "Sessao",
+        folder_id: null,
+        source_url: null,
+        gabarito_url: null,
+        has_official_answers: true,
+        gabarito_coverage: 100,
+        gabarito_text: null,
+        questions: questions.map(questionPayload),
+      });
+    }
 
     if (path === "api/v1/custom-simulations/options" && request.method === "GET") {
       const subjects = new Map<string, number>();

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from models.database import DesktopOAuthCode, User, get_db
+from models.database import DesktopOAuthCode, Exam, ExamAttempt, Folder, User, UserExam, get_db
 from routes.api_v1.user_context import get_current_user
 from app_security import identifier_lookup_values, protect_identifier
 from services.auth import (
@@ -108,6 +108,49 @@ def _find_user_by_supabase_email(db: Session, email: str) -> User | None:
     return None
 
 
+def _assimilate_legacy_dev_user(db: Session, user: User) -> None:
+    """Move local data out of the placeholder account after real login.
+
+    Older desktop builds created ``Concurseiro Dev`` when auth was bypassed.
+    A real Supabase login must own that data instead of leaving a second
+    account visible in rankings/library queries.  The merge is deliberately
+    scoped to the well-known placeholder identifier; it never guesses that
+    two real accounts are duplicates based only on their display name.
+    """
+
+    legacy = db.query(User).filter(
+        User.google_subject_hash.in_(identifier_lookup_values("default_dev_user")),
+    ).first()
+    if legacy is None or legacy.id == user.id:
+        return
+
+    db.query(Exam).filter(Exam.user_id == legacy.id).update(
+        {Exam.user_id: user.id},
+        synchronize_session=False,
+    )
+    db.query(Folder).filter(Folder.user_id == legacy.id).update(
+        {Folder.user_id: user.id},
+        synchronize_session=False,
+    )
+    db.query(ExamAttempt).filter(ExamAttempt.user_id == legacy.id).update(
+        {ExamAttempt.user_id: user.id},
+        synchronize_session=False,
+    )
+    db.query(DesktopOAuthCode).filter(DesktopOAuthCode.user_id == legacy.id).update(
+        {DesktopOAuthCode.user_id: user.id},
+        synchronize_session=False,
+    )
+
+    for entry in db.query(UserExam).filter(UserExam.user_id == legacy.id).all():
+        existing = db.get(UserExam, (user.id, entry.exam_id))
+        if existing is None:
+            entry.user_id = user.id
+        else:
+            db.delete(entry)
+
+    db.delete(legacy)
+
+
 @router.post("/auth/supabase/exchange")
 def exchange_supabase_session(
     request: Request,
@@ -152,6 +195,7 @@ def exchange_supabase_session(
         user.email = identity["email"]
         user.name = identity.get("name") or user.name or "Concurseiro"
         user.picture = identity.get("picture") or user.picture or None
+    _assimilate_legacy_dev_user(db, user)
     db.commit()
     db.refresh(user)
 

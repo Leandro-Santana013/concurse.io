@@ -19,6 +19,7 @@ import {
 import { AuthConfig, AuthUser } from '../types/auth';
 import {
   supabase,
+  supabaseNativeOAuth,
   supabaseAuthConfigured,
   supabaseRedirectUrl,
 } from './supabase';
@@ -27,6 +28,7 @@ const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || '').trim().replace(/\
 const SUPABASE_FUNCTIONS_URL = (import.meta.env.VITE_SUPABASE_FUNCTIONS_URL || `${SUPABASE_URL}/functions/v1`).replace(/\/+$/, '');
 export const OFFLINE_DESKTOP = import.meta.env.VITE_OFFLINE_DESKTOP === '1';
 export const DESKTOP_APP = import.meta.env.VITE_DESKTOP_APP === '1';
+export const LOCAL_ENGINE = import.meta.env.VITE_LOCAL_ENGINE === '1';
 export const TAURI_MOBILE_APP = import.meta.env.VITE_TAURI_MOBILE === '1';
 export const MOBILE_OAUTH_RETURN = 'concurse://oauth/callback';
 const SUPABASE_OAUTH_FLOW_KEY = 'concurse.supabase.oauth.flow.v1';
@@ -34,12 +36,16 @@ const SUPABASE_OAUTH_FLOW_KEY = 'concurse.supabase.oauth.flow.v1';
 export type OAuthDeepLinkResult = {
   code?: string;
   flowId?: string;
+  accessToken?: string;
+  refreshToken?: string;
   error?: string;
   errorDescription?: string;
 };
 
 const DESKTOP_SESSION_KEY = 'concurse.desktop.session.v1';
 const API_REQUEST_TIMEOUT_MS = 8000;
+const LOCAL_API_BASE = (import.meta.env.VITE_LOCAL_API_BASE || 'http://127.0.0.1:45873/api/v1').replace(/\/+$/, '');
+const localRemoteSourceObjects = new Map<number, string>();
 let desktopSessionToken = (() => {
   try {
     return typeof window === 'undefined' ? '' : window.localStorage.getItem(DESKTOP_SESSION_KEY) || '';
@@ -109,6 +115,13 @@ export const apiUrl = (path: string): string => {
   if (!path || /^[a-z][a-z\d+.-]*:\/\//i.test(path)) return path;
   const normalized = path.startsWith('/') ? path : `/${path}`;
   if (normalized.startsWith('/api/v1')) return `${SUPABASE_FUNCTIONS_URL}/app-gateway${normalized}`;
+  return path;
+};
+
+export const localApiUrl = (path: string): string => {
+  if (!path || /^[a-z][a-z\d+.-]*:\/\//i.test(path)) return path;
+  const normalized = path.startsWith('/') ? path : `/${path}`;
+  if (normalized.startsWith('/api/v1')) return `${LOCAL_API_BASE}${normalized.slice('/api/v1'.length)}`;
   return path;
 };
 
@@ -221,6 +234,37 @@ const apiFetch = async (input: RequestInfo | URL, init: RequestInit = {}, timeou
   }).finally(() => globalThis.clearTimeout(timeout));
 };
 
+const localApiFetch = async (input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = API_REQUEST_TIMEOUT_MS) => {
+  const headers = new Headers(init.headers);
+  if (!headers.has('Authorization') && desktopSessionToken) {
+    headers.set('Authorization', `Bearer ${desktopSessionToken}`);
+  }
+  return apiFetch(input, { ...init, headers }, timeoutMs);
+};
+
+const binaryToDataUrl = (bytes: Uint8Array, contentType: string): string => {
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+  return `data:${contentType || 'application/octet-stream'};base64,${btoa(binary)}`;
+};
+
+const fileToDataUrl = async (file: File): Promise<string> => binaryToDataUrl(
+  new Uint8Array(await file.arrayBuffer()),
+  file.type || 'application/octet-stream',
+);
+
+const localMediaUrl = (examId: number, value: string): string => {
+  if (/^\/api\/v1\//i.test(value)) return localApiUrl(value);
+  if (/^\/static\/images\/questions\//i.test(value)) {
+    const filename = value.split('/').pop() || '';
+    return localApiUrl(`/api/v1/exams/${examId}/media/${encodeURIComponent(filename)}`);
+  }
+  return value;
+};
+
 export class AuthRequiredError extends Error {
   constructor(message = 'Sua sessão expirou. Faça login novamente para ver sua biblioteca.') {
     super(message);
@@ -231,6 +275,7 @@ export class AuthRequiredError extends Error {
 export const api = {
   async getAuthConfig(): Promise<AuthConfig> {
     if (OFFLINE_DESKTOP) return invokeOffline<AuthConfig>('offline_auth_config');
+    if (LOCAL_ENGINE) return { google_enabled: supabaseAuthConfigured, supabase_enabled: supabaseAuthConfigured };
     return { google_enabled: supabaseAuthConfigured, supabase_enabled: supabaseAuthConfigured };
   },
 
@@ -240,6 +285,27 @@ export const api = {
     if (error) throw new Error('Falha ao ler a sessão do Supabase.');
     const accessToken = data.session?.access_token;
     if (!accessToken) return null;
+
+    if (LOCAL_ENGINE) {
+      const res = await apiFetch(localApiUrl('/api/v1/auth/supabase/exchange'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ access_token: accessToken }),
+      });
+      if (res.status === 401) {
+        await supabase.auth.signOut();
+        setDesktopSessionToken('');
+        return null;
+      }
+      if (!res.ok) throw new Error('Não foi possível sincronizar a conta Google localmente.');
+      const payload = await res.json() as { session_token?: string; user?: AuthUser };
+      if (!payload.session_token || !payload.user) throw new Error('A sessão local retornada é inválida.');
+      setDesktopSessionToken(payload.session_token);
+      return payload.user;
+    }
 
     const res = await apiFetch(`${API_BASE}/auth/me`);
     if (res.status === 401) {
@@ -285,7 +351,9 @@ export const api = {
     const redirectTo = nativeApp
       ? MOBILE_OAUTH_RETURN
       : supabaseRedirectUrl(nextPath);
-    const { data, error } = await supabase.auth.signInWithOAuth({
+    const oauthClient = nativeApp ? supabaseNativeOAuth : supabase;
+    if (!oauthClient) throw new Error('O login Supabase não está configurado neste build.');
+    const { data, error } = await oauthClient.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo,
@@ -296,10 +364,9 @@ export const api = {
       },
     });
     if (error) throw new Error('Não foi possível abrir o login Google pelo Supabase.');
-    // O navegador do sistema não compartilha a sessão da WebView. Mantemos o
-    // flow id retornado pelo Supabase para selecionar o verifier PKCE correto
-    // quando o deep link voltar ao aplicativo.
-    if (nativeApp) setPendingSupabaseOAuthFlow(data?.flowId);
+    // O desktop usa o fluxo implícito no navegador externo, portanto não há
+    // verifier PKCE para transportar entre o navegador e a WebView.
+    if (nativeApp) setPendingSupabaseOAuthFlow(null);
     if (nativeApp && data?.url) {
       const { openUrl } = await import('@tauri-apps/plugin-opener');
       try {
@@ -328,6 +395,16 @@ export const api = {
     }
   },
 
+  async exchangeSupabaseOAuthTokens(accessToken: string, refreshToken: string): Promise<AuthUser | null> {
+    if (!supabase) throw new Error('O login Supabase não está configurado neste build.');
+    const { error } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+    if (error) throw new Error(`Não foi possível concluir o login Google no aplicativo: ${error.message}`);
+    return this.exchangeSupabaseSession();
+  },
+
   clearPendingSupabaseOAuth(): void {
     setPendingSupabaseOAuthFlow(null);
   },
@@ -347,12 +424,17 @@ export const api = {
             || parsed.hostname !== 'oauth'
             || parsed.pathname !== '/callback'
           ) continue;
-          const error = parsed.searchParams.get('error');
-          const errorDescription = parsed.searchParams.get('error_description') || undefined;
-          const code = parsed.searchParams.get('code');
-          const flowId = parsed.searchParams.get('sb_flow_id') || undefined;
-          if (error) onResult({ error, errorDescription });
-          else if (code) onResult({ code, flowId });
+           const fragment = new URLSearchParams(parsed.hash.replace(/^#/, ''));
+           const getParam = (name: string) => parsed.searchParams.get(name) || fragment.get(name);
+           const error = getParam('error');
+           const errorDescription = getParam('error_description') || undefined;
+           const code = parsed.searchParams.get('code');
+           const flowId = parsed.searchParams.get('sb_flow_id') || undefined;
+           const accessToken = getParam('access_token') || undefined;
+           const refreshToken = getParam('refresh_token') || undefined;
+           if (error) onResult({ error, errorDescription });
+           else if (accessToken && refreshToken) onResult({ accessToken, refreshToken });
+           else if (code) onResult({ code, flowId });
         } catch {
           // A deep link from another source is ignored.
         }
@@ -394,7 +476,7 @@ export const api = {
       if (!res.ok) throw new Error('Falha ao carregar pastas de provas');
       return res.json();
     } catch (error) {
-      if (DESKTOP_APP && isTransportFailure(error)) {
+      if (DESKTOP_APP && OFFLINE_DESKTOP && isTransportFailure(error)) {
         return invokeLocalFallback<Folder[]>('offline_folders');
       }
       throw error;
@@ -415,7 +497,7 @@ export const api = {
       }
       return snapshot;
     } catch (error) {
-      if (DESKTOP_APP && isTransportFailure(error)) {
+      if (DESKTOP_APP && OFFLINE_DESKTOP && isTransportFailure(error)) {
         return invokeLocalFallback<LibrarySnapshot>('offline_library_snapshot');
       }
       throw error;
@@ -429,7 +511,7 @@ export const api = {
       if (!res.ok) throw new Error('Falha ao carregar exame');
       return normalizeExam(await res.json());
     } catch (error) {
-      if (DESKTOP_APP && isTransportFailure(error)) {
+      if (DESKTOP_APP && OFFLINE_DESKTOP && isTransportFailure(error)) {
         return normalizeExam(await invokeLocalFallback<ExamDetail>('offline_get_exam', { examId }));
       }
       throw error;
@@ -564,7 +646,7 @@ export const api = {
       if (!res.ok) throw new Error('Falha ao carregar dados do caderno de erros');
       return res.json();
     } catch (error) {
-      if (DESKTOP_APP && isTransportFailure(error)) {
+      if (DESKTOP_APP && OFFLINE_DESKTOP && isTransportFailure(error)) {
         return invokeLocalFallback<NotebookSubjectStat[]>('offline_notebook_stats');
       }
       throw error;
@@ -621,6 +703,46 @@ export const api = {
         title,
       });
     }
+    if (LOCAL_ENGINE) {
+      const bytes = base64Bytes(dataBase64);
+      let localPayload: Record<string, unknown> = { filename, title, data_base64: dataBase64 };
+      let remoteSourceObject = '';
+      if (/\.pdf$/i.test(filename)) {
+        remoteSourceObject = `exams/uploads/${await hexDigest(bytes)}.pdf`;
+        await this.uploadMedia(remoteSourceObject, bytes, 'application/pdf');
+      } else if (/\.json$/i.test(filename)) {
+        try {
+          const parsed = JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>;
+          const mediaByName = new Map<string, string>();
+          for (const imageFile of imageFiles) {
+            mediaByName.set(imageFile.name.toLowerCase(), await fileToDataUrl(imageFile));
+          }
+          rewriteQuestionMedia(parsed, mediaByName);
+          localPayload = { filename, title, data_base64: utf8Base64(JSON.stringify(parsed)) };
+        } catch {
+          // O endpoint local retorna a mensagem precisa para JSON invÃ¡lido.
+        }
+      }
+      const localImportPath = /\.json$/i.test(filename) ? '/exams/import-local' : '/exams/import-file';
+      const res = await localApiFetch(localApiUrl(`/api/v1${localImportPath}`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(localPayload),
+      });
+      if (!res.ok) {
+        let detail = '';
+        try {
+          const payload = await res.json() as { detail?: string; error?: string };
+          detail = payload.detail || payload.error || '';
+        } catch {
+          // Mantém a mensagem segura abaixo quando a resposta não é JSON.
+        }
+        throw new Error(detail || 'Não foi possível iniciar a extração local da prova.');
+      }
+      const result = await res.json() as ExamIngestResult;
+      if (remoteSourceObject && result.exam_id) localRemoteSourceObjects.set(result.exam_id, remoteSourceObject);
+      return result;
+    }
     const bytes = base64Bytes(dataBase64);
     let payload: Record<string, unknown> = { filename, title, data_base64: dataBase64 };
     if (/\.pdf$/i.test(filename)) {
@@ -652,6 +774,59 @@ export const api = {
     });
     if (!res.ok) throw new Error('Não foi possível sincronizar a prova e seus arquivos no Oracle.');
     return res.json();
+  },
+
+  async getLocalExamProgress(examId: number): Promise<ExamProgress> {
+    const res = await localApiFetch(localApiUrl(`/api/v1/exams/${examId}/progress`));
+    if (!res.ok) throw new Error('Falha ao consultar a extraÃ§Ã£o local da prova.');
+    return res.json();
+  },
+
+  async syncLocalExam(examId: number): Promise<ExamIngestResult> {
+    if (!LOCAL_ENGINE) throw new Error('O motor local nÃ£o estÃ¡ habilitado neste build.');
+    const localResponse = await localApiFetch(localApiUrl(`/api/v1/exams/${examId}`), {}, 30000);
+    if (!localResponse.ok) throw new Error('NÃ£o foi possÃ­vel ler a prova extraÃ­da neste computador.');
+    const localExam = await localResponse.json() as ExamDetail;
+
+    const toRemoteMedia = async (value: string): Promise<string> => {
+      if (!value || /^data:/i.test(value) || /^https?:\/\//i.test(value)) return value;
+      const response = await localApiFetch(localMediaUrl(examId, value), {}, 30000);
+      if (!response.ok) throw new Error(`NÃ£o foi possÃ­vel ler a imagem extraÃ­da (${value}).`);
+      return binaryToDataUrl(new Uint8Array(await response.arrayBuffer()), response.headers.get('content-type') || 'application/octet-stream');
+    };
+
+    const questions = await Promise.all((localExam.questions || []).map(async (question) => ({
+      ...question,
+      images: question.images ? await Promise.all(question.images.map(toRemoteMedia)) : question.images,
+      option_images: question.option_images
+        ? Object.fromEntries(await Promise.all(Object.entries(question.option_images).map(async ([key, values]) => [
+            key,
+            await Promise.all(values.map(toRemoteMedia)),
+          ])))
+        : question.option_images,
+    })));
+
+    const payload = {
+      filename: `desktop-${examId}.json`,
+      title: localExam.title,
+      source_object: localRemoteSourceObjects.get(examId) || undefined,
+      gabarito_url: localExam.gabarito_url || null,
+      data_base64: utf8Base64(JSON.stringify({
+        title: localExam.title,
+        questions,
+      })),
+    };
+    const remoteResponse = await apiFetch(`${API_BASE}/exams/import-local`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }, 120000);
+    if (!remoteResponse.ok) {
+      const detail = await remoteResponse.text().catch(() => '');
+      throw new Error(detail || 'NÃ£o foi possÃ­vel enviar a prova extraÃ­da para o Supabase.');
+    }
+    localRemoteSourceObjects.delete(examId);
+    return remoteResponse.json();
   },
 
 };

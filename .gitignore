@@ -76,6 +76,11 @@ rust_engine/target/
 **/target/
 desktop/src-tauri/gen/
 desktop/tauri.build.*.json
+desktop/.engine-build/
+desktop/src-tauri/binaries/
+tmp/local-engine-test/
+tmp/packaged-engine-test/
+tmp/release-engine-test/
 *.pyd
 *.whl
 

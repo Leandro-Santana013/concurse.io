@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Clipboard, ExternalLink, FileText, Loader2, RefreshCw, X } from 'lucide-react';
-import { api, apiUrl } from '../../services/api';
+import { api, apiUrl, LOCAL_ENGINE } from '../../services/api';
 import { ImportStage } from '../../types/exam';
 import { useUI } from '../../context/UIContext';
 
@@ -30,6 +30,7 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
   const eventSourceRef = useRef<EventSource | null>(null);
   const retryTimerRef = useRef<number | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const syncingLocalRef = useRef<number | null>(null);
   const [examUrl, setExamUrl] = useState('');
   const [localFile, setLocalFile] = useState<File | null>(null);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
@@ -65,6 +66,7 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
     setStatusMessage('');
     setErrorMessage(null);
     setReadyExamId(null);
+    syncingLocalRef.current = null;
     document.body.style.overflow = 'hidden';
     window.setTimeout(() => closeButtonRef.current?.focus(), 0);
 
@@ -99,6 +101,26 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
 
   if (!isOpen) return null;
 
+  const finishLocalExam = async (localExamId: number) => {
+    if (syncingLocalRef.current === localExamId) return;
+    syncingLocalRef.current = localExamId;
+    setStage('processing');
+    setProgress(100);
+    setStatusMessage('Extração concluída. Enviando prova e imagens para o Supabase...');
+    try {
+      const remoteExam = await api.syncLocalExam(localExamId);
+      void refreshDownloads();
+      setReadyExamId(remoteExam.exam_id);
+      setStatusMessage(remoteExam.message || 'Prova extraída e sincronizada no Supabase.');
+      setStage('ready');
+    } catch (error) {
+      setStage('error');
+      setErrorMessage(error instanceof Error ? error.message : 'A prova foi extraída, mas não pôde ser sincronizada no Supabase.');
+    } finally {
+      syncingLocalRef.current = null;
+    }
+  };
+
   const updateProgress = (examId: number, data: { progress?: number; status?: string; error_type?: string | null }) => {
     const nextProgress = data.progress ?? 0;
     const nextStatus = data.status || 'Processando prova...';
@@ -106,6 +128,10 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
     setStatusMessage(nextStatus);
     if (nextProgress >= 100 || nextStatus === 'Aprovada') {
       stopWatching();
+      if (LOCAL_ENGINE) {
+        void finishLocalExam(examId);
+        return;
+      }
       void refreshDownloads();
       setReadyExamId(examId);
       setStage('ready');
@@ -119,6 +145,26 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
 
   const watchProgress = (examId: number, attempt = 0) => {
     stopWatching();
+    if (LOCAL_ENGINE) {
+      const poll = async () => {
+        try {
+          const snapshot = await api.getLocalExamProgress(examId);
+          updateProgress(examId, snapshot);
+          if (snapshot.progress >= 100 || snapshot.progress < 0 || snapshot.error_type) return;
+          retryTimerRef.current = window.setTimeout(() => void poll(), 1000);
+        } catch {
+          if (attempt < 2) {
+            setStatusMessage('Reconectando ao motor local...');
+            retryTimerRef.current = window.setTimeout(() => watchProgress(examId, attempt + 1), 1500 * (attempt + 1));
+          } else {
+            setStage('error');
+            setErrorMessage('Perdemos a conexão com a extração local. Tente acompanhar novamente.');
+          }
+        }
+      };
+      void poll();
+      return;
+    }
     const source = new EventSource(
       apiUrl(`/api/v1/exams/${examId}/progress/stream`),
       { withCredentials: true },
@@ -165,7 +211,7 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
       setStage('submitting');
       setProgress(15);
       setErrorMessage(null);
-      setStatusMessage(OFFLINE_DESKTOP ? 'Guardando a prova no armazenamento local...' : 'Enviando a prova e as imagens para o Oracle...');
+      setStatusMessage(OFFLINE_DESKTOP ? 'Guardando a prova no armazenamento local...' : LOCAL_ENGINE ? 'Extraindo a prova neste computador...' : 'Enviando a prova e as imagens para o Oracle...');
       try {
         const buffer = await localFile.arrayBuffer();
         const bytes = new Uint8Array(buffer);
@@ -180,6 +226,16 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
           customTitle.trim() || localFile.name.replace(/\.[^.]+$/, ''),
           imageFiles,
         );
+        if (response.progress < 100 && response.status !== 'Aprovada') {
+          setStage('processing');
+          setStatusMessage(response.message || 'Extraindo e organizando as questões...');
+          watchProgress(response.exam_id);
+          return;
+        }
+        if (LOCAL_ENGINE) {
+          await finishLocalExam(response.exam_id);
+          return;
+        }
         setProgress(100);
         setStatusMessage(response.message || (OFFLINE_DESKTOP ? 'Prova disponível neste computador.' : 'Prova sincronizada no Oracle.'));
         void refreshDownloads();
@@ -239,7 +295,9 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
             <p id="import-description" className="mt-1 text-sm text-[var(--text-muted)]">
               {OFFLINE_DESKTOP
                 ? 'Escolha um arquivo que já esteja neste computador.'
-                : 'Cole o link da prova ou escolha um arquivo local; a ingestão fica sincronizada no Oracle.'}
+                : LOCAL_ENGINE
+                  ? 'Cole o link da prova ou escolha um arquivo local; a extração acontece neste computador.'
+                  : 'Cole o link da prova ou escolha um arquivo local; a ingestão fica sincronizada no Oracle.'}
             </p>
           </div>
           <button ref={closeButtonRef} type="button" className="icon-button" onClick={onClose} aria-label="Fechar importação"><X aria-hidden="true" /></button>
@@ -284,7 +342,9 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
                   onChange={(event) => setLocalFile(event.target.files?.[0] || null)}
                 />
                 <p className="mt-2 text-xs text-[var(--text-muted)]">
-                  O PDF vai para <code>exams/</code>; Data URLs e imagens selecionadas vão para <code>questions/</code>. Sem arquivo, use os links abaixo.
+                  {LOCAL_ENGINE
+                    ? 'O PDF é salvo na pasta de dados local e processado pelo motor embutido. Sem arquivo, use os links abaixo.'
+                    : 'O PDF vai para exams/; Data URLs e imagens selecionadas vão para questions/. Sem arquivo, use os links abaixo.'}
                 </p>
                 <label className="field-label mt-4" htmlFor="local-question-images-online">Imagens extraídas <span className="font-normal text-[var(--text-muted)]">(opcional, várias)</span></label>
                 <input

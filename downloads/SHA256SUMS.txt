@@ -1,3 +1,7 @@
 83971e8d1e6c7bca55ada7b490ada3c792a38ef206498b35ab22f36db98ec581  concurse-mobile-aarch64-release-v0.1.2-code3-16k.apk
 9e960c0801bd28289678c84c58a0f86a647a108fee8e5c4b64e7016062ce9d69  concurse.io_0.1.0_x64_en-US.msi
 f385a7acb989c0ac5af8e1e5ed2b010d6f8daeda1b716d85d219e5c147450121  concurse.io_0.1.0_x64-setup.exe
+2ce374a5076e4acfc915e70cfcd25478326a98e8017e3403cd59c2b0534c549e  concurse.io_0.1.2_x64_en-US.msi
+3ccd7f73c54b58f709126ae30a8a4583fa2c25f2f862ea72600e0f9cc4583647  concurse.io_0.1.2_x64-setup.exe
+034725566684addca0379d68553bba7a752ab1cf335ce4d75b06c7894e2dcc79  concurse.io_0.1.2-debug_x64_en-US.msi
+985f268dee73c610235315837fa49212aaa929eaaaba7e224f3cb7a4409efcb9  concurse.io_0.1.2-debug_x64-setup.exe

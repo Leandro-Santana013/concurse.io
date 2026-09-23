@@ -5,8 +5,8 @@
   "identifier": "io.concurse.desktop",
   "build": {
     "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "npm --prefix ../frontend run dev -- --mode desktop --host 127.0.0.1",
-    "beforeBuildCommand": "npm --prefix ../frontend run build:desktop",
+    "beforeDevCommand": "npm --prefix ../frontend run dev -- --mode desktop-local --host 127.0.0.1",
+    "beforeBuildCommand": "npm --prefix ../frontend run build:desktop:local",
     "frontendDist": "../../frontend/dist"
   },
   "app": {
@@ -42,6 +42,7 @@
   },
   "bundle": {
     "active": true,
+    "externalBin": ["binaries/concurse-engine"],
     "targets": "all",
     "icon": [
       "icons/32x32.png",

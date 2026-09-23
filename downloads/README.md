@@ -12,6 +12,13 @@ WebView2. O instalador Windows foi produzido pelo bundle Tauri disponível neste
 checkout; a atualização de versão do código-fonte não altera retroativamente o
 metadado interno desses binários.
 
+Os instaladores atuais são os da versão `0.1.2`:
+
+- `concurse.io_0.1.2_x64_en-US.msi` e `concurse.io_0.1.2_x64-setup.exe`: release.
+- `concurse.io_0.1.2-debug_x64_en-US.msi` e `concurse.io_0.1.2-debug_x64-setup.exe`: debug para diagnóstico.
+
+Os instaladores `0.1.0` anteriores permanecem disponíveis para retrocesso.
+
 ## Android
 
 O APK é `arm64-v8a`, assinado com uma chave de desenvolvimento e destinado a

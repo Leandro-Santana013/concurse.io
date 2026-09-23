@@ -6,11 +6,17 @@ sincronizadas pelas Edge Functions do próprio projeto. O Oracle Object Storage
 guarda PDFs e imagens, mas suas credenciais ficam apenas nos secrets do
 Supabase.
 
+No Windows, o build `desktop-local` é autocontido: o Tauri inicia um sidecar
+FastAPI local com o mesmo worker de extração/OCR do projeto, SQLite e arquivos
+de mídia na pasta de dados do aplicativo. Portanto, ranking local, biblioteca,
+estatísticas, tentativas, caderno de erros e extração de PDF não dependem de uma
+FastAPI externa. O Supabase continua disponível apenas no perfil online quando
+for necessário login Google, sincronização entre dispositivos ou ranking global.
+
 O aplicativo mantém cache local para leitura rápida e reabertura offline das
-provas que já foram sincronizadas. Não há descoberta de pares, broadcast,
-servidor local, VM ou domínio externo. A ingestão de PDF/OCR continua sendo
-executada fora do aplicativo, e o importador aceita um PDF ou um JSON já
-extraído.
+provas que já foram sincronizadas. Não há descoberta de pares, broadcast, VM ou
+domínio externo. O importador local aceita PDF e dispara a extração no próprio
+computador; o perfil online continua aceitando os fluxos remotos existentes.
 
 ## Desenvolvimento
 
@@ -21,14 +27,15 @@ npm install
 npm run dev
 ```
 
-O modo normal usa `frontend/.env.desktop` e as Edge Functions do Supabase. Para
-testar apenas a biblioteca local, use `npm run build:desktop:offline`; esse
-perfil não faz login nem sincroniza a conta.
+O modo padrão do desktop usa `frontend/.env.desktop-local` e o sidecar FastAPI
+local. Para o perfil online legado, use `frontend/.env.desktop`; para testar
+apenas o catálogo Tauri antigo, use `npm run build:desktop:offline`.
 
 ## Builds
 
 ```powershell
-npm run build                 # MSI e NSIS para Windows x64
+npm run build                 # gera o sidecar OCR e MSI/NSIS Windows x64
+npm run engine:build          # apenas recria o sidecar FastAPI/OCR
 npm run android:init          # uma vez por checkout
 npm run android:build         # APK arm64
 ```

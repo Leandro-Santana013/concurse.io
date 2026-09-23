@@ -72,7 +72,7 @@ export const LoginPage: React.FC = () => {
     if ((!DESKTOP_APP && !TAURI_MOBILE_APP) || OFFLINE_DESKTOP) return;
     let active = true;
     let stopMobileListener: (() => void) | undefined;
-    const completeLogin = async ({ code, error, errorDescription, flowId }: OAuthDeepLinkResult) => {
+    const completeLogin = async ({ code, error, errorDescription, flowId, accessToken, refreshToken }: OAuthDeepLinkResult) => {
       if (!active) return;
       if (error) {
         api.clearPendingSupabaseOAuth();
@@ -84,9 +84,13 @@ export const LoginPage: React.FC = () => {
         );
         return;
       }
-      if (!code) return;
+      if (!code && !(accessToken && refreshToken)) return;
       try {
-        await api.exchangeSupabaseOAuthCode(code, flowId);
+        if (accessToken && refreshToken) {
+          await api.exchangeSupabaseOAuthTokens(accessToken, refreshToken);
+        } else if (code) {
+          await api.exchangeSupabaseOAuthCode(code, flowId);
+        }
         await refreshSession();
       } catch (error) {
         if (active) {

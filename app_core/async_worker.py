@@ -53,7 +53,9 @@ from services.object_storage import (
 )
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(
+    os.environ.get("CONCURSE_DATA_ROOT") or Path(__file__).resolve().parents[1]
+).resolve()
 QUESTION_MEDIA_DIR = (PROJECT_ROOT / "static" / "images" / "questions").resolve()
 
 
