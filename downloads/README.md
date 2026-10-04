@@ -1,9 +1,9 @@
 # Arquivos para download
 
-Esta pasta reúne os artefatos da branch `codex/concurse-app`. O novo APK
-Android 0.1.5/code6 foi gerado localmente e ainda aguarda publicação no GitHub.
-Os nomes mantêm a versão real gravada no instalador. Verifique o arquivo
-`SHA256SUMS.txt` antes de instalar.
+Esta pasta reúne os artefatos da branch `codex/concurse-app`. O APK Android
+0.1.5/code6 e o bundle do gateway estão publicados no GitHub no commit
+`73f8cee`. Os nomes mantêm a versão real gravada no instalador. Verifique o
+arquivo `SHA256SUMS.txt` antes de instalar.
 
 ## Windows
 
@@ -26,10 +26,11 @@ O novo arquivo é
 [`concurse-mobile-aarch64-release-v0.1.5-code6-16k.apk`](concurse-mobile-aarch64-release-v0.1.5-code6-16k.apk):
 versão `0.1.5`, código Android `6`, ABI `arm64-v8a` e alinhamento de 16 KB.
 Foi gerado e assinado localmente com a mesma chave de desenvolvimento do APK
-anterior, permitindo instalá-lo como atualização. Ainda não foi publicado no
-GitHub; os novos fluxos ainda precisam de publicação da função do Supabase e
-teste no aparelho. A tentativa de atualização por USB não instalou o APK,
-pois o Redmi estava desconectado. Os dados do aplicativo foram preservados.
+anterior, permitindo instalá-lo como atualização. O arquivo está publicado no
+GitHub no commit `73f8cee`; os novos fluxos ainda precisam de confirmação do
+deploy da função do Supabase e de teste no aparelho. A tentativa de atualização
+por USB não instalou o APK, pois o Redmi estava desconectado. Os dados do
+aplicativo foram preservados.
 
 O APK inclui o motor de extração e OCR, usando a mesma lógica de processamento
 de provas do desktop. O Supabase mantém a biblioteca, questões e tentativas;
@@ -39,8 +40,9 @@ A auditoria verificou 123 bibliotecas ARM64, incluindo as dos arquivos Python,
 com alinhamento para páginas de 16 KB e sem bancos ou chaves privadas no pacote.
 
 O arquivo [`app-gateway-mobile-hard-switch.ts`](app-gateway-mobile-hard-switch.ts)
-reúne as alterações preparadas da função central para o editor do Supabase.
-A publicação ainda não ocorreu por bloqueio salvo nas permissões do navegador.
+reúne as alterações da função central para o editor do Supabase e está publicado
+no mesmo commit. O deploy e o estado de sucesso no painel do Supabase ainda não
+foram verificados por esta sessão.
 O [registro da migração](../docs/mobile-migration-audit.md) distingue os testes
 concluídos das verificações pendentes.
 
