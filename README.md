@@ -78,9 +78,9 @@ os hashes e a diferença entre código publicado e validação operacional.
 
 A landing page reúne os downloads e explica o fluxo de estudo. Veja os arquivos
 e as instruções em [`landing/README.md`](landing/README.md).
-A URL planejada no GitHub Pages é
+A página está publicada no GitHub Pages em
 [`https://leandro-santana013.github.io/concurse.io/`](https://leandro-santana013.github.io/concurse.io/).
-A disponibilidade pública desse endereço ainda aguarda confirmação de deploy.
+O endereço público e os três downloads foram verificados em 04/10/2026.
 
 ## Desenvolvimento
 

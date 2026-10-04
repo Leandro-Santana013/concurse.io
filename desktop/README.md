@@ -57,9 +57,9 @@ Os artefatos atuais publicados na branch `codex/concurse-app` são:
 
 Confira os hashes em [`../downloads/SHA256SUMS.txt`](../downloads/SHA256SUMS.txt).
 A landing page e suas instruções estão em
-[`../landing/README.md`](../landing/README.md). A URL planejada no GitHub Pages
-é [`https://leandro-santana013.github.io/concurse.io/`](https://leandro-santana013.github.io/concurse.io/);
-a disponibilidade pública ainda aguarda confirmação de deploy.
+[`../landing/README.md`](../landing/README.md). A página está publicada em
+[`https://leandro-santana013.github.io/concurse.io/`](https://leandro-santana013.github.io/concurse.io/),
+com endereço público e downloads verificados em 04/10/2026.
 
 O Android usa o esquema `concurse://oauth/callback` para retornar do navegador
 do sistema após o login Google. O novo APK
