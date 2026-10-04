@@ -1,14 +1,7 @@
 import React from 'react';
-import { BarChart3, BookOpen, Home, Search, User } from 'lucide-react';
+import { BookOpen } from 'lucide-react';
 import { Link, NavLink } from 'react-router-dom';
-
-const navigation = [
-  { to: '/', label: 'Início', icon: Home, end: true },
-  { to: '/biblioteca', label: 'Biblioteca', icon: BookOpen },
-  { to: '/buscar', label: 'Buscar', icon: Search },
-  { to: '/progresso', label: 'Progresso', icon: BarChart3 },
-  { to: '/perfil', label: 'Perfil & Ajustes', icon: User },
-];
+import { primaryNavigation } from './navigation';
 
 export const Sidebar: React.FC = () => (
   <aside className="app-sidebar" aria-label="Navegação principal">
@@ -19,7 +12,7 @@ export const Sidebar: React.FC = () => (
 
     <nav className="sidebar-nav">
       <p className="sidebar-label">Estudos</p>
-      {navigation.map(({ to, label, icon: Icon, end }) => (
+      {primaryNavigation.map(({ to, label, menuLabel, icon: Icon, end }) => (
         <NavLink
           key={to}
           to={to}
@@ -27,7 +20,7 @@ export const Sidebar: React.FC = () => (
           className={({ isActive }) => `sidebar-link${isActive ? ' is-active' : ''}`}
         >
           <Icon aria-hidden="true" />
-          <span>{label}</span>
+          <span>{menuLabel || label}</span>
         </NavLink>
       ))}
     </nav>

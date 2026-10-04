@@ -129,6 +129,9 @@ export const FoldersView: React.FC<FoldersViewProps> = ({ onStartExam }) => {
 
   useEffect(() => {
     void loadFolders();
+    const refreshLibrary = () => { void loadFolders(); };
+    window.addEventListener('concurse:library-updated', refreshLibrary);
+    return () => window.removeEventListener('concurse:library-updated', refreshLibrary);
   }, []);
 
   const visibleFolders = useMemo(() => {

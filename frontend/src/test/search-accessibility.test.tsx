@@ -196,6 +196,7 @@ describe('busca acessível de provas', () => {
     expect(apiMocks.ingestExam).toHaveBeenCalledWith(
       'https://idcap.selecao.net.br/provas/enfermeiro.pdf',
       'IDCAP - Prefeitura de Exemplo - Enfermeiro',
+      undefined,
     );
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(await screen.findByText('Prova IDCAP processada')).toBeVisible();

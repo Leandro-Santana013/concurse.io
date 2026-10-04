@@ -44,7 +44,10 @@ from services.exam_library import claim_exam_for_user, get_user_exam_ids, link_r
 from services.exam_assets import build_exam_asset_manifest, library_version
 
 router = APIRouter()
-QUESTION_MEDIA_DIR = (Path(__file__).resolve().parents[2] / "static" / "images" / "questions").resolve()
+QUESTION_MEDIA_DIR = (
+    Path(os.environ.get("CONCURSE_DATA_ROOT") or Path(__file__).resolve().parents[2])
+    / "static" / "images" / "questions"
+).resolve()
 
 
 def _normalized_subject(value: Any) -> str:
@@ -445,6 +448,41 @@ def get_progress(
         "progress": exam.progress or 0,
         "error_type": exam.error_type
     }
+
+@router.get("/processing/jobs")
+def processing_jobs(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Working jobs only; this is not a copy of the central library."""
+    if not os.environ.get("CONCURSE_DATA_ROOT"):
+        raise HTTPException(status_code=404)
+    from app_core.async_worker import dispatch_async_exam_task
+    jobs = db.query(Exam).filter(
+        Exam.user_id == current_user.id,
+        Exam.status.in_(["Processando", "Aprovada"]),
+    ).order_by(Exam.id).all()
+    for exam in jobs:
+        if exam.status == "Processando":
+            dispatch_async_exam_task(exam.id)
+    return [{"id": exam.id, "title": exam.title, "url": exam.source_url or "",
+             "status": exam.status, "progress": exam.progress or 0,
+             "error_type": exam.error_type} for exam in jobs]
+
+
+@router.post("/processing/jobs/{exam_id}/published")
+def acknowledge_publication(exam_id: int, payload: Dict[str, Any],
+                            db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    if not os.environ.get("CONCURSE_DATA_ROOT"):
+        raise HTTPException(status_code=404)
+    exam = get_accessible_exam_or_404(db, user_id=current_user.id, exam_id=exam_id)
+    remote_id = payload.get("remote_exam_id")
+    if not isinstance(remote_id, int) or isinstance(remote_id, bool) or remote_id <= 0:
+        raise HTTPException(status_code=400, detail="Identificador da prova central inválido.")
+    if exam.status not in {"Aprovada", "Sincronizada"}:
+        raise HTTPException(status_code=409, detail="A extração ainda não foi concluída.")
+    exam.status = "Sincronizada"
+    exam.progress_message = f"Disponível na biblioteca central (prova {remote_id})."
+    db.commit()
+    return {"ok": True}
+
 
 @router.get("/exams/{exam_id}/progress/stream")
 async def stream_exam_progress(

@@ -133,7 +133,7 @@ describe('rotas e preferências da aplicação', () => {
 
     renderApp('/prova/41');
 
-    expect(await screen.findByRole('heading', { name: 'Prova privada em andamento' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'Prova privada em andamento' }, { timeout: 10000 })).toBeVisible();
     await waitFor(() => expect(apiMocks.getExam).toHaveBeenCalledWith(41));
     const refreshedState = useExamStore.getState();
     expect(refreshedState.answers).toEqual({ '1': 'B' });

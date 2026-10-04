@@ -1,1 +1,2 @@
 downloads/concurse.io_0.1.2* filter=lfs diff=lfs merge=lfs -text
+downloads/*.apk filter=lfs diff=lfs merge=lfs -text

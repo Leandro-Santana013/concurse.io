@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Clipboard, ExternalLink, FileText, Loader2, RefreshCw, X } from 'lucide-react';
-import { api, apiUrl, LOCAL_ENGINE } from '../../services/api';
+import { api, LOCAL_ENGINE } from '../../services/api';
 import { ImportStage } from '../../types/exam';
 import { useUI } from '../../context/UIContext';
 
@@ -27,7 +27,7 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
   const { refreshDownloads, showToast } = useUI();
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const watchGenerationRef = useRef(0);
   const retryTimerRef = useRef<number | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const syncingLocalRef = useRef<number | null>(null);
@@ -43,8 +43,7 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
   const [readyExamId, setReadyExamId] = useState<number | null>(null);
 
   const stopWatching = () => {
-    eventSourceRef.current?.close();
-    eventSourceRef.current = null;
+    watchGenerationRef.current += 1;
     if (retryTimerRef.current !== null) window.clearTimeout(retryTimerRef.current);
     retryTimerRef.current = null;
   };
@@ -104,31 +103,34 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
   const finishLocalExam = async (localExamId: number) => {
     if (syncingLocalRef.current === localExamId) return;
     syncingLocalRef.current = localExamId;
+    const generation = watchGenerationRef.current;
     setStage('processing');
     setProgress(100);
     setStatusMessage('Extração concluída. Enviando prova e imagens para o Supabase...');
     try {
       const remoteExam = await api.syncLocalExam(localExamId);
       void refreshDownloads();
+      if (generation !== watchGenerationRef.current) return;
       setReadyExamId(remoteExam.exam_id);
       setStatusMessage(remoteExam.message || 'Prova extraída e sincronizada no Supabase.');
       setStage('ready');
     } catch (error) {
+      if (generation !== watchGenerationRef.current) return;
       setStage('error');
       setErrorMessage(error instanceof Error ? error.message : 'A prova foi extraída, mas não pôde ser sincronizada no Supabase.');
     } finally {
-      syncingLocalRef.current = null;
+      if (generation === watchGenerationRef.current) syncingLocalRef.current = null;
     }
   };
 
-  const updateProgress = (examId: number, data: { progress?: number; status?: string; error_type?: string | null }) => {
+  const updateProgress = (examId: number, local: boolean, data: { progress?: number; status?: string; error_type?: string | null }) => {
     const nextProgress = data.progress ?? 0;
     const nextStatus = data.status || 'Processando prova...';
     setProgress(Math.max(0, nextProgress));
     setStatusMessage(nextStatus);
     if (nextProgress >= 100 || nextStatus === 'Aprovada') {
       stopWatching();
-      if (LOCAL_ENGINE) {
+      if (local) {
         void finishLocalExam(examId);
         return;
       }
@@ -143,58 +145,28 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
     }
   };
 
-  const watchProgress = (examId: number, attempt = 0) => {
+  const watchProgress = (examId: number, local: boolean, attempt = 0) => {
     stopWatching();
-    if (LOCAL_ENGINE) {
-      const poll = async () => {
+    const generation = watchGenerationRef.current;
+    const poll = async () => {
         try {
-          const snapshot = await api.getLocalExamProgress(examId);
-          updateProgress(examId, snapshot);
+          const snapshot = local ? await api.getLocalExamProgress(examId) : await api.getExamProgress(examId);
+          if (generation !== watchGenerationRef.current) return;
+          updateProgress(examId, local, snapshot);
           if (snapshot.progress >= 100 || snapshot.progress < 0 || snapshot.error_type) return;
           retryTimerRef.current = window.setTimeout(() => void poll(), 1000);
         } catch {
+          if (generation !== watchGenerationRef.current) return;
           if (attempt < 2) {
-            setStatusMessage('Reconectando ao motor local...');
-            retryTimerRef.current = window.setTimeout(() => watchProgress(examId, attempt + 1), 1500 * (attempt + 1));
+            setStatusMessage('Reconectando ao processamento...');
+            retryTimerRef.current = window.setTimeout(() => watchProgress(examId, local, attempt + 1), 1500 * (attempt + 1));
           } else {
             setStage('error');
-            setErrorMessage('Perdemos a conexão com a extração local. Tente acompanhar novamente.');
+            setErrorMessage('Perdemos a conexão com o processamento. Tente acompanhar novamente.');
           }
         }
-      };
-      void poll();
-      return;
-    }
-    const source = new EventSource(
-      apiUrl(`/api/v1/exams/${examId}/progress/stream`),
-      { withCredentials: true },
-    );
-    eventSourceRef.current = source;
-    source.onmessage = (event) => {
-      try {
-        updateProgress(examId, JSON.parse(event.data));
-      } catch {
-        setStatusMessage('Recebendo atualizações do processamento...');
-      }
     };
-    source.onerror = async () => {
-      source.close();
-      eventSourceRef.current = null;
-      try {
-        const snapshot = await api.getExamProgress(examId);
-        updateProgress(examId, snapshot);
-        if (snapshot.progress >= 100 || snapshot.progress < 0 || snapshot.error_type) return;
-      } catch {
-        // A reconexão limitada abaixo fornece uma segunda chance à conexão.
-      }
-      if (attempt < 2) {
-        setStatusMessage('Reconectando ao processamento...');
-        retryTimerRef.current = window.setTimeout(() => watchProgress(examId, attempt + 1), 1200 * (attempt + 1));
-      } else {
-        setStage('error');
-        setErrorMessage('Perdemos a conexão com o processamento. Tente acompanhar novamente.');
-      }
-    };
+    void poll();
   };
 
   const pasteInto = async (setter: (value: string) => void) => {
@@ -211,7 +183,7 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
       setStage('submitting');
       setProgress(15);
       setErrorMessage(null);
-      setStatusMessage(OFFLINE_DESKTOP ? 'Guardando a prova no armazenamento local...' : LOCAL_ENGINE ? 'Extraindo a prova neste computador...' : 'Enviando a prova e as imagens para o Oracle...');
+      setStatusMessage(OFFLINE_DESKTOP ? 'Guardando a prova no armazenamento local...' : LOCAL_ENGINE ? 'Extraindo a prova neste dispositivo...' : 'Enviando a prova e as imagens para o Oracle...');
       try {
         const buffer = await localFile.arrayBuffer();
         const bytes = new Uint8Array(buffer);
@@ -229,15 +201,15 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
         if (response.progress < 100 && response.status !== 'Aprovada') {
           setStage('processing');
           setStatusMessage(response.message || 'Extraindo e organizando as questões...');
-          watchProgress(response.exam_id);
+          watchProgress(response.exam_id, response.processing_location === 'device');
           return;
         }
-        if (LOCAL_ENGINE) {
+        if (response.processing_location === 'device') {
           await finishLocalExam(response.exam_id);
           return;
         }
         setProgress(100);
-        setStatusMessage(response.message || (OFFLINE_DESKTOP ? 'Prova disponível neste computador.' : 'Prova sincronizada no Oracle.'));
+        setStatusMessage(response.message || (OFFLINE_DESKTOP ? 'Prova disponível neste dispositivo.' : 'Prova sincronizada no Oracle.'));
         void refreshDownloads();
         setReadyExamId(response.exam_id);
         setStage('ready');
@@ -261,6 +233,10 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
     try {
       const response = await api.ingestExam(cleanUrl, customTitle.trim() || 'Nova Prova de Concurso', gabaritoUrl.trim() || undefined);
       if (response.status === 'Aprovada') {
+        if (response.processing_location === 'device') {
+          await finishLocalExam(response.exam_id);
+          return;
+        }
         setProgress(100);
         setStatusMessage(response.reused ? response.message : 'Prova pronta para começar.');
         void refreshDownloads();
@@ -270,7 +246,7 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
       }
       setStage('processing');
       setStatusMessage(response.reused ? response.message : 'Baixando e organizando as questões...');
-      watchProgress(response.exam_id);
+      watchProgress(response.exam_id, response.processing_location === 'device');
     } catch (error) {
       void refreshDownloads();
       setStage('error');
@@ -294,9 +270,9 @@ export const DirectIngestModal: React.FC<DirectIngestModalProps> = ({
             <h2 id="import-title" className="text-lg font-semibold text-[var(--text)]">Importar prova</h2>
             <p id="import-description" className="mt-1 text-sm text-[var(--text-muted)]">
               {OFFLINE_DESKTOP
-                ? 'Escolha um arquivo que já esteja neste computador.'
+                ? 'Escolha um arquivo que já esteja neste dispositivo.'
                 : LOCAL_ENGINE
-                  ? 'Cole o link da prova ou escolha um arquivo local; a extração acontece neste computador.'
+                  ? 'Cole o link da prova ou escolha um arquivo local; a extração acontece neste dispositivo.'
                   : 'Cole o link da prova ou escolha um arquivo local; a ingestão fica sincronizada no Oracle.'}
             </p>
           </div>

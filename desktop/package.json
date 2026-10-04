@@ -10,8 +10,9 @@
     "build": "npm run engine:build && npm run icons && tauri build",
     "icons": "tauri icon concurse-icon.png",
     "android:init": "tauri android init",
+    "android:prepare": "node scripts/prepare-android-engine.mjs",
     "android:dev": "tauri android dev",
-    "android:build": "npm run icons && tauri android build --apk --target aarch64",
+    "android:build": "npm run android:prepare && npm run icons && tauri android build --apk --target aarch64",
     "ios:init": "tauri ios init",
     "ios:dev": "tauri ios dev",
     "ios:build": "npm run icons && tauri ios build"

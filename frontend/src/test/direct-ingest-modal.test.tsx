@@ -18,22 +18,20 @@ const apiMocks = vi.hoisted(() => ({
     reused: false,
     already_in_library: false,
   })),
-  getExamProgress: vi.fn(),
+  getExamProgress: vi.fn(async () => ({ status: 'Processando', progress: 5 })),
+  getLocalExamProgress: vi.fn(async () => ({ status: 'Processando', progress: 5 })),
+  syncLocalExam: vi.fn(async () => ({ exam_id: 99, status: 'Aprovada', progress: 100, message: 'Prova sincronizada' })),
 }));
 
-vi.mock('../services/api', () => ({ api: apiMocks, apiUrl: apiMocks.apiUrl }));
-
-class FakeEventSource {
-  onmessage: ((event: MessageEvent) => void) | null = null;
-  onerror: (() => void) | null = null;
-  close = vi.fn();
-
-  constructor(public readonly url: string) {}
-}
+vi.mock('../services/api', () => ({
+  api: apiMocks,
+  apiUrl: apiMocks.apiUrl,
+  LOCAL_ENGINE: false,
+}));
 
 describe('modal de importação', () => {
   beforeEach(() => {
-    vi.stubGlobal('EventSource', FakeEventSource);
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
@@ -56,8 +54,36 @@ describe('modal de importação', () => {
 
     await user.click(screen.getByRole('button', { name: 'Processar prova' }));
 
-    await waitFor(() => expect(screen.getByText('Baixando e organizando as questões...')).toBeVisible());
+    await waitFor(() => expect(apiMocks.getExamProgress).toHaveBeenCalledWith(42));
+    expect(screen.getByRole('progressbar')).toHaveAttribute('value', '5');
     expect(container.querySelector('.ingest-progress-loader')).toBeInTheDocument();
     expect(container.querySelectorAll('.ingest-progress-loader')).toHaveLength(2);
+  });
+
+  it('publica a extração do aparelho e abre o identificador central', async () => {
+    apiMocks.ingestExam.mockResolvedValueOnce({ exam_id: 42, title: 'Prova', status: 'Processando', progress: 5,
+      message: 'Extraindo', reused: false, already_in_library: false, processing_location: 'device' } as any);
+    apiMocks.getLocalExamProgress.mockResolvedValueOnce({ status: 'Aprovada', progress: 100 });
+    const onReady = vi.fn();
+    const user = userEvent.setup();
+    render(<MemoryRouter><UIProvider><DirectIngestModal isOpen onClose={vi.fn()} onExamReady={onReady} initialExamUrl="https://example.com/prova.pdf" /></UIProvider></MemoryRouter>);
+    await user.click(screen.getByRole('button', { name: 'Processar prova' }));
+    await waitFor(() => expect(apiMocks.syncLocalExam).toHaveBeenCalledWith(42));
+    await user.click(await screen.findByRole('button', { name: 'Iniciar simulado' }));
+    expect(onReady).toHaveBeenCalledWith(99);
+    expect(apiMocks.getExamProgress).not.toHaveBeenCalled();
+  });
+
+  it('reutiliza a prova central sem tratar seu identificador como extração local', async () => {
+    apiMocks.ingestExam.mockResolvedValueOnce({ exam_id: 77, title: 'Prova', status: 'Aprovada', progress: 100,
+      message: 'Prova já disponível', reused: true, already_in_library: true, processing_location: 'cloud' } as any);
+    const onReady = vi.fn();
+    const user = userEvent.setup();
+    render(<MemoryRouter><UIProvider><DirectIngestModal isOpen onClose={vi.fn()} onExamReady={onReady} initialExamUrl="https://example.com/prova.pdf" /></UIProvider></MemoryRouter>);
+    await user.click(screen.getByRole('button', { name: 'Processar prova' }));
+    await user.click(await screen.findByRole('button', { name: 'Iniciar simulado' }));
+    expect(onReady).toHaveBeenCalledWith(77);
+    expect(apiMocks.syncLocalExam).not.toHaveBeenCalled();
+    expect(apiMocks.getLocalExamProgress).not.toHaveBeenCalled();
   });
 });

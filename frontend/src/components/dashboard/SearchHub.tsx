@@ -39,9 +39,9 @@ const isIdcapResult = (item: SearchResultItem) =>
 const wait = (milliseconds: number) =>
   new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
 
-const waitForIdcapImport = async (examId: number): Promise<ExamProgress> => {
+const waitForIdcapImport = async (examId: number, local: boolean): Promise<ExamProgress> => {
   for (let attempt = 0; attempt < MAX_IDCAP_PROGRESS_POLLS; attempt += 1) {
-    const snapshot = await api.getExamProgress(examId);
+    const snapshot = local ? await api.getLocalExamProgress(examId) : await api.getExamProgress(examId);
     const normalizedStatus = String(snapshot.status || '').trim().toLowerCase();
 
     if (snapshot.progress >= 100 || normalizedStatus === 'aprovada') return snapshot;
@@ -195,13 +195,16 @@ export const SearchHub: React.FC<SearchHubProps> = ({ onExamReady }) => {
     setProcessingIdcapUrl(item.url);
     showToast('info', 'Processando prova IDCAP', 'A prova será adicionada à biblioteca sem abrir outra janela.');
     try {
-      const response = await api.ingestExam(item.url, item.title);
+      const response = await api.ingestExam(item.url, item.title, item.gabarito_url || undefined);
+      const local = response.processing_location === 'device';
       if (response.progress < 100 && response.status !== 'Aprovada') {
-        await waitForIdcapImport(response.exam_id);
+        await waitForIdcapImport(response.exam_id, local);
       }
+      const ready = local ? await api.syncLocalExam(response.exam_id) : response;
 
       removeResultFromCurrentPage(item.url);
       showToast('success', 'Prova IDCAP processada', 'A prova foi adicionada à sua biblioteca.');
+      await onExamReady?.(ready.exam_id);
     } catch (err) {
       showToast(
         'error',

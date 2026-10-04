@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { axe } from 'vitest-axe';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,6 +15,7 @@ const apiMocks = vi.hoisted(() => ({
   getCurrentUser: vi.fn(async () => null),
   exchangeSupabaseSession: vi.fn(async () => null),
   getGoogleLoginUrl: vi.fn(() => '#'),
+  beginGoogleLogin: vi.fn(async () => undefined),
   logout: vi.fn(async () => undefined),
 }));
 
@@ -47,12 +49,15 @@ describe('login com Google', () => {
   it('protege a biblioteca e preserva o destino no login', async () => {
     const { container } = renderApp('/biblioteca');
 
-    expect(await screen.findByRole('heading', { name: 'Seu estudo continua daqui.' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'Suas provas. Seu espaço.' })).toBeVisible();
     expect(screen.getByTestId('current-location')).toHaveTextContent('/login?next=%2Fbiblioteca');
 
-    const googleLink = await screen.findByRole('link', { name: 'Continuar com Google' });
-    expect(googleLink).toHaveAttribute('href', '#');
-    expect(googleLink).toHaveAttribute('aria-disabled', 'false');
+    await userEvent.click(screen.getByRole('button', { name: /^Entrar$/ }));
+    expect(screen.getByRole('heading', { name: 'Seu estudo continua daqui.' })).toBeVisible();
+    const googleButton = await screen.findByRole('button', { name: 'Continuar com Google' });
+    expect(googleButton).toBeEnabled();
+    await userEvent.click(googleButton);
+    expect(apiMocks.beginGoogleLogin).toHaveBeenCalledWith('/biblioteca');
 
     const audit = await axe(container, {
       rules: { 'color-contrast': { enabled: false } },
@@ -64,7 +69,6 @@ describe('login com Google', () => {
     renderApp('/login?error=invalid_state&next=%2Fbuscar');
 
     expect(await screen.findByRole('alert')).toHaveTextContent('A tentativa de login expirou por segurança');
-    expect(await screen.findByRole('link', { name: 'Continuar com Google' }))
-      .toHaveAttribute('href', '#');
+    expect(await screen.findByRole('button', { name: 'Continuar com Google' })).toBeEnabled();
   });
 });

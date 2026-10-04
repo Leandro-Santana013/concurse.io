@@ -765,11 +765,36 @@ def process_exam_async(exam_id: int, gabarito_override: Optional[str] = None):
         traceback.print_exc()
         set_exam_progress(exam_id, f"Erro inesperado: {str(unexpected_err)[:200]}", -1, "INTERNAL_ERROR")
 
+_android_processing_lock = threading.Semaphore(1)
+_running_exam_ids: set[int] = set()
+_running_exam_ids_lock = threading.Lock()
+
+
 def dispatch_async_exam_task(exam_id: int, gabarito_override: Optional[str] = None):
     """Inicia a execução da tarefa em uma thread dedicada não-bloqueante."""
+    with _running_exam_ids_lock:
+        if exam_id in _running_exam_ids:
+            return None
+        _running_exam_ids.add(exam_id)
+
+    def run():
+        try:
+            if os.environ.get("CONCURSE_EMBEDDED_ANDROID") == "1":
+                from mobile_engine import processing_started, processing_finished
+                processing_started()
+                with _android_processing_lock:
+                    try:
+                        process_exam_async(exam_id, gabarito_override)
+                    finally:
+                        processing_finished()
+            else:
+                process_exam_async(exam_id, gabarito_override)
+        finally:
+            with _running_exam_ids_lock:
+                _running_exam_ids.discard(exam_id)
+
     worker_thread = threading.Thread(
-        target=process_exam_async,
-        args=(exam_id, gabarito_override),
+        target=run,
         daemon=True
     )
     worker_thread.start()

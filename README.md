@@ -9,7 +9,8 @@ Android.
 - login Google pelo Supabase Auth;
 - biblioteca de provas associada à conta, disponível em mais de um dispositivo;
 - cache local para reabrir provas já sincronizadas;
-- ingestão local de PDF/JSON e envio dos arquivos para o Oracle Object Storage;
+- extração/OCR de PDF no desktop e importação de JSON estruturado nos aplicativos,
+  com envio dos arquivos para o Oracle Object Storage;
 - imagens e PDFs entregues por Edge Functions do Supabase, com autorização por
   PAR somente para os prefixos necessários;
 - renderização de fórmulas, simulados, progresso e caderno de erros;
@@ -21,11 +22,16 @@ usar os aplicativos. O Oracle fica como armazenamento de mídia; as credenciais
 privadas do bucket permanecem nos secrets das Edge Functions e nunca são
 embutidas nos instaladores.
 
-No desktop Windows, o perfil `desktop-local` é autocontido: o instalador inclui
-um sidecar FastAPI com o mesmo pipeline de extração/OCR, banco SQLite e mídia
-local. Assim, extração de provas, biblioteca, estatísticas, tentativas, caderno
-de erros e ranking local funcionam sem uma FastAPI externa. Supabase permanece
-opcional para login Google, sincronização entre dispositivos e ranking global.
+No desktop Windows, o perfil `desktop-local` inclui um sidecar FastAPI com o
+pipeline de extração/OCR, SQLite e mídia de trabalho do motor. A prova final é
+enviada ao Supabase e os arquivos ao Oracle. Biblioteca, tentativas,
+estatísticas, caderno de erros e ranking usam os dados centrais pelo gateway;
+o SQLite do motor não é a biblioteca principal.
+
+O mobile usa o mesmo gateway e ainda não inclui o motor de extração/OCR.
+Importar um PDF no Android não equivale à extração feita no Windows. A
+migração completa dos fluxos está pendente, conforme a
+[auditoria mobile](docs/mobile-migration-audit.md).
 
 ## Downloads
 
@@ -36,14 +42,26 @@ acompanhado pelo SHA-256 em [`downloads/SHA256SUMS.txt`](downloads/SHA256SUMS.tx
 | --- | --- | --- |
 | Windows x64 | [`concurse.io_0.1.0_x64_en-US.msi`](downloads/concurse.io_0.1.0_x64_en-US.msi) | Instalador MSI |
 | Windows x64 | [`concurse.io_0.1.0_x64-setup.exe`](downloads/concurse.io_0.1.0_x64-setup.exe) | Instalador NSIS |
-| Android arm64 | [`concurse-mobile-aarch64-release-v0.1.2-code3-16k.apk`](downloads/concurse-mobile-aarch64-release-v0.1.2-code3-16k.apk) | APK para Redmi/Android arm64 |
+| Android arm64 | [`concurse-mobile-aarch64-release-v0.1.4-code5-16k.apk`](downloads/concurse-mobile-aarch64-release-v0.1.4-code5-16k.apk) | Carrossel inicial e verificação do serviço de login; teste no aparelho pendente |
 
-O APK Android está publicado para teste mesmo com a falha nativa conhecida no
-Android 16/HyperOS: em alguns aparelhos o processo aborta durante a criação do
-WebView, antes de a tela aparecer. O arquivo é assinado com a chave de
-desenvolvimento usada nesta build e serve para diagnóstico; uma versão de
-produção só deve ser publicada depois da correção desse abort e da assinatura
-com uma chave de release própria.
+O APK Android 0.1.4/code5 apresenta três páginas sobre biblioteca, prática e
+revisão, seguidas do login. O carrossel permite deslizar, usar a paginação e
+ir diretamente ao acesso. Antes de abrir o Google, o aplicativo verifica o
+serviço e apresenta erros na própria tela, permitindo uma nova tentativa.
+
+A versão 0.1.3/code4 corrigiu a configuração inválida `plugins.opener.open`;
+o usuário confirmou que chegou à tela de login no Redmi 14C. A captura USB em
+03/10/2026 havia confirmado que esse campo fazia a versão 0.1.2/code3 abortar
+antes da interface. A versão nova preserva essa correção e o alinhamento de 16 KB.
+
+A falha de DNS no login foi resolvida após o usuário retomar o projeto Supabase
+em 03/10/2026. A verificação remota confirmou o serviço Auth respondendo com
+Google habilitado e a autorização redirecionando para `accounts.google.com`.
+O usuário confirmou o retorno do Google ao aplicativo na versão instalada
+0.1.3. A interface e o fluxo da versão 0.1.4 ainda precisam de teste no aparelho.
+O novo arquivo usa a mesma chave de desenvolvimento do anterior, permitindo
+instalá-lo como atualização. Uma distribuição de produção exige uma chave de
+release própria.
 
 ## Desenvolvimento
 
@@ -96,7 +114,6 @@ completo de desenvolvimento e armazenamento.
 
 ## Estado do projeto
 
-O fluxo Windows/web está preparado para uso com Supabase. O APK Android está
-disponível para reproduzir o problema de inicialização e validar a correção em
-aparelhos afetados. A falha não impede o uso do código-fonte, do instalador
-Windows ou da biblioteca web.
+O fluxo Windows/web está preparado para uso com Supabase. O APK Android
+0.1.4/code5 está disponível neste checkout e aguarda testes da nova interface
+e do login completo no aparelho. A publicação no GitHub ainda não ocorreu.

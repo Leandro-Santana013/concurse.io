@@ -1,12 +1,14 @@
 {
+  "version": "0.1.5",
   "build": {
     "beforeDevCommand": "npm --prefix ../frontend run dev -- --host 0.0.0.0",
-    "beforeBuildCommand": "npm --prefix ../frontend run build:mobile"
+    "beforeBuildCommand": "node scripts/prepare-android-engine.mjs && npm --prefix ../frontend run build:mobile"
   },
   "bundle": {
+    "externalBin": [],
     "android": {
       "minSdkVersion": 24,
-      "versionCode": 1
+      "versionCode": 6
     }
   },
   "plugins": {
@@ -17,9 +19,6 @@
           "appLink": false
         }
       ]
-    },
-    "opener": {
-      "open": true
     }
   }
 }

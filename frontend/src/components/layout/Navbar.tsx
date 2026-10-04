@@ -1,26 +1,16 @@
 import React from 'react';
 import {
-  BarChart3,
   BookOpen,
   CloudDownload,
-  Home,
   Import,
-  LogOut,
-  Search,
-  User,
+  Menu,
 } from 'lucide-react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useExam } from '../../context/ExamContext';
 import { useUI } from '../../context/UIContext';
 import { useAuth } from '../../context/AuthContext';
-
-const navigation = [
-  { to: '/', label: 'Início', icon: Home, end: true },
-  { to: '/biblioteca', label: 'Biblioteca', icon: BookOpen },
-  { to: '/buscar', label: 'Buscar', icon: Search },
-  { to: '/progresso', label: 'Progresso', icon: BarChart3 },
-  { to: '/perfil', label: 'Perfil', icon: User },
-];
+import { MobileMenu } from './MobileMenu';
+import { primaryNavigation } from './navigation';
 
 const getPageTitle = (pathname: string) => {
   if (pathname === '/perfil') return 'Perfil & Configurações';
@@ -35,7 +25,7 @@ const getPageTitle = (pathname: string) => {
 export const Navbar: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { activeDownloadsCount, openDirectIngestModal } = useUI();
+  const { activeDownloadsCount, openDirectIngestModal, isMobileSidebarOpen, toggleMobileSidebar } = useUI();
   const { activeExam, isFinished } = useExam();
   const { user } = useAuth();
 
@@ -48,6 +38,16 @@ export const Navbar: React.FC = () => {
     <>
       <header className="app-navbar">
         <div className="navbar-title-group">
+          <button
+            type="button"
+            className="mobile-menu-toggle mobile-menu-trigger"
+            aria-label="Abrir menu"
+            aria-controls="mobile-menu"
+            aria-expanded={isMobileSidebarOpen}
+            onClick={toggleMobileSidebar}
+          >
+            <Menu aria-hidden="true" />
+          </button>
           <img className="mobile-brand brand-logo-image" src="/concurse-icon-64.png" alt="" width={28} height={28} />
           <p>{getPageTitle(location.pathname)}</p>
         </div>
@@ -101,11 +101,12 @@ export const Navbar: React.FC = () => {
       </header>
 
       <nav className="mobile-bottom-nav" aria-label="Navegação principal">
-        {navigation.map(({ to, label, icon: Icon, end }) => (
+        {primaryNavigation.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
             to={to}
             end={end}
+            aria-label={label}
             className={({ isActive }) => `bottom-nav-link${isActive ? ' is-active' : ''}`}
           >
             <Icon aria-hidden="true" />
@@ -113,6 +114,7 @@ export const Navbar: React.FC = () => {
           </NavLink>
         ))}
       </nav>
+      <MobileMenu />
     </>
   );
 };

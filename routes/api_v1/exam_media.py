@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from urllib.parse import quote, unquote, urlparse
 
@@ -16,7 +17,7 @@ from services.object_storage import ObjectStorageError, get_object, question_obj
 from services.object_storage import exam_pdf_object_key
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(os.environ.get("CONCURSE_DATA_ROOT") or Path(__file__).resolve().parents[2])
 QUESTION_MEDIA_DIR = (PROJECT_ROOT / "static" / "images" / "questions").resolve()
 PDF_DIR = (PROJECT_ROOT / "pdfs").resolve()
 LEGACY_QUESTION_MEDIA_PREFIX = "/static/images/questions/"

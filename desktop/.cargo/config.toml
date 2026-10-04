@@ -1,4 +1,7 @@
 [target.aarch64-linux-android]
+# Keep this configuration at the npm project root. The Android CLI builds from
+# src-tauri, while Gradle's npm callback builds from desktop; Cargo must find
+# the same flags from both working directories.
 # Android 15/16 devices may use 16 KiB memory pages. 16 KiB ELF
 # segments remain compatible with devices using the traditional 4 KiB pages.
 # Keep the linker options as separate arguments.  This form is understood by

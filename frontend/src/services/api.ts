@@ -22,6 +22,7 @@ import {
   supabaseNativeOAuth,
   supabaseAuthConfigured,
   supabaseRedirectUrl,
+  assertGoogleLoginAvailable,
 } from './supabase';
 
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || '').trim().replace(/\/+$/, '');
@@ -46,6 +47,10 @@ const DESKTOP_SESSION_KEY = 'concurse.desktop.session.v1';
 const API_REQUEST_TIMEOUT_MS = 8000;
 const LOCAL_API_BASE = (import.meta.env.VITE_LOCAL_API_BASE || 'http://127.0.0.1:45873/api/v1').replace(/\/+$/, '');
 const localRemoteSourceObjects = new Map<number, string>();
+const localPublicationPromises = new Map<number, Promise<ExamIngestResult>>();
+const localPublishedExams = new Map<number, { ownerId: string; result: ExamIngestResult }>();
+let engineSessionSubject = '';
+let engineSessionPromise: Promise<void> | null = null;
 let desktopSessionToken = (() => {
   try {
     return typeof window === 'undefined' ? '' : window.localStorage.getItem(DESKTOP_SESSION_KEY) || '';
@@ -235,11 +240,49 @@ const apiFetch = async (input: RequestInfo | URL, init: RequestInit = {}, timeou
 };
 
 const localApiFetch = async (input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = API_REQUEST_TIMEOUT_MS) => {
+  if (LOCAL_ENGINE) await ensureLocalEngineSession();
   const headers = new Headers(init.headers);
   if (!headers.has('Authorization') && desktopSessionToken) {
     headers.set('Authorization', `Bearer ${desktopSessionToken}`);
   }
   return apiFetch(input, { ...init, headers }, timeoutMs);
+};
+
+const ensureLocalEngineSession = async (): Promise<void> => {
+  const session = supabase ? (await supabase.auth.getSession()).data.session : null;
+  if (!session?.access_token || !session.user?.id) throw new AuthRequiredError();
+  if (desktopSessionToken && engineSessionSubject === session.user.id) return;
+  if (engineSessionPromise) return engineSessionPromise;
+  engineSessionPromise = (async () => {
+    setDesktopSessionToken('');
+    engineSessionSubject = '';
+    // The native engine starts on its own thread while the welcome screen is
+    // usable. Wait for readiness here, before a processing action needs it.
+    const deadline = Date.now() + 45000;
+    let ready = false;
+    while (Date.now() < deadline) {
+      try {
+        const response = await apiFetch(`${LOCAL_API_BASE.replace(/\/api\/v1$/, '')}/health`, {}, 1200);
+        if (response.ok) { ready = true; break; }
+      } catch { /* The engine may still be loading the first time. */ }
+      await new Promise(resolve => globalThis.setTimeout(resolve, 300));
+    }
+    if (!ready) throw new Error('O processamento no dispositivo ainda não iniciou. Feche e abra o aplicativo para tentar novamente.');
+    const response = await apiFetch(localApiUrl('/api/v1/auth/supabase/exchange'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      body: JSON.stringify({ access_token: session.access_token }),
+    }, 30000);
+    if (response.status === 401) throw new AuthRequiredError();
+    if (!response.ok) throw new Error('Não foi possível preparar o processamento para sua conta.');
+    const payload = await response.json() as { session_token?: string };
+    if (!payload.session_token) throw new Error('O processamento retornou uma sessão inválida.');
+    const currentSession = supabase ? (await supabase.auth.getSession()).data.session : null;
+    if (currentSession?.user?.id !== session.user.id) throw new AuthRequiredError();
+    setDesktopSessionToken(payload.session_token);
+    engineSessionSubject = session.user.id;
+  })().finally(() => { engineSessionPromise = null; });
+  return engineSessionPromise;
 };
 
 const binaryToDataUrl = (bytes: Uint8Array, contentType: string): string => {
@@ -286,27 +329,8 @@ export const api = {
     const accessToken = data.session?.access_token;
     if (!accessToken) return null;
 
-    if (LOCAL_ENGINE) {
-      const res = await apiFetch(localApiUrl('/api/v1/auth/supabase/exchange'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ access_token: accessToken }),
-      });
-      if (res.status === 401) {
-        await supabase.auth.signOut();
-        setDesktopSessionToken('');
-        return null;
-      }
-      if (!res.ok) throw new Error('Não foi possível sincronizar a conta Google localmente.');
-      const payload = await res.json() as { session_token?: string; user?: AuthUser };
-      if (!payload.session_token || !payload.user) throw new Error('A sessão local retornada é inválida.');
-      setDesktopSessionToken(payload.session_token);
-      return payload.user;
-    }
-
+    // The central user ID owns the library and attempts. A processing database
+    // ID is private to the engine and must never become the displayed identity.
     const res = await apiFetch(`${API_BASE}/auth/me`);
     if (res.status === 401) {
       await supabase.auth.signOut();
@@ -353,6 +377,9 @@ export const api = {
       : supabaseRedirectUrl(nextPath);
     const oauthClient = nativeApp ? supabaseNativeOAuth : supabase;
     if (!oauthClient) throw new Error('O login Supabase não está configurado neste build.');
+    // signInWithOAuth constructs its URL locally. Check the service before
+    // handing it to the system browser so DNS failures remain recoverable here.
+    await assertGoogleLoginAvailable();
     const { data, error } = await oauthClient.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -456,6 +483,9 @@ export const api = {
     if (OFFLINE_DESKTOP) return;
     if (supabase) await supabase.auth.signOut();
     setDesktopSessionToken('');
+    engineSessionSubject = '';
+    localRemoteSourceObjects.clear();
+    localPublishedExams.clear();
   },
 
   async deleteAccount(): Promise<void> {
@@ -591,35 +621,62 @@ export const api = {
     });
     if (sources) params.append('sources', sources);
     if (refresh) params.append('refresh', 'true');
-    const res = await apiFetch(`${API_BASE}/search?${params.toString()}`);
+    const res = LOCAL_ENGINE
+      ? await localApiFetch(`${LOCAL_API_BASE}/search?${params.toString()}`, {}, 120000)
+      : await apiFetch(`${API_BASE}/search?${params.toString()}`);
     if (!res.ok) throw new Error('Falha ao realizar busca de provas');
     const data: unknown = await res.json();
-    if (Array.isArray(data)) {
-      const items = data as SearchResultItem[];
-      return {
-        items,
+    const result: SearchResultsPage = Array.isArray(data)
+      ? {
+        items: data as SearchResultItem[],
         page,
         page_size: pageSize,
-        total: items.length,
-        total_pages: items.length > 0 ? Math.ceil(items.length / pageSize) : 0,
+        total: data.length,
+        total_pages: data.length > 0 ? Math.ceil(data.length / pageSize) : 0,
         has_previous: page > 1,
-        has_next: items.length === pageSize,
-      };
+        has_next: data.length === pageSize,
+      } : data as SearchResultsPage;
+    if (LOCAL_ENGINE && result.items.length) {
+      const catalog = await apiFetch(`${API_BASE}/search/catalog`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, items: result.items.slice(0, 50) }),
+      }, 30000);
+      if (!catalog.ok) throw new Error('A busca terminou, mas os resultados não puderam ser sincronizados. Tente novamente.');
+      const reusable = await this.lookupProcessedExams(result.items.map(item => item.url));
+      result.items = result.items.map(item => {
+        const existing = reusable[item.url];
+        return { ...item, id: existing?.id || null, status: existing ? 'Aprovada' : 'Pendente', reuse_available: Boolean(existing) };
+      });
     }
-    return data as SearchResultsPage;
+    return result;
+  },
+
+  async lookupProcessedExams(urls: string[]): Promise<Record<string, { id: number; title: string }>> {
+    const response = await apiFetch(`${API_BASE}/exams/reuse-lookup`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ urls }),
+    }, 30000);
+    if (!response.ok) throw new Error('Não foi possível verificar as provas já processadas na biblioteca central.');
+    return response.json();
   },
 
   async ingestExam(url: string, title: string, gabaritoUrl?: string): Promise<ExamIngestResult> {
     if (OFFLINE_DESKTOP) {
       throw new Error('No modo offline escolha um arquivo local em vez de um link.');
     }
-    const res = await apiFetch(`${API_BASE}/exams/ingest`, {
+    if (LOCAL_ENGINE) {
+      const existing = (await this.lookupProcessedExams([url]))[url];
+      if (existing) return { ...(await this.claimProcessedExam(existing.id)), processing_location: 'cloud' };
+    }
+    const fetcher = LOCAL_ENGINE ? localApiFetch : apiFetch;
+    const res = await fetcher(`${LOCAL_ENGINE ? LOCAL_API_BASE : API_BASE}/exams/ingest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url, title, gabarito_url: gabaritoUrl }),
     });
     if (!res.ok) throw new Error('Falha ao iniciar processamento da prova');
-    return res.json();
+    const result = await res.json() as ExamIngestResult;
+    return { ...result, processing_location: LOCAL_ENGINE ? 'device' : 'cloud' };
   },
 
   async claimProcessedExam(examId: number): Promise<ExamIngestResult> {
@@ -670,7 +727,22 @@ export const api = {
 
   async getActiveDownloads(): Promise<ActiveDownload[]> {
     if (OFFLINE_DESKTOP) return invokeOffline<ActiveDownload[]>('offline_active_downloads');
-    const res = await apiFetch(`${API_BASE}/downloads/active`);
+    if (TAURI_MOBILE_APP && LOCAL_ENGINE) {
+      const response = await localApiFetch(`${LOCAL_API_BASE}/processing/jobs`);
+      if (!response.ok) throw new Error('Não foi possível acompanhar as importações neste dispositivo.');
+      const jobs = await response.json() as ActiveDownload[];
+      const pending: ActiveDownload[] = [];
+      for (const job of jobs) {
+        if (job.status === 'Aprovada' && job.progress >= 100) {
+          try { await this.syncLocalExam(job.id); }
+          catch { pending.push({ ...job, status: 'Aguardando envio à biblioteca' }); }
+        } else pending.push(job);
+      }
+      return pending;
+    }
+    const res = LOCAL_ENGINE
+      ? await localApiFetch(`${LOCAL_API_BASE}/downloads/active`)
+      : await apiFetch(`${API_BASE}/downloads/active`);
     if (!res.ok) return [];
     return res.json();
   },
@@ -682,11 +754,11 @@ export const api = {
     return res.json();
   },
 
-  async uploadMedia(objectPath: string, bytes: Uint8Array, contentType: string): Promise<void> {
+  async uploadMedia(objectPath: string, bytes: Uint8Array, contentType: string, token?: string): Promise<void> {
     if (OFFLINE_DESKTOP) throw new Error('O envio para o Oracle exige uma sessão Supabase online.');
     const res = await apiFetch(`${SUPABASE_FUNCTIONS_URL}/media-gateway?path=${encodeURIComponent(objectPath)}`, {
       method: 'PUT',
-      headers: { 'Content-Type': contentType },
+      headers: { 'Content-Type': contentType, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: bytes as BodyInit,
     }, 120000);
     if (!res.ok) {
@@ -706,11 +778,8 @@ export const api = {
     if (LOCAL_ENGINE) {
       const bytes = base64Bytes(dataBase64);
       let localPayload: Record<string, unknown> = { filename, title, data_base64: dataBase64 };
-      let remoteSourceObject = '';
-      if (/\.pdf$/i.test(filename)) {
-        remoteSourceObject = `exams/uploads/${await hexDigest(bytes)}.pdf`;
-        await this.uploadMedia(remoteSourceObject, bytes, 'application/pdf');
-      } else if (/\.json$/i.test(filename)) {
+
+      if (/\.json$/i.test(filename)) {
         try {
           const parsed = JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>;
           const mediaByName = new Map<string, string>();
@@ -740,8 +809,7 @@ export const api = {
         throw new Error(detail || 'Não foi possível iniciar a extração local da prova.');
       }
       const result = await res.json() as ExamIngestResult;
-      if (remoteSourceObject && result.exam_id) localRemoteSourceObjects.set(result.exam_id, remoteSourceObject);
-      return result;
+      return { ...result, processing_location: 'device' };
     }
     const bytes = base64Bytes(dataBase64);
     let payload: Record<string, unknown> = { filename, title, data_base64: dataBase64 };
@@ -778,25 +846,80 @@ export const api = {
 
   async getLocalExamProgress(examId: number): Promise<ExamProgress> {
     const res = await localApiFetch(localApiUrl(`/api/v1/exams/${examId}/progress`));
-    if (!res.ok) throw new Error('Falha ao consultar a extraÃ§Ã£o local da prova.');
+    if (!res.ok) throw new Error('Falha ao consultar a extração da prova no dispositivo.');
     return res.json();
   },
 
   async syncLocalExam(examId: number): Promise<ExamIngestResult> {
-    if (!LOCAL_ENGINE) throw new Error('O motor local nÃ£o estÃ¡ habilitado neste build.');
+    const owner = supabase ? (await supabase.auth.getSession()).data.session?.user?.id : null;
+    const published = localPublishedExams.get(examId);
+    if (owner && published?.ownerId === owner) {
+      await this.confirmLocalPublication(examId, published.result.exam_id);
+      return published.result;
+    }
+    const existing = localPublicationPromises.get(examId);
+    if (existing) return existing;
+    const publication = this.publishLocalExam(examId).then(result => {
+      if (owner) localPublishedExams.set(examId, { ownerId: owner, result });
+      return result;
+    })
+      .finally(() => localPublicationPromises.delete(examId));
+    localPublicationPromises.set(examId, publication);
+    return publication;
+  },
+
+  async confirmLocalPublication(examId: number, remoteExamId: number): Promise<void> {
+    if (!TAURI_MOBILE_APP) return;
+    // The server import key also prevents duplicates after an app restart.
+    // A lost local receipt is retried when the processing queue is refreshed.
+    await localApiFetch(`${LOCAL_API_BASE}/processing/jobs/${examId}/published`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ remote_exam_id: remoteExamId }),
+    }).catch(() => undefined);
+  },
+
+  async publishLocalExam(examId: number): Promise<ExamIngestResult> {
+    if (!LOCAL_ENGINE) throw new Error('O processamento no dispositivo não está habilitado nesta versão.');
+    const ownerSession = supabase ? (await supabase.auth.getSession()).data.session : null;
+    if (!ownerSession?.access_token || !ownerSession.user?.id) throw new AuthRequiredError();
+    const requireSameOwner = async () => {
+      const current = supabase ? (await supabase.auth.getSession()).data.session : null;
+      if (current?.user?.id !== ownerSession.user.id) throw new AuthRequiredError();
+    };
+    const storeMedia = async (objectPath: string, bytes: Uint8Array, contentType: string) => {
+      await requireSameOwner();
+      await this.uploadMedia(objectPath, bytes, contentType, ownerSession.access_token);
+    };
     const localResponse = await localApiFetch(localApiUrl(`/api/v1/exams/${examId}`), {}, 30000);
-    if (!localResponse.ok) throw new Error('NÃ£o foi possÃ­vel ler a prova extraÃ­da neste computador.');
+    if (!localResponse.ok) throw new Error('Não foi possível ler a prova extraída neste dispositivo.');
     const localExam = await localResponse.json() as ExamDetail;
 
     const toRemoteMedia = async (value: string): Promise<string> => {
-      if (!value || /^data:/i.test(value) || /^https?:\/\//i.test(value)) return value;
-      const response = await localApiFetch(localMediaUrl(examId, value), {}, 30000);
-      if (!response.ok) throw new Error(`NÃ£o foi possÃ­vel ler a imagem extraÃ­da (${value}).`);
-      return binaryToDataUrl(new Uint8Array(await response.arrayBuffer()), response.headers.get('content-type') || 'application/octet-stream');
+      if (!value || (/^https?:\/\//i.test(value) && !value.startsWith(LOCAL_API_BASE))) return value;
+      let bytes: Uint8Array;
+      let contentType: string;
+      const embedded = value.match(/^data:([^;,]+)?;base64,(.*)$/s);
+      if (embedded) {
+        bytes = base64Bytes(embedded[2]);
+        contentType = embedded[1] || 'application/octet-stream';
+      } else {
+        const response = await localApiFetch(localMediaUrl(examId, value), {}, 30000);
+        if (!response.ok) throw new Error('Não foi possível ler uma imagem extraída.');
+        bytes = new Uint8Array(await response.arrayBuffer());
+        contentType = response.headers.get('content-type') || 'application/octet-stream';
+      }
+      const extension = contentType.split('/')[1]?.replace(/[^a-z0-9]/gi, '') || 'bin';
+      const objectPath = `questions/import-assets-${await hexDigest(bytes)}.${extension}`;
+      await storeMedia(objectPath, bytes, contentType);
+      return objectPath;
     };
-
-    const questions = await Promise.all((localExam.questions || []).map(async (question) => ({
-      ...question,
+    // Upload one question at a time to keep large scanned exams within a
+    // phone's memory budget and avoid putting all images into one JSON body.
+    const questions = [];
+    for (const question of localExam.questions || []) {
+      const { id: _workingQuestionId, ...content } = question;
+      questions.push({
+      ...content,
       images: question.images ? await Promise.all(question.images.map(toRemoteMedia)) : question.images,
       option_images: question.option_images
         ? Object.fromEntries(await Promise.all(Object.entries(question.option_images).map(async ([key, values]) => [
@@ -804,29 +927,47 @@ export const api = {
             await Promise.all(values.map(toRemoteMedia)),
           ])))
         : question.option_images,
-    })));
+      });
+    }
+    const storePdf = async (kind: 'prova' | 'gabarito'): Promise<string | undefined> => {
+      const response = await localApiFetch(`${LOCAL_API_BASE}/exams/${examId}/pdf/${kind}`, {}, 30000);
+      if (response.status === 404) return undefined;
+      if (!response.ok) throw new Error('Não foi possível ler o PDF processado.');
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      const objectPath = `exams/uploads/${await hexDigest(bytes)}.pdf`;
+      await storeMedia(objectPath, bytes, 'application/pdf');
+      return objectPath;
+    };
+    const sourceObject = localRemoteSourceObjects.get(examId) || await storePdf('prova');
+    const answerKeyObject = await storePdf('gabarito');
+    const document = { title: localExam.title, questions };
 
     const payload = {
-      filename: `desktop-${examId}.json`,
+      filename: `processed-${examId}.json`,
       title: localExam.title,
-      source_object: localRemoteSourceObjects.get(examId) || undefined,
+      source_object: sourceObject,
+      source_url: /^https?:\/\//i.test(localExam.source_url || '') ? localExam.source_url : undefined,
+      gabarito_object: answerKeyObject,
       gabarito_url: localExam.gabarito_url || null,
-      data_base64: utf8Base64(JSON.stringify({
-        title: localExam.title,
-        questions,
-      })),
+      data_base64: utf8Base64(JSON.stringify(document)),
+      import_key: await hexDigest(new TextEncoder().encode(JSON.stringify(document))),
     };
+    await requireSameOwner();
     const remoteResponse = await apiFetch(`${API_BASE}/exams/import-local`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ownerSession.access_token}` },
       body: JSON.stringify(payload),
     }, 120000);
     if (!remoteResponse.ok) {
       const detail = await remoteResponse.text().catch(() => '');
-      throw new Error(detail || 'NÃ£o foi possÃ­vel enviar a prova extraÃ­da para o Supabase.');
+      throw new Error(detail || 'Não foi possível enviar a prova extraída para o Supabase.');
     }
     localRemoteSourceObjects.delete(examId);
-    return remoteResponse.json();
+    const result = await remoteResponse.json() as ExamIngestResult;
+    await requireSameOwner();
+    await this.confirmLocalPublication(examId, result.exam_id);
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('concurse:library-updated'));
+    return { ...result, processing_location: 'cloud' };
   },
 
 };

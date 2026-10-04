@@ -1,4 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { presentInternalUser, presentRankingUser, type AuthIdentity, type InternalUser } from "./user-profile.ts";
+import { isPublicSourceUrl, normalizeSourceUrl, ownedSourceKey, sourceKey } from "./source-url.ts";
+import { ImportError, importProcessedExam } from "./processed-import.ts";
+import { gradeAttempt, studyOverview } from "./study-results.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, range",
@@ -13,6 +17,15 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 });
 
 const nowIso = () => new Date().toISOString();
+const readAll = async (query: () => any): Promise<any[]> => {
+  const rows = [];
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await query().range(offset, offset + 999);
+    if (error) throw new Error(error.message);
+    rows.push(...(data || []));
+    if (!data || data.length < 1000) return rows;
+  }
+};
 const parseJson = <T>(value: unknown, fallback: T): T => {
   if (value === null || value === undefined || value === "") return fallback;
   try {
@@ -72,18 +85,8 @@ const authenticate = async (request: Request): Promise<{ authUser: any; db: Retu
   return { authUser: data.user, db };
 };
 
-type InternalUser = {
-  id: number;
-  email: string;
-  name: string;
-  picture: string;
-  supabase_auth_id: string;
-};
-
-const ensureInternalUser = async (db: ReturnType<typeof createClient>, authUser: User): Promise<InternalUser> => {
+const ensureInternalUser = async (db: ReturnType<typeof createClient>, authUser: AuthIdentity): Promise<InternalUser> => {
   const metadata = authUser.user_metadata || {};
-  const displayName = String(metadata.full_name || metadata.name || "").trim();
-  const displayPicture = String(metadata.avatar_url || metadata.picture || "").trim();
   const { data: existing, error: lookupError } = await db
     .from("users")
     .select("id,email,name,picture,supabase_auth_id")
@@ -91,11 +94,7 @@ const ensureInternalUser = async (db: ReturnType<typeof createClient>, authUser:
     .maybeSingle();
   if (lookupError) throw new Error(`Não foi possível localizar a conta: ${lookupError.message}`);
   if (existing) {
-    return {
-      ...(existing as InternalUser),
-      name: String(existing.name || displayName || "Concurseiro"),
-      picture: String(existing.picture || displayPicture || ""),
-    };
+    return presentInternalUser(existing, authUser);
   }
 
   const row = {
@@ -116,10 +115,10 @@ const ensureInternalUser = async (db: ReturnType<typeof createClient>, authUser:
       .select("id,email,name,picture,supabase_auth_id")
       .eq("supabase_auth_id", authUser.id)
       .maybeSingle();
-    if (raced) return raced as InternalUser;
+    if (raced) return presentInternalUser(raced, authUser);
     throw new Error(`Não foi possível criar a conta: ${createError.message}`);
   }
-  return created as InternalUser;
+  return presentInternalUser(created, authUser);
 };
 
 const mediaUrlForPrefix = (value: unknown, prefix: "questions" | "exams") => {
@@ -220,13 +219,13 @@ const loadExamQuestions = async (db: ReturnType<typeof createClient>, examId: nu
   const { data: sourceQuestions, error: sourceError } = await db.from("questions").select("*").in("id", questionIds);
   if (sourceError) throw new Error(sourceError.message);
   const byId = new Map((sourceQuestions || []).map((question) => [Number(question.id), question as Record<string, unknown>]));
-  return questionIds.map((questionId) => byId.get(questionId)).filter(Boolean) as Record<string, unknown>[];
+  return questionIds.map((questionId) => byId.get(questionId)).filter(Boolean)
+    .map((question, index) => ({ ...question!, numero_questao: String(index + 1) })) as Record<string, unknown>[];
 };
 
 const answerQuestion = (questions: Record<string, unknown>[], key: string) => {
-  const byIdOrNumber = questions.find((question) => (
-    String(question.id || "") === key || String(question.numero_questao || "") === key
-  ));
+  const byIdOrNumber = questions.find(question => String(question.id || "") === key)
+    || questions.find(question => String(question.numero_questao || "") === key);
   if (byIdOrNumber) return byIdOrNumber;
   const ordinal = Number(key);
   return Number.isInteger(ordinal) && ordinal > 0 ? questions[ordinal - 1] : undefined;
@@ -252,7 +251,7 @@ const loadWrongQuestions = async (db: ReturnType<typeof createClient>, userId: n
       const question = answerQuestion(questions, String(key));
       const correctAnswer = String(question?.correct_answer || "").trim().toUpperCase();
       const givenAnswer = String(rawAnswer || "").trim().toUpperCase();
-      if (!question || !correctAnswer || givenAnswer === correctAnswer) continue;
+      if (!question || !correctAnswer || correctAnswer === "X" || givenAnswer === correctAnswer) continue;
       const questionId = Number(question.id);
       if (!Number.isInteger(questionId) || questionId <= 0) continue;
       const subject = String(question.subject || "Geral");
@@ -267,7 +266,7 @@ const loadWrongQuestions = async (db: ReturnType<typeof createClient>, userId: n
 
 const loadRanking = async (db: ReturnType<typeof createClient>, currentUser: InternalUser) => {
   const [{ data: users, error: usersError }, { data: attempts, error: attemptsError }] = await Promise.all([
-    db.from("users").select("id,name,picture"),
+    db.from("users").select("id,name,picture,supabase_auth_id"),
     db.from("exam_attempts").select("user_id,total,score"),
   ]);
   if (usersError || attemptsError) throw new Error(usersError?.message || attemptsError?.message || "Falha ao carregar ranking.");
@@ -282,20 +281,23 @@ const loadRanking = async (db: ReturnType<typeof createClient>, currentUser: Int
     totals.set(userId, current);
   }
 
-  return (users || [])
-    .map((user) => {
+  const ranking = await Promise.all((users || [])
+    .filter((user) => (totals.get(Number(user.id))?.total || 0) > 0)
+    .map(async (user) => {
       const userId = Number(user.id);
       const totalsForUser = totals.get(userId) || { total: 0, correct: 0 };
+      let identity: AuthIdentity | undefined;
+      if (userId !== currentUser.id && !user.name && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(user.supabase_auth_id || ""))) {
+        const { data, error } = await db.auth.admin.getUserById(user.supabase_auth_id);
+        if (!error && data.user) identity = data.user;
+      }
       return {
-        id: userId,
-        name: String(user.name || (userId === currentUser.id ? currentUser.name : "Concurseiro")),
-        picture: String(user.picture || (userId === currentUser.id ? currentUser.picture : "")),
+        ...presentRankingUser(user, currentUser, identity),
         total_questions: totalsForUser.total,
         accuracy: totalsForUser.total ? Number(((totalsForUser.correct * 100) / totalsForUser.total).toFixed(1)) : 0,
       };
-    })
-    .filter((entry) => entry.total_questions > 0)
-    .sort((left, right) => (right.total_questions - left.total_questions) || (right.accuracy - left.accuracy));
+    }));
+  return ranking.sort((left, right) => (right.total_questions - left.total_questions) || (right.accuracy - left.accuracy));
 };
 
 const summaryPayload = (exam: Record<string, unknown>, questions: Record<string, unknown>[], attempts: Record<string, unknown>[]) => {
@@ -320,22 +322,21 @@ const summaryPayload = (exam: Record<string, unknown>, questions: Record<string,
 };
 
 const loadLibrary = async (db: ReturnType<typeof createClient>, userId: number) => {
-  const { data: links, error: linksError } = await db.from("user_exams").select("exam_id").eq("user_id", userId);
-  if (linksError) throw new Error(linksError.message);
-  const ids = (links || []).map((row) => Number(row.exam_id)).filter(Boolean);
-  if (!ids.length) return { ids, exams: [], questions: [], attempts: [], folders: [] };
-  const [{ data: exams, error: examsError }, { data: questions, error: questionsError }, { data: attempts, error: attemptsError }] = await Promise.all([
-    db.from("exams").select("*").in("id", ids),
-    db.from("questions").select("*").in("exam_id", ids).order("question_index", { ascending: true, nullsFirst: false }).order("id", { ascending: true }),
-    db.from("exam_attempts").select("*").eq("user_id", userId).in("exam_id", ids),
+  const [links, owned, attempts] = await Promise.all([
+    readAll(() => db.from("user_exams").select("exam_id").eq("user_id", userId).order("exam_id")),
+    readAll(() => db.from("exams").select("id").eq("user_id", userId).order("id")),
+    readAll(() => db.from("exam_attempts").select("*").eq("user_id", userId).order("id")),
   ]);
-  if (examsError || questionsError || attemptsError) throw new Error(examsError?.message || questionsError?.message || attemptsError?.message || "Falha ao carregar biblioteca.");
-  const folderIds = [...new Set((exams || []).map((exam) => exam.folder_id).filter(Boolean))];
-  const { data: folders, error: foldersError } = folderIds.length
-    ? await db.from("folders").select("*").in("id", folderIds)
-    : { data: [], error: null };
-  if (foldersError) throw new Error(foldersError.message);
-  return { ids, exams: exams || [], questions: questions || [], attempts: attempts || [], folders: folders || [] };
+  const ids = [...new Set([...links.map(row => Number(row.exam_id)), ...owned.map(row => Number(row.id))])];
+  if (!ids.length) return { ids, exams: [], questions: [], attempts, folders: [], sessions: [] };
+  const [exams, questions, sessions] = await Promise.all([
+    readAll(() => db.from("exams").select("*").in("id", ids).order("id")),
+    readAll(() => db.from("questions").select("*").in("exam_id", ids).order("question_index", { ascending: true, nullsFirst: false }).order("id")),
+    readAll(() => db.from("generated_exam_sessions").select("*").in("exam_id", ids).order("exam_id")),
+  ]);
+  const folderIds = [...new Set(exams.map(exam => exam.folder_id).filter(Boolean))];
+  const folders = folderIds.length ? await readAll(() => db.from("folders").select("*").in("id", folderIds).order("id")) : [];
+  return { ids, exams, questions, attempts, folders, sessions };
 };
 
 const folderPayload = (library: Awaited<ReturnType<typeof loadLibrary>>) => {
@@ -344,7 +345,12 @@ const folderPayload = (library: Awaited<ReturnType<typeof loadLibrary>>) => {
     const examId = Number(question.exam_id);
     byExam.set(examId, [...(byExam.get(examId) || []), question]);
   }
-  const exams = library.exams.map((exam) => ({
+  const questionsById = new Map(library.questions.map(question => [Number(question.id), question]));
+  for (const session of library.sessions) {
+    const ids = parseJson<unknown[]>(session.question_ids_json, []).map(Number);
+    byExam.set(Number(session.exam_id), ids.map(id => questionsById.get(id)).filter(Boolean));
+  }
+  const exams = library.exams.filter(exam => !["Processando", "Erro"].includes(exam.status)).map((exam) => ({
     exam,
     questions: byExam.get(Number(exam.id)) || [],
   }));
@@ -364,6 +370,41 @@ const accessibleExam = async (db: ReturnType<typeof createClient>, userId: numbe
   if (link) return true;
   const { data: owned } = await db.from("exams").select("id").eq("id", examId).eq("user_id", userId).maybeSingle();
   return Boolean(owned);
+};
+
+const reusableExams = async (db: ReturnType<typeof createClient>, userId: number, urls: string[]) => {
+  const eligible = [...new Set(urls)].filter(isPublicSourceUrl).slice(0, 50);
+  if (!eligible.length) return {} as Record<string, { id: number; title: string }>;
+  const keys = await Promise.all(eligible.map(sourceKey));
+  const ownedKeys = await Promise.all(eligible.map(url => ownedSourceKey(userId, url)));
+  const normalized = eligible.map(normalizeSourceUrl);
+  const { data: aliases, error: aliasError } = await db.from("exam_sources").select("source_key,exam_id").in("source_key", [...keys, ...ownedKeys]);
+  if (aliasError) throw new Error(aliasError.message);
+  const { data: legacy, error: legacyError } = await db.from("exams").select("id,source_url")
+    .in("source_url", [...new Set([...eligible, ...normalized])]).eq("status", "Aprovada");
+  if (legacyError) throw new Error(legacyError.message);
+  const ids = [...new Set([...(aliases || []).map(row => Number(row.exam_id)), ...(legacy || []).map(row => Number(row.id))])];
+  if (!ids.length) return {} as Record<string, { id: number; title: string }>;
+  const { data: exams, error } = await db.from("exams").select("id,title,status,doc_type,user_id").in("id", ids).eq("status", "Aprovada");
+  if (error) throw new Error(error.message);
+  const { data: catalog, error: catalogError } = await db.from("exam_catalog").select("source_url")
+    .in("source_url", [...new Set([...eligible, ...normalized])]);
+  if (catalogError) throw new Error(catalogError.message);
+  const catalogUrls = new Set((catalog || []).map(row => normalizeSourceUrl(row.source_url)));
+  const result: Record<string, { id: number; title: string }> = {};
+  for (const [index, url] of eligible.entries()) {
+    const id = (aliases || []).find(row => row.source_key === ownedKeys[index])?.exam_id ||
+      (aliases || []).find(row => row.source_key === keys[index])?.exam_id ||
+      (legacy || []).find(row => normalizeSourceUrl(row.source_url) === normalized[index])?.id;
+    const exam = (exams || []).find(row => Number(row.id) === Number(id));
+    if (!exam || exam.doc_type === "generated_session") continue;
+    if (!catalogUrls.has(normalized[index]) && !(await accessibleExam(db, userId, Number(exam.id)))) continue;
+    const { count, error: countError } = await db.from("questions").select("id", { count: "exact", head: true }).eq("exam_id", exam.id);
+    if (countError) throw new Error(countError.message);
+    if (!count || count < 5) continue;
+    result[url] = { id: Number(exam.id), title: String(exam.title || "Prova") };
+  }
+  return result;
 };
 
 const examDetail = async (db: ReturnType<typeof createClient>, examId: number) => {
@@ -408,6 +449,13 @@ Deno.serve(async (request) => {
       return json({ id: internalUser.id, email: internalUser.email, name: internalUser.name || "Concurseiro", picture: internalUser.picture || "", is_authenticated: true });
     }
     if (path === "api/v1/auth/logout" && request.method === "POST") return json({ ok: true });
+    if (path === "api/v1/exams/reuse-lookup" && request.method === "POST") {
+      const payload = await request.json() as { urls?: unknown };
+      if (!Array.isArray(payload.urls) || payload.urls.length > 50 || payload.urls.some(value => typeof value !== "string" || value.length > 2000)) {
+        return json({ error: "Informe até 50 fontes válidas." }, 400);
+      }
+      return json(await reusableExams(db, internalUser.id, payload.urls));
+    }
     if (path === "api/v1/auth/me" && request.method === "DELETE") {
       const { error } = await db.from("users").delete().eq("id", internalUser.id);
       if (error) return json({ error: error.message }, 400);
@@ -415,69 +463,29 @@ Deno.serve(async (request) => {
     }
 
     if (path === "api/v1/exams/import-local" && request.method === "POST") {
-      const payload = await request.json() as {
-        filename?: string;
-        title?: string;
-        data_base64?: string;
-        source_object?: string;
-        gabarito_url?: string | null;
-      };
-      let document: Record<string, unknown> = {};
-      if (payload.data_base64) {
-        try {
-          const binary = atob(payload.data_base64);
-          const text = new TextDecoder().decode(Uint8Array.from(binary, (character) => character.charCodeAt(0)));
-          const parsed = JSON.parse(text);
-          if (parsed && typeof parsed === "object") document = parsed as Record<string, unknown>;
-        } catch {
-          if (/\.json$/i.test(String(payload.filename || ""))) return json({ error: "O JSON da prova é inválido." }, 400);
-        }
+      try {
+        return json(await importProcessedExam(db, internalUser.id, await request.json(), importedMedia));
+      } catch (error) {
+        if (error instanceof ImportError) return json({ error: error.message }, error.status);
+        throw error;
       }
-      const rawQuestions = Array.isArray(document.questions) ? document.questions : [];
-      const title = String(payload.title || document.title || payload.filename || "Prova importada");
-      const hasAnswers = rawQuestions.filter((question) => String((question as Record<string, unknown>)?.correct_answer || "").trim()).length;
-      const { data: created, error: examError } = await db.from("exams").insert({
-        title,
-        status: rawQuestions.length ? "Aprovada" : "Arquivo recebido",
-        user_id: internalUser.id,
-        source_url: payload.source_object ? `oci://${payload.source_object}` : null,
-        gabarito_url: payload.gabarito_url || null,
-        has_official_answers: rawQuestions.length > 0 && hasAnswers === rawQuestions.length ? 1 : 0,
-        answer_key_source: hasAnswers ? "imported" : "none",
-        gabarito_coverage: rawQuestions.length ? (hasAnswers * 100) / rawQuestions.length : 0,
-        progress: 100,
-        progress_message: rawQuestions.length ? "Prova pronta" : "Arquivo recebido; extração local pendente",
-      }).select("id").single();
-      if (examError || !created) return json({ error: examError?.message || "Não foi possível criar a prova." }, 400);
-      const questionRows = [];
-      for (const [index, raw] of rawQuestions.entries()) {
-        const question = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
-        const images = (Array.isArray(question.images) ? question.images : []).map((value) => importedMedia(value, Number(created.id), index + 1, "q"));
-        const optionImages = question.option_images && typeof question.option_images === "object" ? question.option_images as Record<string, unknown> : {};
-        const resolvedOptionImages: Record<string, unknown[]> = {};
-        for (const [key, values] of Object.entries(optionImages)) {
-          resolvedOptionImages[key] = await Promise.all((Array.isArray(values) ? values : []).map((value, imageIndex) => importedMedia(value, Number(created.id), index + 1, `o${key}${imageIndex}`)));
-        }
-        questionRows.push({
-          exam_id: Number(created.id),
-          statement: String(question.statement || ""),
-          options: JSON.stringify(question.options && typeof question.options === "object" ? question.options : {}),
-          correct_answer: String(question.correct_answer || ""),
-          subject: String(question.subject || "Geral"),
-          images: JSON.stringify(await Promise.all(images)),
-          option_images: JSON.stringify(resolvedOptionImages),
-          numero_questao: String(question.numero_questao || index + 1),
-          question_index: index,
-          latex_support: question.latex_support ? 1 : 0,
-        });
+    }
+    if (path === "api/v1/search/catalog" && request.method === "POST") {
+      const payload = await request.json() as { query?: string; items?: Record<string, unknown>[] };
+      if (!Array.isArray(payload.items) || payload.items.length > 50) return json({ error: "Informe até 50 resultados de busca." }, 400);
+      const sources = new Map<string, Record<string, unknown>>();
+      for (const item of payload.items) {
+        if (!isPublicSourceUrl(item.url) || item.url.length > 500) continue;
+        const source_url = normalizeSourceUrl(item.url);
+        sources.set(source_url, { source_url, title: String(item.title || "Prova de concurso").slice(0, 300),
+          query_key: String(payload.query || "").slice(0, 100), gabarito_url: isPublicSourceUrl(item.gabarito_url) ? item.gabarito_url : null,
+          match_score: Number(item.match_score || 0), source: String(item.source || "web").slice(0, 50), created_at: nowIso() });
       }
-      if (questionRows.length) {
-        const { error: questionError } = await db.from("questions").insert(questionRows);
-        if (questionError) return json({ error: questionError.message }, 400);
+      if (sources.size) {
+        const { error } = await db.from("exam_catalog").upsert([...sources.values()], { onConflict: "source_url", ignoreDuplicates: true });
+        if (error) throw new Error(error.message);
       }
-      const { error: linkError } = await db.from("user_exams").upsert({ user_id: internalUser.id, exam_id: Number(created.id), created_at: nowIso() }, { onConflict: "user_id,exam_id" });
-      if (linkError) return json({ error: linkError.message }, 400);
-      return json({ exam_id: Number(created.id), title, status: rawQuestions.length ? "Aprovada" : "Arquivo recebido", progress: 100, message: rawQuestions.length ? "Prova importada e sincronizada no Oracle." : "PDF recebido; extraia as questões localmente para concluir a ingestão.", reused: false, already_in_library: true });
+      return json({ saved: sources.size });
     }
 
     const library = await loadLibrary(db, internalUser.id);
@@ -512,7 +520,15 @@ Deno.serve(async (request) => {
     if (examMatch) {
       const examId = Number(examMatch[1]);
       const suffix = examMatch[2] || "";
-      if (!(await accessibleExam(db, internalUser.id, examId))) return json({ error: "Prova não atribuída à sua conta." }, 403);
+      let canAccess = await accessibleExam(db, internalUser.id, examId);
+      if (!canAccess && suffix === "claim" && request.method === "POST") {
+        const { data: aliases, error: aliasError } = await db.from("exam_sources").select("source_url").eq("exam_id", examId);
+        if (aliasError) throw new Error(aliasError.message);
+        const { data: original } = await db.from("exams").select("source_url").eq("id", examId).single();
+        const reusable = await reusableExams(db, internalUser.id, [...(aliases || []).map(row => String(row.source_url)), String(original?.source_url || "")]);
+        canAccess = Object.values(reusable).some(exam => exam.id === examId);
+      }
+      if (!canAccess) return json({ error: "Prova não atribuída à sua conta." }, 403);
       if (!suffix && request.method === "GET") return json(await examDetail(db, examId));
       if (suffix === "progress" && request.method === "GET") {
         const { data: exam } = await db.from("exams").select("status,progress,progress_message,error_type").eq("id", examId).single();
@@ -532,33 +548,21 @@ Deno.serve(async (request) => {
       const examId = Number(payload.exam_id || 0);
       if (!(await accessibleExam(db, internalUser.id, examId))) return json({ error: "Prova não atribuída à sua conta." }, 403);
       const detail = await examDetail(db, examId);
-      const answers = payload.answers || {};
-      const detailedAnswers: Record<string, unknown> = {};
-      let score = 0;
-      for (const [index, question] of detail.questions.entries()) {
-        const key = question.numero_questao || String(index + 1);
-        const userAnswer = String(answers[key] || "").trim().toUpperCase();
-        const correct = String(question.correct_answer || "").trim().toUpperCase();
-        const isCorrect = Boolean(correct && userAnswer === correct);
-        if (isCorrect) score += 1;
-        detailedAnswers[key] = { question_id: question.id, user_answer: userAnswer, correct_answer: correct, is_correct: isCorrect, subject: question.subject };
-      }
-      const total = detail.questions.length;
-      const percentage = total ? (score * 100) / total : 0;
-      const { data: attempt, error } = await db.from("exam_attempts").insert({ exam_id: examId, score, total, percentage, elapsed_seconds: Number(payload.elapsed_seconds || 0), answers_json: JSON.stringify(answers), created_at: nowIso(), user_id: internalUser.id }).select("id").single();
+      if (!payload.answers || typeof payload.answers !== "object" || Array.isArray(payload.answers)) return json({ error: "Informe as respostas da prova." }, 400);
+      const elapsed = Number(payload.elapsed_seconds || 0);
+      if (!Number.isInteger(elapsed) || elapsed < 0) return json({ error: "O tempo de estudo é inválido." }, 400);
+      const result = gradeAttempt(detail.questions, payload.answers);
+      const { data: attempt, error } = await db.from("exam_attempts").insert({ exam_id: examId, score: result.score, total: result.total, percentage: result.percentage, elapsed_seconds: elapsed, answers_json: JSON.stringify(payload.answers), created_at: nowIso(), user_id: internalUser.id }).select("id").single();
       if (error) return json({ error: error.message }, 400);
-      return json({ attempt_id: Number(attempt.id), exam_id: examId, score, total, percentage, elapsed_seconds: Number(payload.elapsed_seconds || 0), detailed_answers: detailedAnswers, feedback_per_subject: {} });
+      return json({ attempt_id: Number(attempt.id), exam_id: examId, ...result, elapsed_seconds: elapsed });
     }
 
     if (path === "api/v1/stats/overview" && request.method === "GET") {
-      const attempts = library.attempts;
-      const totalQuestions = library.questions.length;
-      const totalCorrect = attempts.reduce((sum, attempt) => sum + Number(attempt.score || 0), 0);
-      const totalAnswered = attempts.reduce((sum, attempt) => sum + Number(attempt.total || 0), 0);
       const ranking = await loadRanking(db, internalUser);
-      const rankIndex = ranking.findIndex((entry) => entry.id === internalUser.id);
-      return json({ total_exams: library.exams.length, total_questions: totalQuestions, total_correct: totalCorrect, global_accuracy: totalAnswered ? Number(((totalCorrect * 100) / totalAnswered).toFixed(1)) : 0, streak: 0, study_time: "0m", rank: rankIndex >= 0 ? `${rankIndex + 1}º` : "-" });
+      const rankIndex = ranking.findIndex(entry => entry.id === internalUser.id);
+      return json({ ...studyOverview(library.attempts), rank: rankIndex >= 0 ? `${rankIndex + 1}º` : "—" });
     }
+
     if (path === "api/v1/ranking" && request.method === "GET") {
       const ranking = await loadRanking(db, internalUser);
       return json(ranking.map(({ id: _id, ...entry }) => entry));
@@ -605,7 +609,7 @@ Deno.serve(async (request) => {
         has_official_answers: true,
         gabarito_coverage: 100,
         gabarito_text: null,
-        questions: questions.map(questionPayload),
+        questions: questions.map((question, index) => questionPayload({ ...question, numero_questao: String(index + 1) })),
       });
     }
 
@@ -622,24 +626,33 @@ Deno.serve(async (request) => {
       return json({ available_questions: library.questions.length, subjects: [...subjects].map(([name, count]) => ({ name, count })), sources: [...sources].map(([id, value]) => ({ id, ...value })) });
     }
     if (path === "api/v1/custom-simulations" && request.method === "GET") {
-      const { data: sessions, error } = await db.from("generated_exam_sessions").select("exam_id,kind,created_at").eq("kind", "custom");
-      if (error) return json({ error: error.message }, 400);
-      return json((sessions || []).map((session) => {
-        const exam = library.exams.find((row) => Number(row.id) === Number(session.exam_id));
-        return { id: Number(session.exam_id), title: String(exam?.title || "Simulado"), kind: String(session.kind), created_at: session.created_at, question_count: 0, attempt_count: 0, best_score: null, last_score: null };
+      return json(library.sessions.filter(session => session.kind === "custom").map(session => {
+        const summary = shaped.summaries.find(row => row.id === Number(session.exam_id));
+        return { ...summary, id: Number(session.exam_id), title: summary?.title || "Simulado personalizado", kind: "custom", created_at: session.created_at };
       }));
     }
     if (path === "api/v1/exams/generate_custom" && request.method === "POST") {
       const url = new URL(request.url);
-      const count = Math.max(1, Math.min(100, Number(url.searchParams.get("count") || 20)));
+      const count = Number(url.searchParams.get("count") || 20);
+      if (!Number.isInteger(count) || count < 5 || count > 100) return json({ error: "Escolha de 5 a 100 questões." }, 400);
       const subjects = new Set(url.searchParams.getAll("subjects").map((value) => value.trim()).filter(Boolean));
       const sourceId = Number(url.searchParams.get("source_exam_id") || 0);
-      const candidates = library.questions.filter((question) => (!subjects.size || subjects.has(String(question.subject || "Geral"))) && (!sourceId || Number(question.exam_id) === sourceId)).slice(0, count);
+      const eligible = library.questions.filter(question => Object.keys(parseJson(question.options, {})).length >= 2 && String(question.correct_answer || "").trim() &&
+        (!subjects.size || subjects.has(String(question.subject || "Geral"))) && (!sourceId || Number(question.exam_id) === sourceId));
+      if (!eligible.length) return json({ error: "Nenhuma questão válida para os filtros escolhidos." }, 400);
+      if (url.searchParams.get("strict") === "true" && eligible.length < count) return json({ error: `Há apenas ${eligible.length} questões válidas para os filtros escolhidos; reduza a quantidade ou amplie a seleção.` }, 400);
+      for (let index = eligible.length - 1; index > 0; index--) {
+        const target = Math.floor(Math.random() * (index + 1));
+        [eligible[index], eligible[target]] = [eligible[target], eligible[index]];
+      }
+      const candidates = eligible.slice(0, count);
       const { data: created, error: createError } = await db.from("exams").insert({ title: "Simulado personalizado", status: "Sessão", user_id: internalUser.id, has_official_answers: 1, answer_key_source: "generated", doc_type: "generated_session", gabarito_coverage: 100, progress: 100, progress_message: "Sessão pronta" }).select("id").single();
       if (createError || !created) return json({ error: createError?.message || "Não foi possível criar o simulado." }, 400);
       const { error: sessionError } = await db.from("generated_exam_sessions").insert({ exam_id: created.id, kind: "custom", question_ids_json: JSON.stringify(candidates.map((question) => question.id)), created_at: nowIso() });
       if (sessionError) return json({ error: sessionError.message }, 400);
-      return json({ id: Number(created.id), title: "Simulado personalizado", status: "Sessão", has_official_answers: true, gabarito_coverage: 100, questions: candidates.map(questionPayload) });
+      const { error: linkError } = await db.from("user_exams").upsert({ user_id: internalUser.id, exam_id: Number(created.id), created_at: nowIso() }, { onConflict: "user_id,exam_id" });
+      if (linkError) return json({ error: linkError.message }, 400);
+      return json({ id: Number(created.id), title: "Simulado personalizado", status: "Sessão", has_official_answers: true, gabarito_coverage: 100, questions: candidates.map((question, index) => questionPayload({ ...question, numero_questao: String(index + 1) })) });
     }
 
     if (path === "api/v1/search" && request.method === "GET") {

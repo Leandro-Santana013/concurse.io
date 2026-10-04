@@ -150,6 +150,7 @@ export interface ExamIngestResult {
   message: string;
   reused: boolean;
   already_in_library: boolean;
+  processing_location?: 'device' | 'cloud';
 }
 
 export interface ActiveDownload {
