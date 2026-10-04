@@ -8,25 +8,48 @@ Supabase como fonte de identidade, biblioteca, provas, questões e tentativas,
 e arquivos de prova, gabarito e imagens no Oracle. O SQLite do Android guarda
 somente a fila e os dados de trabalho da extração.
 
-O APK `0.1.5/code6` foi gerado e assinado no worktree `p2p-desktop`, branch
-`codex/concurse-app`, em 04/10/2026, e publicado no GitHub no commit `73f8cee`.
-A publicação operacional da função no Supabase e o teste no aparelho continuam
-pendentes de verificação; não considerar a migração operacionalmente concluída.
+A revisão Android atual é `0.1.6/code7`, preparada no worktree `p2p-desktop`,
+branch `codex/concurse-app`. Ela corrige a inicialização do motor, a busca,
+a extração de gabarito e a navegação. O usuário informou ter substituído a
+função `app-gateway` no painel Supabase; isso ainda não foi confirmado por
+uma verificação remota autenticada. O novo APK também não foi validado no
+Redmi 14C, que não está disponível por ADB. O Android permanece beta e a
+migração não deve ser considerada operacionalmente concluída.
 
 ## Implementação e evidências
 
 | Fluxo | Alteração | Verificação atual |
 | --- | --- | --- |
-| Inicialização | Mantém a remoção da configuração inválida `plugins.opener.open` que abortava a versão `0.1.2/code3`. Falhas do motor são registradas sem encerrar a interface. | APK assinado, ARM64, Android mínimo 24 e alvo 36. A versão instalada no Redmi antes desta atualização era `0.1.3/code4`. |
+| Inicialização | Mantém a remoção de `plugins.opener.open`, que abortava `0.1.2/code3`. Corrige a falha do OpenSSL registrada no Redmi antes de o motor iniciar: `CRYPTOGRAPHY_OPENSSL_NO_LEGACY=1` evita a carga do provedor legado, preservando AES-GCM e SHA-256 no provedor padrão. | O diagnóstico no Redmi identificou o motor indisponível, impedindo a busca local. O teste de bootstrap cobre a configuração; a abertura de `0.1.6/code7` no aparelho está pendente. |
 | Login | Preserva o carrossel inicial, a verificação do serviço Auth e o retorno Google por `concurse://oauth/callback`. A identidade usada pela biblioteca vem do serviço central. | Testes de login passaram. O usuário confirmou Google e retorno na versão anterior; ainda falta verificar o APK novo. |
-| Busca e pesquisa | Usa o motor embarcado, registra resultados públicos no catálogo central e consulta provas já extraídas para reutilização. | Testes de busca do backend passaram. O código e o bundle das novas rotas do gateway estão publicados no GitHub; o deploy operacional aguarda confirmação. |
-| PDF, link e OCR | Empacota Python, FastAPI, PyMuPDF, NumPy, OpenCV, ONNX Runtime e RapidOCR. Executa o mesmo worker de provas do desktop, em uma fila de processamento por vez. | Compilação completa passou. Auditoria do APK encontrou 123 ELFs ARM64, todos com alinhamento para páginas de 16 KB, incluindo as bibliotecas dentro dos arquivos Python. Teste PDF/OCR para o aparelho foi compilado, mas ainda não executado. |
+| Busca e pesquisa | Usa o motor embarcado, registra resultados públicos no catálogo central e reutiliza provas extraídas. Reconhece `Fiscal de Postura IDCAP`, normaliza `idecap` para IDCAP e compara cargo, cidade, ano e banca. O fallback pode localizar a cópia pública oficial correspondente, sem contornar CAPTCHA. | Testes cobrem a consulta de Fiscal de Postura, a exclusão de cargos diferentes e a associação da cópia oficial correta. A prova IDCAP de Ibirataia foi verificada; a consulta pelo APK e a reutilização remota autenticada permanecem pendentes. |
+| PDF, link e OCR | Empacota Python, FastAPI, PyMuPDF, NumPy, OpenCV, ONNX Runtime e RapidOCR. Executa o mesmo worker de provas do desktop, em uma fila de processamento por vez. | O caderno real foi processado pelos caminhos Rust e Python: 50 questões consecutivas, todas com quatro alternativas completas. O caminho Python é usado pelo Android; isso ainda precisa ser confirmado no aparelho. |
+| Gabarito e alternativas | Prioriza as respostas explícitas da prova matriz antes das listas genéricas de letras. Preserva alternativas de associação e o gabarito entre páginas. O cache foi atualizado para `legacy-parse-cache-v12-idcap-embedded-answers`. | Nos dois caminhos, as 50 respostas coincidiram com a prova matriz oficial. Q1 é D; Q49 é B e mantém as quatro permutações completas. As regressões cobrem os erros identificados. |
 | Progresso e recuperação | Consulta autenticada substitui SSE sem Bearer. A fila retoma trabalhos interrompidos; a confirmação de publicação remove o trabalho concluído da lista ativa. | Testes do acompanhamento e da passagem do ID de trabalho para o ID central passaram. |
-| Publicação da prova | Envia PDF, gabarito e imagens ao Oracle, publica as questões no Supabase e aprova somente após persistência. Repetições e envio concorrente de prova pública reutilizam o mesmo registro. | Testes cobrem persistência, repetição, isolamento de uploads privados, reutilização entre contas, falha parcial e concorrência. O código está publicado; a publicação operacional remota aguarda confirmação. |
+| Publicação da prova | Envia PDF, gabarito e imagens ao Oracle, publica as questões no Supabase e aprova somente após persistência. Repetições e envio concorrente de prova pública reutilizam o mesmo registro. | Testes cobrem persistência, repetição, isolamento de uploads privados, reutilização entre contas, falha parcial e concorrência. O usuário informou ter substituído a função; a confirmação autenticada da publicação e leitura remota permanece pendente. |
 | Biblioteca | Sempre lê os vínculos e os dados centrais; atualiza a lista quando uma extração é publicada. | Testes da biblioteca passaram. Validação autenticada da nova função e do APK permanece pendente. |
 | Respostas, erros, simulados e progresso de estudo | Corrige por ID de questão, preserva questões anuladas, calcula matérias e estatísticas de tentativas reais e usa as questões da biblioteca nos simulados. | Testes de correção, simulados, navegação e estatísticas passaram. Verificação remota pendente. |
-| Perfil e ranking | Usa metadados do Supabase Auth quando os campos legados estão vazios ou criptografados. Exibe participantes com tentativas reais. | Testes de apresentação de identidade passaram. O código está publicado; a publicação operacional remota aguarda confirmação. |
-| Navegação | Cinco ícones em uma única linha: Início, Biblioteca, Buscar, Progresso e Perfil. Menu hambúrguer com os demais acessos. | Interface compilada e testes de navegação passaram. Ainda falta inspeção no aparelho. |
+| Perfil e ranking | Usa metadados do Supabase Auth quando os campos legados estão vazios ou criptografados. Exibe participantes com tentativas reais. | Testes de apresentação de identidade passaram; o resultado da função substituída pelo usuário ainda precisa de confirmação autenticada. |
+| Navegação e aparência | O topo compacto A, aprovado pelo usuário, respeita as áreas do sistema por insets nativos do Android. Cinco destinos permanecem em uma linha: Início, Biblioteca, Buscar, Progresso e Perfil. O menu complementar contém Caderno de erros, Ranking e Importar prova. O ícone C com check tem duas variantes para os 12 temas. | Os testes de navegador verificam layout responsivo, menu complementar, foco, Escape e navegação. A inspeção do novo layout e dos insets no Redmi continua pendente. |
+
+## Prova real de referência
+
+O caderno [IDCAP 2024 — Fiscal de Obras, Posturas e Meio Ambiente de
+Ibirataia/BA](https://arquivos.qconcursos.com/prova/arquivo_prova/131135/idcap-2024-prefeitura-de-ibirataia-ba-fiscal-de-obras-posturas-e-meio-ambiente-prova.pdf)
+foi comparado com a [prova matriz publicada pelo
+IDCAP](https://anexos.cdn.selecao.net.br/uploads/227/concursos/155/anexos/tRaWy5eLSx1XAx1SsL7AT1n7QmZ6lDeYUhh3Qfe4.pdf),
+listada no [concurso 001/2024](https://idcap.selecao.net.br/informacoes/155/).
+As duas URLs públicas responderam com o mesmo PDF: 12 páginas, 341.766 bytes,
+50 questões e SHA-256
+`34891104503e03d489554f35a3e36acf9405e4f8744b7952ddccea438e30b7e0`.
+A prova matriz contém as 50 marcações explícitas de resposta correta.
+
+Não foi usado um arquivo de gabarito separado sem confirmar seu conteúdo.
+O endereço de gabarito derivado do Qconcursos devolveu o mesmo caderno; o
+gabarito individual no portal da banca exigia login. A conferência utilizou
+as respostas da prova matriz pública, incluindo Q1 D, Q48 C, Q49 B e Q50 A.
+O parser completo preservou as alternativas de Q49: A `C, B, A.`, B `A, B, C.`,
+C `B, A, C.` e D `A, C, B.`.
 
 ## Ranking
 
@@ -35,7 +58,37 @@ A consulta somente de leitura à base confirmou que a entrada genérica
 com 25 acertos em 40 questões. Não foi encontrada uma conta de demonstração
 `Concurseiro App` ou `Dev` para excluir. Nenhuma conta real foi removida.
 
-## Artefatos
+## Artefatos desta revisão
+
+- `downloads/concurse-mobile-aarch64-release-v0.1.6-code7-16k.apk`:
+  revisão beta ARM64, Android mínimo 24, alvo 36, versionCode 7;
+  158.110.064 bytes, SHA-256
+  `613dcd0886b4f7b7f7e521ae1b1a18651fb3050479d547d304397ea654dcb8fc`.
+- O [inventário de downloads](../downloads/README.md) e
+  [`SHA256SUMS.txt`](../downloads/SHA256SUMS.txt) registram os arquivos de
+  distribuição e seus hashes. A assinatura v2/v3 foi verificada e coincide
+  com code6. O APK assinado passou em `zipalign -c -P 16 4`; a auditoria
+  confirmou 123 ELFs ARM64 com alinhamento de 16 KB e 102 arquivos permitidos
+  do motor, sem banco de dados ou chave privada no pacote.
+- `downloads/app-gateway-mobile-hard-switch.ts`: pacote único, gerado dos
+  cinco arquivos de `supabase/functions/app-gateway`, para publicação pelo
+  editor do painel. Os arquivos originais continuam disponíveis para manutenção.
+- `desktop/engine/android/EngineSmokeTest.kt`: teste Android que inicia a
+  aplicação, verifica a API do motor, AES-GCM, sessão assinada, backend de busca,
+  margens das barras do sistema, texto de PDF e OCR. Foi compilado contra a
+  variante release code7 e assinado com o mesmo certificado do APK principal;
+  a execução no aparelho está pendente.
+- `desktop/engine/android/audit_apk.py`: verifica também os ELFs dentro dos
+  arquivos Python e restringe os arquivos do motor à lista de fontes permitida.
+
+Os instaladores Windows `0.1.2` não foram recompilados nesta revisão. As
+alterações nos componentes e ícones compartilhados estão nas fontes e só
+alteram esses binários após um novo build.
+
+## Histórico do APK 0.1.5/code6
+
+O APK `0.1.5/code6` foi gerado e assinado em 04/10/2026 no mesmo worktree e
+publicado no GitHub no commit `73f8cee`.
 
 - `downloads/concurse-mobile-aarch64-release-v0.1.5-code6-16k.apk`:
   158.568.816 bytes; SHA-256
@@ -43,50 +96,49 @@ com 25 acertos em 40 questões. Não foi encontrada uma conta de demonstração
 - A assinatura coincide com a chave das versões anteriores, permitindo
   atualização com preservação dos dados. O alinhamento do APK assinado
   também passou na verificação do Android SDK para páginas de 16 KB.
-- `downloads/app-gateway-mobile-hard-switch.ts`: pacote único, gerado dos
-  cinco arquivos de `supabase/functions/app-gateway`, para publicação pelo
-  editor do painel. Os arquivos originais continuam disponíveis para manutenção.
-- `desktop/engine/android/EngineSmokeTest.kt`: teste Android que inicia a
-  aplicação, verifica a API do motor, lê texto de PDF e executa OCR de imagem.
-- `desktop/engine/android/audit_apk.py`: verifica também os ELFs dentro dos
-  arquivos Python e restringe os arquivos do motor à lista de fontes permitida.
+- A auditoria de code6 encontrou 123 ELFs ARM64 com alinhamento para páginas
+  de 16 KB, incluindo as bibliotecas dentro dos arquivos Python, e não
+  encontrou banco de dados ou chave privada no pacote.
 
-A auditoria não encontrou banco de dados ou chave privada no APK.
+Essa auditoria de empacotamento não provava que o motor iniciava no Redmi.
+A falha do OpenSSL foi identificada depois na captura do aparelho e motivou
+a correção incluída na revisão code7.
 
 ## Verificações e pendências
 
-O backend passou em 29 testes de biblioteca, busca e gabarito, com um teste
-ignorado. Os 53 testes frontend passaram em dois grupos: 48 testes de
-14 arquivos no pool `threads` e os cinco testes de busca no pool `vmThreads`.
-Os relatórios estão em `build/outputs/diagnostics/frontend-unit-threads.json`
-e `frontend-search-vm-threads.json`, dentro do aplicativo Android gerado.
-A busca não iniciava seu worker no primeiro pool. O segundo pool, aplicado
-à suíte inteira, falhou em testes de mocks e Web Crypto que passam no pool
-normal; por isso foi usado somente para a busca. Não considerar essa
-verificação como uma execução integral bem-sucedida em um único pool.
+Na revisão code7, o backend passou em 29 testes, com um ignorado. As
+verificações do pipeline e das regressões passaram em 52 testes. Passaram
+também 20 testes frontend e seis testes de navegador. A prova real foi
+conferida nos caminhos Rust e Python, além das regressões com os casos de
+gabarito e alternativas. Os testes de navegador incluem inspeção visual do
+layout responsivo; não substituem a execução do APK no Android.
 
-O teste Android foi compilado contra a variante release do aplicativo e
-assinado com a mesma chave do APK principal; sua assinatura foi verificada.
-A tentativa de atualizar o Redmi não instalou o APK: o aparelho deixou de
-aparecer na conexão USB. Não houve desinstalação nem limpeza de dados.
+No histórico de code6, 53 testes frontend passaram em dois grupos: 48 no
+pool `threads` e cinco de busca no pool `vmThreads`. Não foi uma execução
+integral bem-sucedida em um único pool. O teste Android foi compilado e
+assinado naquela revisão, mas não executado no aparelho.
 
-O usuário autorizou acessar o painel Supabase e publicar a função. O navegador
-continua rejeitando o acesso por uma preferência salva que bloqueia
-`supabase.com`. Em 04/10, uma regra específica para `https://supabase.com`
-foi salva pela interface do Codex como "Requer aprovação". A consulta somente
-de leitura à configuração confirmou `access = "allow"`; mesmo assim, a
-ferramenta do navegador manteve a recusa pelo bloqueio anterior. Após o usuário
-liberar a janela, a conexão do navegador foi desativada e reativada pela
-interface; o estado ativado foi confirmado. O usuário informou que a regra já
-está em "Sempre permitir". Depois de reabrir a sessão, o painel ficou visível e
-listou `app-gateway`, mas uma nova tentativa pelo controle normal continuou
-recusada antes de expor a página à automação, mesmo após o usuário informar que
-liberou todas as permissões e reiniciou completamente o aplicativo. Não houve
-acesso por outra superfície nem publicação. Antes de publicar, conferir o
-código remoto para preservar eventuais alterações mais recentes.
+A tentativa anterior de atualizar o Redmi não instalou o APK porque o
+aparelho deixou de aparecer na conexão USB. Nesta revisão, ele apareceu
+brevemente no ADB após restabelecer a ponte, mas voltou a perder a conexão.
+A instalação de code7 retornou `device not found`; não se afirma instalação
+nem funcionamento do APK code7. Não houve desinstalação ou limpeza de dados.
 
-Após liberar o painel e reconectar o Redmi, verificar inicialização, PDF/OCR,
-login, busca, ingestão por link e arquivo, gabarito, publicação no Oracle e
+A consulta somente de leitura ao PostgreSQL central não conseguiu concluir
+uma conexão com a configuração existente. Nenhuma escrita foi executada.
+Não foi possível conferir se já existe um registro de Ibirataia e se suas
+respostas e alternativas correspondem à matriz corrigida; a reutilização
+desse registro remoto deve ser verificada com a sessão do aparelho.
+
+A automação do painel foi bloqueada anteriormente por uma regra de acesso.
+Depois disso, o usuário informou ter substituído a função manualmente no
+Supabase. O estado atual da pendência é a validação remota autenticada das
+novas rotas, não uma nova solicitação de autorização para publicar.
+
+Após reconectar o Redmi, verificar inicialização do motor e da API local,
+PDF/OCR, login, busca, ingestão por link e arquivo, gabarito, publicação no Oracle e
 Supabase, biblioteca, resolução, erros, simulados, estatísticas, ranking e
-navegação. Não usar apenas compilação ou contagem de questões como prova de
-que todos os fluxos foram concluídos.
+navegação, incluindo as áreas do sistema e o menu complementar. Confirmar
+também os fluxos remotos com uma sessão autenticada. Não usar apenas
+compilação, testes de navegador ou contagem de questões como prova de que
+todos os fluxos foram concluídos.

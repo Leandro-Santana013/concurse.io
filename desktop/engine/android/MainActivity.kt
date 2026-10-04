@@ -3,6 +3,9 @@ package io.concurse.desktop
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.enableEdgeToEdge
+import androidx.core.graphics.Insets
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import java.io.File
@@ -12,7 +15,24 @@ class MainActivity : TauriActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        reserveSystemBarSpace()
         startProcessingEngine()
+    }
+
+    private fun reserveSystemBarSpace() {
+        val content = findViewById<android.view.View>(android.R.id.content)
+        ViewCompat.setOnApplyWindowInsetsListener(content) { view, windowInsets ->
+            val types = WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            val insets = windowInsets.getInsets(types)
+            view.setPadding(insets.left, insets.top, insets.right, insets.bottom)
+            // Native padding owns system-bar clearance on every WebView version.
+            // Forward zeroed system insets to avoid counting that space twice,
+            // while preserving keyboard updates and visual viewport resizing.
+            WindowInsetsCompat.Builder(windowInsets)
+                .setInsets(types, Insets.NONE)
+                .build()
+        }
+        ViewCompat.requestApplyInsets(content)
     }
 
     private fun startProcessingEngine() {

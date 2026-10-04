@@ -4,6 +4,14 @@ Página estática de apresentação e downloads. Preserva a identidade de leitur
 do aplicativo, com temas claro e escuro, prévia ilustrativa das funções,
 instruções de instalação e FAQ.
 
+O símbolo é o C com check usado nos aplicativos, em preto e branco. Os arquivos
+`assets/concurse-icon-light-64.png` e `assets/concurse-icon-dark-64.png` são
+cópias das variantes de `frontend/public/`, sem redesenhar o símbolo. Cabeçalho,
+prévia, rodapé e favicon acompanham a escolha claro/escuro ou a preferência do
+sistema. A imagem de compartilhamento usa a variante clara; ao alterar
+`assets/social-card.svg`, renderize novamente `assets/social-card.png` no
+navegador, em 1200 × 630 pixels.
+
 As fontes Inter e Source Serif 4 são hospedadas junto da página; suas licenças
 Open Font License ficam em `assets/fonts/`. A página não usa analytics, cookies
 de rastreamento nem credenciais do Supabase.

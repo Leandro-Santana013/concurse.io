@@ -53,7 +53,7 @@ def test_cache_key_changes_with_parser_inputs(tmp_path, monkeypatch):
     _, second = prepare_parse_source(b"same-pdf-changed", **kwargs)
     _, third = prepare_parse_source(b"same-pdf", **{**kwargs, "force_ocr": True})
 
-    assert PARSE_CACHE_VERSION == "legacy-parse-cache-v11-numbered-source-context"
+    assert PARSE_CACHE_VERSION == "legacy-parse-cache-v12-idcap-embedded-answers"
     assert first != second
     assert first != third
 

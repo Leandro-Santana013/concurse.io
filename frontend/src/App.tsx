@@ -14,6 +14,7 @@ import { Navbar } from './components/layout/Navbar';
 import { ProgressLayout } from './components/layout/ProgressLayout';
 import { Sidebar } from './components/layout/Sidebar';
 import { ToastViewport } from './components/ui/ToastViewport';
+import { BrandIcon } from './components/ui/BrandIcon';
 import { useExam } from './context/ExamContext';
 import { useAuth } from './context/AuthContext';
 import { useUI } from './context/UIContext';
@@ -75,7 +76,7 @@ const ProtectedRoute: React.FC = () => {
   if (status === 'loading') {
     return (
       <main className="auth-load-state" aria-busy="true">
-        <img className="brand-symbol brand-logo-image" src="/concurse-icon-64.png" alt="" width={28} height={28} />
+        <BrandIcon className="brand-symbol brand-logo-image" width={28} height={28} />
         <span className="ui-loader" aria-hidden="true" />
         <p>Preparando seu espaço de estudo…</p>
       </main>

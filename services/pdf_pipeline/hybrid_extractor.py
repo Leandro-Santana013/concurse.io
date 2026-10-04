@@ -770,7 +770,17 @@ def extract_options_from_chunk(
         valid_sequences.sort(key=lambda x: x[0], reverse=True)
         return valid_sequences[0][1]
 
-    seq = find_valid_sequence(matches, len(chunk))
+    # Os rótulos A./B./C. de uma coluna de associação e as letras dentro das
+    # respostas "C, B, A." não são marcadores das alternativas. Quando o
+    # caderno fornece quatro rótulos explícitos (A)..(D), essa sequência
+    # conserva a coluna no enunciado e cada permutação na alternativa certa.
+    parenthesized = [
+        (match.group(1).upper(), match.start(), match.end())
+        for match in re.finditer(r"(?m)^[ \t]*\(([A-Ea-e])\)[ \t]*", chunk)
+    ]
+    seq = find_valid_sequence(parenthesized, len(chunk))
+    if len(seq or []) < 4:
+        seq = find_valid_sequence(matches, len(chunk))
     if not seq:
         return {}, None
 
@@ -2151,6 +2161,11 @@ def parse_exam_document(
         return []
 
     document_native_text = "\n".join(page.get_text() for page in doc)
+    declared_native_option_labels = (
+        "ABCD"
+        if re.search(r"(?i)\b(?:4|quatro)\s+alternativas\b", document_native_text)
+        else "ABCDE"
+    )
     image_counts = [len(page.get_images(full=True)) for page in doc]
     native_question_chunks = _extract_native_question_chunks(doc)
 
@@ -2655,8 +2670,8 @@ def parse_exam_document(
                         preserve_native_word_boundaries=True,
                     )
                     if (
-                        set(text_opts) == set("ABCDE")
-                        and all(str(text_opts.get(label) or "").strip() for label in "ABCDE")
+                        set(text_opts) == set(declared_native_option_labels)
+                        and all(str(text_opts.get(label) or "").strip() for label in declared_native_option_labels)
                         and len(str(text_stmt or "").strip()) > 15
                     ):
                         native_text_candidate = (text_opts, text_stmt)
@@ -3241,7 +3256,14 @@ def parse_exam_document(
         options = {}
         is_certo_errado = False
 
-        if valid_seq and len(valid_seq) >= 2:
+        explicit_options, explicit_statement = ({}, None)
+        if len(re.findall(r"(?m)^[ \t]*\([A-Ea-e]\)", chunk)) >= 4:
+            explicit_options, explicit_statement = extract_options_from_chunk(chunk)
+
+        if len(explicit_options) >= 4 and explicit_statement is not None:
+            options = explicit_options
+            enunciado = clean_text_artifacts(explicit_statement)
+        elif valid_seq and len(valid_seq) >= 2:
             first_opt_idx = valid_seq[0].start()
             raw_enunciado = chunk[:first_opt_idx].strip()
 
@@ -3278,6 +3300,18 @@ def parse_exam_document(
                 is_certo_errado = True
                 options = {'C': 'Certo', 'E': 'Errado'}
                 enunciado = chunk_clean
+
+        # No Android o parser Python deve conservar também a última letra de
+        # permutações curtas. O texto remontado pode limpar um "B." isolado
+        # como rodapé, enquanto o bloco original da questão o conserva.
+        native_chunk = native_text_question_chunks.get(q_num)
+        if declared_native_option_labels == "ABCD" and native_chunk:
+            native_options, _ = extract_options_from_chunk(
+                native_chunk,
+                preserve_native_word_boundaries=True,
+            )
+            if set(native_options) == set("ABCD") and all(native_options.values()):
+                options = native_options
 
         # Fórmulas KaTeX no enunciado
         formatted_enunciado, has_latex_enunciado = format_latex_formulas(enunciado)

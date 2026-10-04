@@ -1,5 +1,5 @@
 {
-  "version": "0.1.5",
+  "version": "0.1.6",
   "build": {
     "beforeDevCommand": "npm --prefix ../frontend run dev -- --host 0.0.0.0",
     "beforeBuildCommand": "node scripts/prepare-android-engine.mjs && npm --prefix ../frontend run build:mobile"
@@ -8,7 +8,7 @@
     "externalBin": [],
     "android": {
       "minSdkVersion": 24,
-      "versionCode": 6
+      "versionCode": 7
     }
   },
   "plugins": {

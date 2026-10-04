@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 
-PARSE_CACHE_VERSION = "legacy-parse-cache-v11-numbered-source-context"
+PARSE_CACHE_VERSION = "legacy-parse-cache-v12-idcap-embedded-answers"
 
 
 def _env_flag(name: str, default: bool) -> bool:

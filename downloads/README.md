@@ -1,7 +1,7 @@
 # Arquivos para download
 
 Esta pasta reúne os artefatos publicados na branch `codex/concurse-app`. O APK
-Android 0.1.5/code6 e o bundle do gateway estão no GitHub. Os nomes mantêm a
+Android 0.1.6/code7 e o bundle do gateway estão no GitHub. Os nomes mantêm a
 versão real gravada no instalador. Verifique o arquivo `SHA256SUMS.txt` antes
 de instalar.
 
@@ -9,9 +9,10 @@ A [página pública de apresentação e instalação](https://leandro-santana013
 usa os mesmos artefatos deste inventário. O código e as instruções de publicação ficam em
 [`landing/README.md`](../landing/README.md).
 
-Os ícones do código-fonte foram atualizados para preto e branco em 04/10/2026.
-Os instaladores desta pasta mantêm o ícone embutido na compilação original;
-a atualização dos arquivos de imagem não altera esses binários.
+O APK code7 inclui o ícone correto C com check em preto e branco. A interface
+troca entre branco no preto e preto no branco conforme os 12 temas disponíveis.
+Os instaladores Windows 0.1.2 preservam o ícone da compilação original; suas
+fontes compartilhadas já usam as novas variantes, mas não foram recompilados.
 
 ## Windows
 
@@ -30,7 +31,8 @@ Os instaladores `0.1.0` anteriores permanecem disponíveis para retrocesso.
 
 Os arquivos de download desta pasta são:
 
-- `concurse-mobile-aarch64-release-v0.1.5-code6-16k.apk`: APK Android atual.
+- `concurse-mobile-aarch64-release-v0.1.6-code7-16k.apk`: APK Android atual, beta.
+- `concurse-mobile-aarch64-release-v0.1.5-code6-16k.apk`: APK anterior com motor embarcado e falha de inicialização do OpenSSL.
 - `concurse-mobile-aarch64-release-v0.1.4-code5-16k.apk`: APK Android anterior.
 - `concurse-mobile-aarch64-release-v0.1.3-code4-16k.apk`: APK Android de
   recuperação, sem o motor embarcado.
@@ -48,26 +50,32 @@ Os arquivos de download desta pasta são:
 ## Android
 
 O novo arquivo é
-[`concurse-mobile-aarch64-release-v0.1.5-code6-16k.apk`](concurse-mobile-aarch64-release-v0.1.5-code6-16k.apk):
-versão `0.1.5`, código Android `6`, ABI `arm64-v8a` e alinhamento de 16 KB.
+[`concurse-mobile-aarch64-release-v0.1.6-code7-16k.apk`](concurse-mobile-aarch64-release-v0.1.6-code7-16k.apk):
+versão `0.1.6`, código Android `7`, ABI `arm64-v8a` e alinhamento de 16 KB.
 Foi gerado e assinado localmente com a mesma chave de desenvolvimento do APK
-anterior, permitindo instalá-lo como atualização. O arquivo está publicado no
-GitHub no commit `73f8cee`; os novos fluxos ainda precisam de confirmação do
-deploy da função do Supabase e de teste no aparelho. A tentativa de atualização
-por USB não instalou o APK, pois o Redmi estava desconectado. Os dados do
-aplicativo foram preservados.
+anterior, permitindo instalá-lo como atualização. Tem 158.110.064 bytes e SHA-256
+`613dcd0886b4f7b7f7e521ae1b1a18651fb3050479d547d304397ea654dcb8fc`.
+O estado dos testes no Redmi e das rotas autenticadas está no
+[registro da migração](../docs/mobile-migration-audit.md).
+
+Esta revisão corrige o motor que falhava antes de iniciar por causa do
+provedor legado do OpenSSL. Corrige a busca de Fiscal de Postura/IDCAP,
+inclusive `idecap`, exclui cargos diferentes e localiza a cópia pública oficial
+do mesmo caderno quando disponível. O parser preserva as 50 respostas e as
+alternativas completas da matriz IDCAP de Ibirataia 2024; o cache foi renovado.
 
 O APK inclui o motor de extração e OCR, usando a mesma lógica de processamento
 de provas do desktop. O Supabase mantém a biblioteca, questões e tentativas;
 os arquivos são enviados ao Oracle quando a extração termina. A barra inferior
-agora contém cinco ícones em uma única linha, com menu hambúrguer no topo.
+contém cinco ícones em uma única linha. O topo compacto aprovado fica abaixo
+das barras do Android, com menu para revisão, ranking e importação.
 A auditoria verificou 123 bibliotecas ARM64, incluindo as dos arquivos Python,
 com alinhamento para páginas de 16 KB e sem bancos ou chaves privadas no pacote.
 
 O arquivo [`app-gateway-mobile-hard-switch.ts`](app-gateway-mobile-hard-switch.ts)
 reúne as alterações da função central para o editor do Supabase e está publicado
-no mesmo commit. O deploy e o estado de sucesso no painel do Supabase ainda não
-foram verificados por esta sessão.
+na branch. O usuário informou ter substituído a função no painel do Supabase;
+a confirmação remota autenticada permanece pendente.
 O [registro da migração](../docs/mobile-migration-audit.md) distingue os testes
 concluídos das verificações pendentes.
 
@@ -93,8 +101,9 @@ permanece disponível; essa versão não contém o motor de processamento Androi
 A falha de DNS do login em 03/10/2026 foi resolvida após o usuário retomar o
 projeto Supabase. O serviço Auth e o redirecionamento para o Google foram
 verificados remotamente. O usuário também confirmou que o Google abriu e
-retornou ao aplicativo na versão instalada 0.1.3. Os testes visuais no navegador
-não foram realizados porque a permissão de acesso foi negada.
+retornou ao aplicativo na versão instalada 0.1.3. O topo compacto atual foi
+validado no navegador em telas de 320 px, 375 px, paisagem e desktop;
+esses testes não substituem a execução no Android.
 
 O novo APK é destinado a diagnóstico. A distribuição de produção exige
 validação no aparelho e uma chave de release própria.
@@ -139,6 +148,7 @@ junto com os artefatos desta pasta.
 - `frontend/src/components/layout/Navbar.tsx`
 - `frontend/src/components/layout/Sidebar.tsx`
 - `frontend/src/components/layout/navigation.ts`
+- `frontend/src/components/ui/BrandIcon.tsx`
 - `frontend/src/index.css`
 - `frontend/src/services/api.ts`
 - `frontend/src/services/supabase.ts`
@@ -146,6 +156,12 @@ junto com os artefatos desta pasta.
 - `app_core/async_worker.py`
 - `routes/api_v1/exam_api.py`
 - `routes/api_v1/exam_media.py`
+- `routes/api_v1/search_api.py`
+- `services/crawlers/scraper_service.py`
+- `services/search/exam_search_filter.py`
+- `services/gabarito/gabarito_service.py`
+- `services/pdf_pipeline/hybrid_extractor.py`
+- `services/pdf_pipeline/parse_cache.py`
 
 ### Configuração e publicação
 
@@ -172,6 +188,11 @@ junto com os artefatos desta pasta.
 - `frontend/src/test/native-google-login.test.ts`
 - `frontend/src/test/search-accessibility.test.tsx`
 - `frontend/src/test/setup.ts`
+- `frontend/src/test/brand-icon.test.tsx`
+- `frontend/e2e/mobile-navigation.spec.ts`
+- `tests/test_android_engine_bootstrap.py`
+- `tests/test_fiscal_posturas_search.py`
+- `tests/test_idcap_embedded_answers.py`
 
 O relatório técnico completo está em `docs/mobile-migration-audit.md`. O arquivo
 `.idsig` que pode aparecer ao lado do APK é apenas uma assinatura auxiliar local

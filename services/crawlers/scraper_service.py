@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 import time
 import re
 import concurrent.futures
-from urllib.parse import quote_plus, urljoin
+from urllib.parse import quote_plus, urljoin, urlsplit
 
 def get_ddgs_class():
     """Retorna a classe DuckDuckGo Search disponível no ambiente."""
@@ -23,6 +23,8 @@ from services.search.exam_search_filter import (
     standardize_card_title,
     calculate_card_match_score,
     filter_and_rank_exam_cards,
+    card_matches_search_query,
+    _normalized_search_terms,
 )
 
 import os
@@ -228,8 +230,24 @@ def _scrape_pci_pdfs(query, nlp_data=None):
 
     queries_to_post = []
     clean_q = ' '.join([w for w in query.split() if w.lower() not in stop_words]).strip()
+    clean_q = re.sub(r'\bidecap\b', 'IDCAP', clean_q, flags=re.IGNORECASE)
     if clean_q:
         queries_to_post.append(clean_q)
+    # PCI's form can miss a title when the requested responsibility is only
+    # part of a combined role (e.g. Fiscal de Obras, Posturas e Meio Ambiente).
+    # Discover by bank + primary role, then retain the full original query as
+    # the constraint on every returned card, including year and location.
+    discovery_noise = stop_words | {
+        'de', 'do', 'da', 'dos', 'das', 'em', 'no', 'na', 'nos', 'nas',
+        'e', 'a', 'o', 'as', 'os', 'banca', 'prefeitura', 'municipal', 'camara',
+    }
+    bank_terms = set(banca_val.split()) | {'idcap', 'idecap'}
+    primary_terms = [word for word in re.findall(r'\b\w+\b', clean_q.lower())
+                     if word not in discovery_noise | bank_terms and not word.isdigit()]
+    if banca_val and primary_terms:
+        relaxed = f"{banca_val.upper()} {primary_terms[0]}"
+        if relaxed.lower() != clean_q.lower():
+            queries_to_post.append(relaxed)
     if orgao_val and orgao_val not in queries_to_post:
         queries_to_post.append(orgao_val)
     if cargo_val and cargo_val not in queries_to_post:
@@ -275,6 +293,10 @@ def _scrape_pci_pdfs(query, nlp_data=None):
 
             display_title = f"{prova_name}{orgao_str}{ano_str}{banca_suffix}"
             combined_text = f"{prova_name} {orgao_col} {banca_col} {ano_val} {full_href}".lower()
+            if not card_matches_search_query({
+                'title': display_title, 'url': full_href, 'source': 'pci',
+            }, query, nlp_data):
+                continue
             
             score = 60
             if cargo_val and cargo_val in combined_text:
@@ -308,7 +330,7 @@ def _scrape_pci_pdfs(query, nlp_data=None):
         return next_page_url
 
     # 1. Consulta o endpoint nativo de busca do PCI via POST
-    for q_post in queries_to_post[:2]:
+    for q_post in queries_to_post[:3]:
         try:
             resp = requests.post('https://www.pciconcursos.com.br/provas/', data={'prova': q_post}, headers=headers, timeout=3.5)
             if resp.status_code == 200:
@@ -524,13 +546,16 @@ def _scrape_idcap_pdfs(query, nlp_data=None):
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
             futures = [executor.submit(fetch_concurso_pdfs, item) for item in concurso_links]
             for fut in concurrent.futures.as_completed(futures):
-                results.extend(fut.result())
+                results.extend(result for result in fut.result()
+                               if card_matches_search_query(result, query, nlp_data))
                 if len(results) >= DEFAULT_SEARCH_RESULT_LIMIT:
                     break
 
-        if results:
-            results.sort(key=lambda x: x.get('match_score', 0), reverse=True)
-            unique_results = {result['url']: result for result in results}
+        matching_results = [result for result in results
+                            if card_matches_search_query(result, query, nlp_data)]
+        if matching_results:
+            matching_results.sort(key=lambda x: x.get('match_score', 0), reverse=True)
+            unique_results = {result['url']: result for result in matching_results}
             return list(unique_results.values())[:DEFAULT_SEARCH_RESULT_LIMIT]
     except Exception as e:
         print(f"      [IDCAP Crawler] Aviso: {e}", flush=True)
@@ -549,9 +574,15 @@ def _scrape_idcap_pdfs(query, nlp_data=None):
                 r'\b(?:idcap|idecap)\b',
                 f"{result.get('title', '')} {result.get('url', '')}",
                 re.IGNORECASE,
-            ):
+            ) and card_matches_search_query(result, fallback_query, fallback_nlp):
                 item = dict(result)
                 item['source'] = 'idcap'
+                if (len(idcap_results) < 3
+                        and urlsplit(str(item.get('url') or '')).hostname == 'www.pciconcursos.com.br'
+                        and not urlsplit(item['url']).path.lower().endswith('.pdf')):
+                    official_copy = _find_idcap_official_copy(item['url'])
+                    if official_copy:
+                        item['url'] = official_copy
                 idcap_results.append(item)
         if official_blocked:
             print(
@@ -620,6 +651,72 @@ def _search_pdfs_web(query, nlp_data=None):
     return results[:DEFAULT_SEARCH_RESULT_LIMIT]
 
 
+def _find_idcap_official_copy(pci_url: str) -> str | None:
+    """Resolve an identical public IDCAP booklet from the PCI card identity.
+
+    PCI can require an interactive security check before displaying file URLs.
+    This consults the original bank's public catalogue instead. The contest's
+    city/year and the complete role must agree; an unrelated fiscal exam is
+    never substituted and no contest ID or document URL is hardcoded.
+    """
+    slug = urlsplit(pci_url).path.rstrip('/').rsplit('/', 1)[-1]
+    identity = re.fullmatch(
+        r'(?P<role>.+?)-(?P<institution>prefeitura(?:-municipal)?|camara(?:-municipal)?)'
+        r'-(?P<place>.+?)-(?P<bank>idcap|idecap)-(?P<year>(?:19|20)\d{2})', slug,
+        flags=re.IGNORECASE,
+    )
+    if not identity:
+        return None
+    place = re.sub(r'^de-', '', identity['place'], flags=re.IGNORECASE)
+    # City alone is the contest discovery key. The final comparison still
+    # includes its complete name, the year and every word in the job title.
+    city = re.sub(r'-[a-z]{2}$', '', place, flags=re.IGNORECASE).replace('-', ' ')
+    role_terms = _normalized_search_terms(identity['role']) - {'de', 'do', 'da', 'e'}
+    city_terms = _normalized_search_terms(city)
+    institution_terms = _normalized_search_terms(identity['institution'])
+    year = identity['year']
+    headers = {'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'pt-BR,pt;q=0.9'}
+    try:
+        index_url = f'https://idcap.selecao.net.br/index/todos/?busca={quote_plus(city)}'
+        index = requests.get(index_url, headers=headers, timeout=5.0)
+        if index.status_code != 200 or _is_cloudflare_challenge(index):
+            return None
+        soup = BeautifulSoup(index.text, 'html.parser')
+        contests = {}
+        for link in soup.find_all('a', href=True):
+            if '/informacoes/' not in urlsplit(link['href']).path:
+                continue
+            label = (link.find_parent('div') or link).get_text(' ', strip=True)
+            terms = _normalized_search_terms(label)
+            if (not city_terms.issubset(terms) or not institution_terms.issubset(terms)
+                    or interpret_search_query_deterministic(label).get('ano') != year):
+                continue
+            contests[urljoin(index_url, link['href'])] = label
+        # Ambiguous municipal contests need an explicit source instead of a
+        # guess. An index card may omit the UF, so uniqueness also matters.
+        if len(contests) != 1:
+            return None
+        contest_url = next(iter(contests))
+        contest = requests.get(contest_url, headers=headers, timeout=5.0)
+        if contest.status_code != 200 or _is_cloudflare_challenge(contest):
+            return None
+        document = BeautifulSoup(contest.text, 'html.parser')
+        for link in document.find_all('a', href=True):
+            pdf_url = urljoin(contest_url, link['href'])
+            if not urlsplit(pdf_url).path.lower().endswith('.pdf'):
+                continue
+            label = link.get_text(' ', strip=True)
+            if 'gabarito' in label.lower() or is_administrative_document(label):
+                continue
+            # Compare the document label separately from its contest header;
+            # using the page body could match a different role listed nearby.
+            if role_terms.issubset(_normalized_search_terms(label)):
+                return pdf_url
+    except requests.RequestException as error:
+        print(f'[IDCAP public copy] Source unavailable: {type(error).__name__}', flush=True)
+    return None
+
+
 def extract_pci_page_pdfs(pci_url: str) -> tuple[str | None, str | None, str | None]:
     """
     Inspeciona determinística e diretamente uma página do PCI Concursos ou link direto de arquivo.
@@ -632,7 +729,7 @@ def extract_pci_page_pdfs(pci_url: str) -> tuple[str | None, str | None, str | N
     pci_url_clean = pci_url.strip()
 
     # Se já for link direto de PDF
-    if '.pdf' in pci_url_clean.lower() or 'arquivo.pciconcursos.com.br' in pci_url_clean:
+    if urlsplit(pci_url_clean).path.lower().endswith('.pdf') or urlsplit(pci_url_clean).hostname == 'arquivo.pciconcursos.com.br':
         if 'gabarito' in pci_url_clean.lower():
             return None, pci_url_clean, None
         gab_candidate = None
@@ -649,7 +746,7 @@ def extract_pci_page_pdfs(pci_url: str) -> tuple[str | None, str | None, str | N
     }
 
     try:
-        resp = requests.get(pci_url_clean, headers=headers, timeout=8.0, verify=False)
+        resp = requests.get(pci_url_clean, headers=headers, timeout=8.0)
         if resp.status_code != 200:
             return None, None, None
 
@@ -664,7 +761,8 @@ def extract_pci_page_pdfs(pci_url: str) -> tuple[str | None, str | None, str | N
         soup = BeautifulSoup(html_text, 'html.parser')
 
         page_title = None
-        title_tag = soup.find('h1') or soup.find('title')
+        title_tag = next((tag for tag in (soup.find('h1'), soup.find('title'))
+                          if tag and tag.get_text(strip=True)), None)
         if title_tag:
             page_title = title_tag.get_text(separator=' ', strip=True)
             page_title = re.sub(r'(\s*-\s*PCI Concursos|\s*-\s*Provas para Download|\s*-\s*Download).*', '', page_title, flags=re.IGNORECASE).strip()
@@ -677,9 +775,16 @@ def extract_pci_page_pdfs(pci_url: str) -> tuple[str | None, str | None, str | N
             text = a.get_text(separator=' ', strip=True).lower()
             href_lower = href.lower()
 
-            full_href = href if href.startswith('http') else f"https://www.pciconcursos.com.br{href}"
+            full_href = urljoin(pci_url_clean, href)
+            target = urlsplit(full_href)
+            if target.scheme not in {'http', 'https'}:
+                continue
 
-            if 'arquivo.pciconcursos.com.br' in href_lower or '.pdf' in href_lower or '/download/' in href_lower:
+            # Sharing URLs contain the page's /download/ path in a query
+            # parameter. Only the actual destination path can identify a PDF.
+            is_pdf = target.path.lower().endswith('.pdf')
+            is_pci_file = target.hostname in {'arquivo.pciconcursos.com.br', 'provas.pciconcursos.com.br'}
+            if is_pdf or is_pci_file:
                 if 'gabarito' in text or 'gabarito' in href_lower:
                     if not gabarito_url:
                         gabarito_url = full_href
@@ -687,6 +792,8 @@ def extract_pci_page_pdfs(pci_url: str) -> tuple[str | None, str | None, str | N
                     if not prova_url and not is_administrative_document(text):
                         prova_url = full_href
 
+        if not prova_url:
+            prova_url = _find_idcap_official_copy(pci_url_clean)
         return prova_url, gabarito_url, page_title
 
     except Exception as e:

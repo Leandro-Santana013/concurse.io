@@ -11,6 +11,7 @@ import { useUI } from '../../context/UIContext';
 import { useAuth } from '../../context/AuthContext';
 import { MobileMenu } from './MobileMenu';
 import { primaryNavigation } from './navigation';
+import { BrandIcon } from '../ui/BrandIcon';
 
 const getPageTitle = (pathname: string) => {
   if (pathname === '/perfil') return 'Perfil & Configurações';
@@ -33,6 +34,9 @@ export const Navbar: React.FC = () => {
     ? `/prova/${activeExam.id}${isFinished ? '/resultado' : ''}`
     : '/biblioteca';
   const userInitial = (user?.name || user?.email || 'C').trim().charAt(0).toUpperCase();
+  const downloadStatus = activeDownloadsCount > 0
+    ? `${activeDownloadsCount} ${activeDownloadsCount === 1 ? 'arquivo em processamento' : 'arquivos em processamento'}`
+    : '';
 
   return (
     <>
@@ -41,20 +45,20 @@ export const Navbar: React.FC = () => {
           <button
             type="button"
             className="mobile-menu-toggle mobile-menu-trigger"
-            aria-label="Abrir menu"
+            aria-label="Abrir mais opções"
             aria-controls="mobile-menu"
             aria-expanded={isMobileSidebarOpen}
             onClick={toggleMobileSidebar}
           >
             <Menu aria-hidden="true" />
           </button>
-          <img className="mobile-brand brand-logo-image" src="/concurse-icon-64.png" alt="" width={28} height={28} />
+          <BrandIcon className="mobile-brand brand-logo-image" width={28} height={28} />
           <p>{getPageTitle(location.pathname)}</p>
         </div>
 
         <div className="navbar-actions">
           {activeDownloadsCount > 0 && (
-            <div className="download-status" role="status" aria-live="polite">
+            <div className="download-status" aria-hidden="true">
               <CloudDownload aria-hidden="true" />
               <span>{activeDownloadsCount} {activeDownloadsCount === 1 ? 'arquivo' : 'arquivos'}</span>
               <span className="desktop-only"> em processamento</span>
@@ -66,6 +70,7 @@ export const Navbar: React.FC = () => {
               type="button"
               className="ui-button ui-button-secondary active-exam-button"
               onClick={() => navigate(activeExamPath)}
+              aria-label={isFinished ? 'Ver resultado da prova' : 'Continuar prova'}
             >
               <BookOpen aria-hidden="true" />
               <span className="desktop-only">{isFinished ? 'Ver resultado' : 'Continuar prova'}</span>
@@ -77,9 +82,15 @@ export const Navbar: React.FC = () => {
             className="ui-button ui-button-primary navbar-import-button"
             onClick={() => openDirectIngestModal()}
             aria-label="Importar prova por link"
+            aria-describedby={activeDownloadsCount > 0 ? 'navbar-download-status' : undefined}
           >
             <Import aria-hidden="true" />
             <span className="desktop-only">Importar</span>
+            {activeDownloadsCount > 0 && (
+              <span className="navbar-download-badge" aria-hidden="true">
+                {activeDownloadsCount > 99 ? '99+' : activeDownloadsCount}
+              </span>
+            )}
           </button>
 
           <div className="account-control">
@@ -87,6 +98,7 @@ export const Navbar: React.FC = () => {
               type="button"
               className="account-identity hover:opacity-90 transition cursor-pointer"
               onClick={() => navigate('/perfil')}
+              aria-label="Acessar Perfil & Configurações"
               title="Acessar Perfil & Configurações"
             >
               {user?.picture ? (
@@ -97,6 +109,9 @@ export const Navbar: React.FC = () => {
               <span className="account-name desktop-only">{user?.name || 'Concurseiro'}</span>
             </button>
           </div>
+          <span id="navbar-download-status" className="visually-hidden" role="status" aria-live="polite">
+            {downloadStatus}
+          </span>
         </div>
       </header>
 

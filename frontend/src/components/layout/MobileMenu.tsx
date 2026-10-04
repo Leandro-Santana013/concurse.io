@@ -2,7 +2,6 @@ import React, { useEffect, useRef } from 'react';
 import { Import, NotebookPen, Trophy, X } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useUI } from '../../context/UIContext';
-import { primaryNavigation } from './navigation';
 
 const reviewNavigation = [
   { to: '/progresso/erros', label: 'Caderno de erros', icon: NotebookPen },
@@ -14,6 +13,19 @@ export const MobileMenu: React.FC = () => {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const close = () => setMobileSidebarOpen(false);
+  const keepFocusInMenu = (event: React.KeyboardEvent<HTMLDialogElement>) => {
+    if (event.key !== 'Tab') return;
+    const controls = event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), a[href]');
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last?.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first?.focus();
+    }
+  };
 
   useEffect(() => {
     if (!isMobileSidebarOpen) return;
@@ -45,23 +57,19 @@ export const MobileMenu: React.FC = () => {
       className="mobile-menu"
       aria-labelledby="mobile-menu-title"
       aria-modal="true"
+      onKeyDown={keepFocusInMenu}
       onCancel={(event) => { event.preventDefault(); close(); }}
       onClose={close}
       onClick={(event) => { if (event.target === event.currentTarget) close(); }}
     >
       <div className="mobile-menu-panel">
         <div className="mobile-menu-header">
-          <h2 id="mobile-menu-title">Menu</h2>
+          <h2 id="mobile-menu-title">Mais opções</h2>
           <button ref={closeRef} type="button" className="mobile-menu-toggle" aria-label="Fechar menu" onClick={close}>
             <X aria-hidden="true" />
           </button>
         </div>
-        <nav className="mobile-menu-navigation" aria-label="Menu do aplicativo">
-          {primaryNavigation.map(({ to, label, menuLabel, icon: Icon, end }) => (
-            <NavLink key={to} to={to} end={end} onClick={close} className={({ isActive }) => `sidebar-link${isActive ? ' is-active' : ''}`}>
-              <Icon aria-hidden="true" /><span>{menuLabel || label}</span>
-            </NavLink>
-          ))}
+        <nav className="mobile-menu-navigation" aria-label="Navegação complementar">
           <p className="sidebar-label mobile-menu-section">Revisão</p>
           {reviewNavigation.map(({ to, label, icon: Icon }) => (
             <NavLink key={to} to={to} onClick={close} className={({ isActive }) => `sidebar-link${isActive ? ' is-active' : ''}`}>

@@ -4,6 +4,7 @@ import { Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { api, OAuthDeepLinkResult } from '../../services/api';
 import { supabaseAuthConfigured } from '../../services/supabase';
+import { BrandIcon } from '../ui/BrandIcon';
 
 const DESKTOP_APP = import.meta.env.VITE_DESKTOP_APP === '1';
 const OFFLINE_DESKTOP = import.meta.env.VITE_OFFLINE_DESKTOP === '1';
@@ -235,7 +236,7 @@ export const LoginPage: React.FC = () => {
       <section className="login-carousel" aria-roledescription="carrossel" aria-label="Bem-vindo ao concurse.io">
         <header className="login-carousel-header">
           <div className="login-brand">
-            <img className="brand-symbol brand-logo-image" src="/concurse-icon-64.png" alt="" width={32} height={32} />
+            <BrandIcon className="brand-symbol brand-logo-image" width={32} height={32} />
             <span>concurse.io</span>
           </div>
           <button type="button" className="login-shortcut" onClick={() => selectSlide(activeSlide === LOGIN_SLIDE ? 0 : LOGIN_SLIDE)}>

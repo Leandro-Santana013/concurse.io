@@ -9,6 +9,7 @@ Módulo 100% determinístico e autônomo para:
 """
 
 import re
+import unicodedata
 from typing import List, Dict, Tuple, Optional, Any
 
 
@@ -397,6 +398,61 @@ def standardize_card_title(
 # 5. FILTRO E ORDENAÇÃO DE CARDS
 # =============================================================================
 
+def _normalized_search_terms(text: str) -> set:
+    """Compare accents and the common singular/plural forms used in titles."""
+    folded = ''.join(character for character in unicodedata.normalize('NFKD', str(text).lower())
+                     if not unicodedata.combining(character))
+    aliases = {'idecap': 'idcap', 'fiscais': 'fiscal', 'pref': 'prefeitura'}
+    return {
+        aliases.get(term, term[:-1] if len(term) > 4 and term.endswith('s') else term)
+        for term in re.findall(r'[a-z0-9]+', folded)
+    }
+
+
+def card_matches_search_query(card: Dict[str, Any], user_query: str,
+                              nlp_data: Optional[Dict[str, str]] = None) -> bool:
+    """Reject contradictory metadata and keep the requested fiscal specialty.
+
+    A crawler score is not evidence that the requested role matches. In
+    particular, "Auditor Fiscal" cannot satisfy "Fiscal de Postura", while a
+    combined role such as "Fiscal de Obras, Posturas e Meio Ambiente" can.
+    Unknown metadata stays eligible for ordinary queries.
+    """
+    nlp = nlp_data or interpret_search_query_deterministic(user_query)
+    text = f"{card.get('title') or ''} {card.get('url') or ''}"
+    card_nlp = interpret_search_query_deterministic(text)
+    requested_bank = nlp.get('banca') or ''
+    found_bank = card_nlp.get('banca') or ''
+    if not found_bank and str(card.get('source') or '').lower() == 'idcap':
+        found_bank = 'IDCAP'
+    if requested_bank and found_bank and requested_bank != found_bank:
+        return False
+    requested_year = nlp.get('ano') or ''
+    found_years = set(re.findall(r'\b(?:19|20)\d{2}\b', text))
+    if requested_year and found_years and requested_year not in found_years:
+        return False
+
+    query_terms = _normalized_search_terms(user_query)
+    if not {'fiscal', 'postura'}.issubset(query_terms):
+        return True
+
+    # Discovery can relax the external search form, but the final cards keep
+    # every requested specialty, city, bank and year. Match words independently
+    # so an extra responsibility in the job title does not hide the exam.
+    card_terms = _normalized_search_terms(text)
+    ignored = {
+        'prova', 'concurso', 'gabarito', 'pdf', 'download', 'de', 'do', 'da',
+        'dos', 'das', 'para', 'em', 'no', 'na', 'nos', 'nas', 'com', 'e',
+        'a', 'o', 'as', 'os', 'banca', 'pci',
+    }
+    if requested_bank:
+        if requested_bank != found_bank:
+            return False
+        ignored.update(_normalized_search_terms(requested_bank))
+    required = {term for term in query_terms if len(term) > 1 and term not in ignored}
+    return required.issubset(card_terms)
+
+
 def filter_and_rank_exam_cards(
     raw_cards: List[Dict[str, Any]],
     user_query: str,
@@ -421,6 +477,8 @@ def filter_and_rank_exam_cards(
         seen_urls.add(url)
 
         raw_title = card.get('title', '')
+        if not card_matches_search_query(card, user_query, nlp_data):
+            continue
         score = card.get('match_score') or calculate_card_match_score(raw_title, url, nlp_data, user_query)
         clean_title = standardize_card_title(raw_title, nlp_data, url)
 
@@ -453,5 +511,6 @@ __all__ = [
     'interpret_search_query_deterministic',
     'calculate_card_match_score',
     'standardize_card_title',
+    'card_matches_search_query',
     'filter_and_rank_exam_cards'
 ]

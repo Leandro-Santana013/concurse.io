@@ -33,6 +33,10 @@ def run(data_dir: str, supabase_url: str, publishable_key: str, android_context=
         "SUPABASE_PUBLISHABLE_KEY": publishable_key,
         "CORS_ORIGINS": "http://tauri.localhost,https://tauri.localhost",
         "CONCURSE_EMBEDDED_ANDROID": "1",
+        # Chaquopy's OpenSSL does not ship the legacy provider. The app uses
+        # AES-GCM and SHA-256, which remain available in the default provider.
+        # This must be configured before fastapi_app imports cryptography.
+        "CRYPTOGRAPHY_OPENSSL_NO_LEGACY": "1",
     })
     os.environ["USER_DATA_ENCRYPTION_KEY"] = os.environ["SESSION_SECRET"]
     os.environ["OMP_NUM_THREADS"] = "2"

@@ -12,6 +12,7 @@ from .exam_search_filter import (
     interpret_search_query_deterministic,
     calculate_card_match_score,
     standardize_card_title,
+    card_matches_search_query,
     filter_and_rank_exam_cards,
 )
 
@@ -25,5 +26,6 @@ __all__ = [
     "interpret_search_query_deterministic",
     "calculate_card_match_score",
     "standardize_card_title",
+    "card_matches_search_query",
     "filter_and_rank_exam_cards",
 ]

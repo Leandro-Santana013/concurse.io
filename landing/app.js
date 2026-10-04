@@ -16,6 +16,7 @@
     themeToggle?.querySelector('use')?.setAttribute('href', `#${themeIcons[mode]}`);
     const dark = mode === 'dark' || (mode === 'system' && systemTheme.matches);
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#181816' : '#f7f7f5');
+    document.querySelector('link[rel="icon"]')?.setAttribute('href', dark ? './assets/favicon.svg' : './assets/favicon-light.svg');
   };
 
   themeToggle?.addEventListener('click', () => {

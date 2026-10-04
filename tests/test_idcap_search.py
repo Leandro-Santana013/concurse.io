@@ -41,6 +41,22 @@ def test_idecap_alias_is_interpreted_as_idcap():
     assert interpret_search_query_deterministic("provas da idecap")["banca"] == "IDCAP"
 
 
+def test_high_score_cached_auditor_is_excluded_from_fiscal_posturas(search_db, monkeypatch):
+    query = "fiscal de postura idecap"
+    search_db.add_all([
+        ExamCatalog(query_key=query, title="Auditor Fiscal Serra 2024 (IDCAP)",
+                    source_url="https://cache.test/auditor-idcap.pdf", match_score=98, source="idcap"),
+        ExamCatalog(query_key=query, title="Fiscal de Obras, Posturas e Meio Ambiente Ibirataia 2024 (IDCAP)",
+                    source_url="https://cache.test/fiscal-posturas-idcap.pdf", match_score=90, source="idcap"),
+    ])
+    search_db.commit()
+    monkeypatch.setattr("services.crawlers._search_known_exams", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr("services.crawlers._scrape_idcap_pdfs", lambda *_args, **_kwargs: [])
+    result = search_exams_api(q=query, sources="idcap", db=search_db,
+                             current_user=SimpleNamespace(id=1))
+    assert [item.url for item in result.items] == ["https://cache.test/fiscal-posturas-idcap.pdf"]
+
+
 def test_idcap_filter_combines_crawler_and_catalog_quotas(search_db, monkeypatch):
     search_db.add_all([_catalog_card(index) for index in range(DEFAULT_SEARCH_RESULT_LIMIT + 5)])
     search_db.commit()
@@ -142,7 +158,16 @@ def test_partial_idcap_catalog_is_appended_to_crawler_results(search_db, monkeyp
     assert sum(result.url.startswith("https://database.test/") for result in results.items) == 4
 
 
-def test_search_api_paginates_cached_results(search_db):
+def test_search_api_paginates_cached_results(search_db, monkeypatch):
+    crawler_calls = []
+
+    def record_unexpected_crawl(*args, **kwargs):
+        crawler_calls.append((args, kwargs))
+        return []
+
+    for crawler in ("_search_known_exams", "_scrape_idcap_pdfs", "_scrape_pci_pdfs", "_search_pdfs_web", "_search_qc_provas"):
+        monkeypatch.setattr(f"services.crawlers.{crawler}", record_unexpected_crawl)
+
     search_db.add_all([
         ExamCatalog(
             query_key="auditor",
@@ -184,6 +209,7 @@ def test_search_api_paginates_cached_results(search_db):
     )
 
     assert len(first_page.items) == DEFAULT_SEARCH_RESULT_LIMIT
+    assert crawler_calls == [], "Uma página parcial do cache não deve iniciar uma nova pesquisa externa"
     assert len(second_page.items) == DEFAULT_SEARCH_RESULT_LIMIT
     assert len(third_page.items) == 11
     assert first_page.page == 1

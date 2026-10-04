@@ -124,9 +124,10 @@ def _search_result_items(cards):
     ]
 
 def _has_search_page(cards, page: int, page_size: int) -> bool:
-    """Indica se o cache já consegue preencher a página solicitada."""
-    required_count = page * page_size
-    return len(cards) >= required_count
+    """Completa a primeira página, mas preserva a última página parcial."""
+    if page > 1:
+        return len(cards) > (page - 1) * page_size
+    return len(cards) >= page_size
 
 
 def _paginated_search_response(cards, page: int, page_size: int) -> SearchResultsResponse:

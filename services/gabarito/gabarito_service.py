@@ -117,6 +117,32 @@ def extract_gabarito_from_doc(doc):
             return dict(structured_blocks[0]["gabarito"])
         return gabarito_map
 
+    # A prova matriz da IDCAP publica a resposta antes de cada enunciado.
+    # A leitura de tabelas na última página confundia listas como "A, B, C"
+    # com um gabarito e sobrescrevia a resposta explícita da questão 1.
+    # Unir as páginas preserva o caso em que "Questão 48" termina uma página
+    # e "(Correta: C)" começa a próxima, separado apenas pelo rodapé.
+    native_text = "\n".join(page.get_text() for page in doc)
+    headers = list(re.finditer(
+        r"(?im)^[ \t]*(?:quest[ãa]o|item)[ \t]+0*(\d{1,3})[ \t]*$",
+        native_text,
+    ))
+    embedded_answers = {}
+    for index, header in enumerate(headers):
+        end = headers[index + 1].start() if index + 1 < len(headers) else len(native_text)
+        prefix = native_text[header.end():min(end, header.end() + 250)]
+        marker = re.search(
+            r"(?im)^[ \t]*\([ \t]*correta[ \t]*:[ \t]*([A-E])[ \t]*\)[ \t]*$",
+            prefix,
+        )
+        if marker:
+            number, answer = int(header.group(1)), marker.group(1).upper()
+            if number in embedded_answers and embedded_answers[number] != answer:
+                return gabarito_map
+            embedded_answers[number] = answer
+    if embedded_answers:
+        return embedded_answers
+
     pages_to_scan = list(range(total_pages - 1, -1, -1))
 
     for p_idx in pages_to_scan:

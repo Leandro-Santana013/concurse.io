@@ -1346,6 +1346,98 @@
   display: none;
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.navbar-download-badge {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  :root {
+    --navbar-height: calc(64px + env(safe-area-inset-top));
+  }
+
+  .app-navbar {
+    height: var(--navbar-height);
+    gap: 8px;
+    padding-block: env(safe-area-inset-top) 0;
+    padding-inline: max(8px, env(safe-area-inset-left)) max(8px, env(safe-area-inset-right));
+  }
+
+  .navbar-title-group {
+    gap: 8px;
+  }
+
+  .navbar-title-group p {
+    min-width: 0;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .navbar-title-group .mobile-brand {
+    width: 28px;
+    height: 28px;
+    flex: 0 0 28px;
+  }
+
+  .navbar-actions {
+    flex: 0 0 auto;
+    gap: 4px;
+  }
+
+  .app-navbar .mobile-menu-toggle,
+  .navbar-actions .active-exam-button,
+  .navbar-actions .navbar-import-button {
+    position: relative;
+    width: 48px;
+    min-width: 48px;
+    height: 48px;
+    min-height: 48px;
+    flex: 0 0 48px;
+    padding: 0;
+  }
+
+  .app-navbar .mobile-menu-toggle svg,
+  .navbar-actions .ui-button svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .app-navbar .desktop-only,
+  .app-navbar .account-control,
+  .app-navbar .download-status {
+    display: none;
+  }
+
+  .navbar-download-badge {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    display: inline-flex;
+    min-width: 17px;
+    height: 17px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--on-primary);
+    border-radius: 999px;
+    background: var(--on-primary);
+    color: var(--primary);
+    padding: 0 3px;
+    font-size: 10px;
+    font-weight: 750;
+    line-height: 1;
+  }
+}
+
 .app-main {
   min-height: calc(100vh - var(--navbar-height));
   padding-bottom: calc(5rem + env(safe-area-inset-bottom));
@@ -1475,7 +1567,7 @@
 }
 
 .mobile-menu-section {
-  margin-top: 1.25rem;
+  margin-top: 0;
 }
 
 .mobile-menu-footer {
