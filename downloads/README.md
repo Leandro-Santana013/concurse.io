@@ -1,9 +1,9 @@
 # Arquivos para download
 
-Esta pasta reúne os artefatos da branch `codex/concurse-app`. O APK Android
-0.1.5/code6 e o bundle do gateway estão publicados no GitHub no commit
-`73f8cee`. Os nomes mantêm a versão real gravada no instalador. Verifique o
-arquivo `SHA256SUMS.txt` antes de instalar.
+Esta pasta reúne os artefatos publicados na branch `codex/concurse-app`. O APK
+Android 0.1.5/code6 e o bundle do gateway estão no GitHub. Os nomes mantêm a
+versão real gravada no instalador. Verifique o arquivo `SHA256SUMS.txt` antes
+de instalar.
 
 ## Windows
 
@@ -19,6 +19,23 @@ Os instaladores atuais são os da versão `0.1.2`:
 - `concurse.io_0.1.2-debug_x64_en-US.msi` e `concurse.io_0.1.2-debug_x64-setup.exe`: debug para diagnóstico.
 
 Os instaladores `0.1.0` anteriores permanecem disponíveis para retrocesso.
+
+Os arquivos de download desta pasta são:
+
+- `concurse-mobile-aarch64-release-v0.1.5-code6-16k.apk`: APK Android atual.
+- `concurse-mobile-aarch64-release-v0.1.4-code5-16k.apk`: APK Android anterior.
+- `concurse-mobile-aarch64-release-v0.1.3-code4-16k.apk`: APK Android de
+  recuperação, sem o motor embarcado.
+- `concurse-mobile-aarch64-release-v0.1.2-code3-16k.apk`: APK histórico com o
+  erro de inicialização já documentado.
+- `concurse.io_0.1.2_x64_en-US.msi` e `concurse.io_0.1.2_x64-setup.exe`:
+  instaladores Windows release atuais.
+- `concurse.io_0.1.2-debug_x64_en-US.msi` e
+  `concurse.io_0.1.2-debug_x64-setup.exe`: instaladores Windows de diagnóstico.
+- `concurse.io_0.1.0_x64_en-US.msi` e `concurse.io_0.1.0_x64-setup.exe`:
+  instaladores Windows antigos para retrocesso.
+- `app-gateway-mobile-hard-switch.ts`: bundle único da função Supabase.
+- `SHA256SUMS.txt`: hashes dos artefatos publicados.
 
 ## Android
 
@@ -73,3 +90,81 @@ não foram realizados porque a permissão de acesso foi negada.
 
 O novo APK é destinado a diagnóstico. A distribuição de produção exige
 validação no aparelho e uma chave de release própria.
+
+## Arquivos-fonte mais recentes
+
+Os arquivos abaixo são os fontes que implementam o hard switch mobile publicado
+junto com os artefatos desta pasta.
+
+### Gateway Supabase
+
+- `supabase/functions/app-gateway/index.ts`
+- `supabase/functions/app-gateway/processed-import.ts`
+- `supabase/functions/app-gateway/source-url.ts`
+- `supabase/functions/app-gateway/study-results.ts`
+- `supabase/functions/app-gateway/user-profile.ts`
+- `downloads/app-gateway-mobile-hard-switch.ts`: versão única para colar no
+  editor do painel.
+
+### Motor Android, OCR e preparação do APK
+
+- `desktop/engine/android/MainActivity.kt`
+- `desktop/engine/android/ProcessingService.kt`
+- `desktop/engine/android/mobile_engine.py`
+- `desktop/engine/android/engine.gradle.kts`
+- `desktop/engine/android/engine.pro`
+- `desktop/engine/android/network_security_config.xml`
+- `desktop/engine/android/requirements.txt`
+- `desktop/engine/android/normalize_native_wheels.py`
+- `desktop/engine/android/audit_apk.py`
+- `desktop/engine/android/EngineSmokeTest.kt`
+- `desktop/scripts/prepare-android-engine.mjs`
+- `desktop/scripts/collect-android-startup.ps1`
+
+### Interface e serviços compartilhados
+
+- `frontend/src/components/auth/LoginPage.tsx`
+- `frontend/src/components/dashboard/DirectIngestModal.tsx`
+- `frontend/src/components/dashboard/FoldersView.tsx`
+- `frontend/src/components/dashboard/SearchHub.tsx`
+- `frontend/src/components/layout/MobileMenu.tsx`
+- `frontend/src/components/layout/Navbar.tsx`
+- `frontend/src/components/layout/Sidebar.tsx`
+- `frontend/src/components/layout/navigation.ts`
+- `frontend/src/index.css`
+- `frontend/src/services/api.ts`
+- `frontend/src/services/supabase.ts`
+- `frontend/src/types/exam.ts`
+- `app_core/async_worker.py`
+- `routes/api_v1/exam_api.py`
+- `routes/api_v1/exam_media.py`
+
+### Configuração e publicação
+
+- `.gitattributes`: mantém APKs grandes no Git LFS.
+- `frontend/.env.mobile`
+- `frontend/tsconfig.json`
+- `desktop/.cargo/config.toml`
+- `desktop/package.json`
+- `desktop/src-tauri/tauri.android.conf.json`
+- `desktop/src-tauri/tauri.ios.conf.json`
+- `desktop/README.md`
+- `README.md`
+
+### Testes que acompanham a mudança
+
+- `frontend/src/test/app-routing-preferences.test.tsx`
+- `frontend/src/test/auth-login.test.tsx`
+- `frontend/src/test/direct-ingest-modal.test.tsx`
+- `frontend/src/test/gateway-processed-import.test.ts`
+- `frontend/src/test/gateway-study-results.test.ts`
+- `frontend/src/test/gateway-user-profile.test.ts`
+- `frontend/src/test/mobile-navigation.test.tsx`
+- `frontend/src/test/mobile-processing-api.test.ts`
+- `frontend/src/test/native-google-login.test.ts`
+- `frontend/src/test/search-accessibility.test.tsx`
+- `frontend/src/test/setup.ts`
+
+O relatório técnico completo está em `docs/mobile-migration-audit.md`. O arquivo
+`.idsig` que pode aparecer ao lado do APK é apenas uma assinatura auxiliar local
+e não faz parte do pacote distribuído.
