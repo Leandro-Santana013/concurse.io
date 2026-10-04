@@ -1,0 +1,47 @@
+name: Publish concurse.io landing
+
+on:
+  push:
+    branches: [codex/concurse-app]
+    paths:
+      - 'landing/**'
+      - 'downloads/SHA256SUMS.txt'
+      - '.github/workflows/landing-pages.yml'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: concurse-landing-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/configure-pages@v5
+      - name: Build and check landing
+        run: |
+          node landing/scripts/build.mjs
+          node landing/scripts/check.mjs --remote
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: landing/dist
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

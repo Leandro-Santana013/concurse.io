@@ -5,6 +5,10 @@ Android 0.1.5/code6 e o bundle do gateway estão no GitHub. Os nomes mantêm a
 versão real gravada no instalador. Verifique o arquivo `SHA256SUMS.txt` antes
 de instalar.
 
+A página pública de apresentação e instalação usa os mesmos artefatos deste
+inventário. O código e as instruções de publicação ficam em
+[`landing/README.md`](../landing/README.md).
+
 ## Windows
 
 Os dois instaladores são equivalentes: o MSI é adequado para implantação

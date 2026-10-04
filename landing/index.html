@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="system">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f7f7f5" />
+    <meta name="description" content="Reúna suas provas, transforme PDFs em questões, pratique com simulados e revise seus erros. Conheça o concurse.io e baixe os aplicativos para Windows e Android." />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="pt_BR" />
+    <meta property="og:site_name" content="concurse.io" />
+    <meta property="og:title" content="concurse.io — Suas provas. Seu próximo passo." />
+    <meta property="og:description" content="Um lugar para reunir suas provas, praticar questões e transformar cada erro no próximo passo." />
+    <meta property="og:url" content="{{SITE_URL}}" />
+    <meta property="og:image" content="{{SITE_URL}}assets/social-card.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="concurse.io. Suas provas. Seu próximo passo. Leitura, prática e revisão." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="concurse.io — Suas provas. Seu próximo passo." />
+    <meta name="twitter:description" content="Reúna suas provas. Pratique no seu ritmo. Revise com intenção." />
+    <meta name="twitter:image" content="{{SITE_URL}}assets/social-card.png" />
+    <link rel="canonical" href="{{SITE_URL}}" />
+    <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+    <script>
+      try {
+        const preference = localStorage.getItem('concurse-landing-theme');
+        if (preference === 'light' || preference === 'dark') document.documentElement.dataset.theme = preference;
+      } catch (_) {}
+    </script>
+    <script src="./app.js" defer></script>
+    <title>concurse.io — Suas provas. Seu próximo passo.</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#conteudo">Ir para o conteúdo</a>
+    <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6" /></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 15v5h16v-5" /></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 5 5" /></symbol>
+      <symbol id="i-book" viewBox="0 0 24 24"><path d="M12 5v15m0-15C9 3 5 3 2 4v15c3-1 7-1 10 1 3-2 7-2 10-1V4c-3-1-7-1-10 1Z" /></symbol>
+      <symbol id="i-library" viewBox="0 0 24 24"><path d="M4 3v18M8 3v18M13 3v18m4-17 4 16M2 21h20" /></symbol>
+      <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H5a1 1 0 0 0-1 1v18a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V8Zm0 0v6h6M8 13h8m-8 4h6" /></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6" /></symbol>
+      <symbol id="i-list" viewBox="0 0 24 24"><path d="m3 6 2 2 3-4m-5 12 2 2 3-4m4-8h9m-9 10h9" /></symbol>
+      <symbol id="i-review" viewBox="0 0 24 24"><path d="M4 3h13v18H4Zm0 5H2m2 5H2m2 5H2m6-10h5m-5 4h5m-5 4h3m8-8 3 3-3 3" /></symbol>
+      <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 3v17h17M9 15v-4m5 4V7m5 8V4" /></symbol>
+      <symbol id="i-sync" viewBox="0 0 24 24"><path d="M20 7a9 9 0 0 0-15-2L2 8m0-6v6h6m-4 9a9 9 0 0 0 15 2l3-3m0 6v-6h-6" /></symbol>
+      <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8m-4-4v4" /></symbol>
+      <symbol id="i-phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2" /><path d="M10 5h4m-3 14h2" /></symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="13" height="13" rx="2" /><path d="M16 8V3H3v13h5" /></symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5" /></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 13A9 9 0 0 1 11 3 9 9 0 1 0 21 13Z" /></symbol>
+      <symbol id="i-system" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8m-4-4v4m0-14v6" /></symbol>
+      <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" /></symbol>
+      <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6" /></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24"><path d="m12 2 8 4v6c0 5-8 10-8 10S4 17 4 12V6Zm-4 10 3 3 5-5" /></symbol>
+    </svg>
+
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="#inicio" aria-label="concurse.io, início">
+          <img src="./assets/favicon.svg" alt="" width="34" height="34" />
+          <span>concurse<span class="brand-suffix">.io</span></span>
+        </a>
+        <nav class="navigation" id="site-navigation" aria-label="Navegação principal">
+          <a href="#como-funciona">Como funciona</a>
+          <a href="#recursos">Recursos</a>
+          <a href="#duvidas">Dúvidas</a>
+          <a class="navigation-download" href="#downloads">Baixar aplicativo <svg class="icon" aria-hidden="true"><use href="#i-arrow" /></svg></a>
+        </nav>
+        <div class="header-actions">
+          <button class="icon-button theme-toggle" type="button" aria-label="Tema: sistema. Alterar para claro." title="Tema: sistema" data-theme-toggle>
+            <svg class="icon" aria-hidden="true"><use href="#i-system" /></svg>
+          </button>
+          <button class="icon-button menu-toggle" type="button" aria-label="Abrir menu" aria-expanded="false" aria-controls="site-navigation" data-menu-toggle>
+            <svg class="icon" aria-hidden="true"><use href="#i-menu" /></svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main id="conteudo">
+      <section class="hero section" id="inicio" aria-labelledby="hero-title">
+        <div class="container">
+          <div class="hero-grid">
+            <div class="hero-copy">
+              <p class="eyebrow"><span class="eyebrow-line" aria-hidden="true"></span> Um lugar para o seu estudo</p>
+              <h1 id="hero-title">Suas provas.<br />Seu próximo <em>passo.</em></h1>
+              <p class="hero-description">Reúna as provas que importam. Pratique no seu ritmo. Entenda seus erros e volte melhor para a próxima questão.</p>
+              <div class="hero-actions">
+                <a class="button button-primary" href="#downloads">Baixar aplicativo <svg class="icon" aria-hidden="true"><use href="#i-download" /></svg></a>
+                <a class="text-link" href="#como-funciona">Conhecer a plataforma <svg class="icon" aria-hidden="true"><use href="#i-arrow" /></svg></a>
+              </div>
+              <p class="hero-availability">Windows <span aria-hidden="true">/</span> Android em versão experimental</p>
+            </div>
+
+          <div class="product-preview" role="group" aria-label="Prévia ilustrativa da interface do concurse.io">
+              <div class="preview-topbar">
+                <span class="preview-window-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                <span>concurse.io</span>
+                <svg class="icon" aria-hidden="true"><use href="#i-shield" /></svg>
+              </div>
+              <div class="preview-body">
+                <aside class="preview-sidebar" aria-hidden="true">
+                  <img src="./assets/favicon.svg" alt="" width="30" height="30" />
+                  <span class="sidebar-item is-active"><svg class="icon"><use href="#i-library" /></svg></span>
+                  <span class="sidebar-item"><svg class="icon"><use href="#i-search" /></svg></span>
+                  <span class="sidebar-item"><svg class="icon"><use href="#i-list" /></svg></span>
+                  <span class="sidebar-item"><svg class="icon"><use href="#i-review" /></svg></span>
+                  <span class="sidebar-item sidebar-item-bottom"><svg class="icon"><use href="#i-chart" /></svg></span>
+                </aside>
+                <div class="preview-main">
+                  <div class="preview-heading"><span class="small-label">SEU ESPAÇO DE ESTUDO</span><span class="preview-avatar" aria-hidden="true">C</span></div>
+                  <div class="preview-tabs" role="tablist" aria-label="Explore a prévia da plataforma">
+                    <button id="tab-organizar" role="tab" type="button" aria-selected="true" aria-controls="panel-organizar" tabindex="0">Organizar</button>
+                    <button id="tab-praticar" role="tab" type="button" aria-selected="false" aria-controls="panel-praticar" tabindex="-1">Praticar</button>
+                    <button id="tab-revisar" role="tab" type="button" aria-selected="false" aria-controls="panel-revisar" tabindex="-1">Revisar</button>
+                  </div>
+                  <div class="preview-panel" id="panel-organizar" role="tabpanel" aria-labelledby="tab-organizar" tabindex="0">
+                    <div class="preview-title-row"><h2>Sua biblioteca.</h2><span class="preview-static-action" aria-hidden="true"><svg class="icon"><use href="#i-plus" /></svg> Adicionar prova</span></div>
+                    <p class="preview-subtitle">Tudo pronto para o seu próximo estudo.</p>
+                    <div class="preview-search" aria-hidden="true"><svg class="icon"><use href="#i-search" /></svg><span>Encontrar na biblioteca</span><span class="preview-key">/</span></div>
+                    <div class="preview-exam"><span class="preview-file" aria-hidden="true"><svg class="icon"><use href="#i-file" /></svg></span><div><strong>Conhecimentos gerais</strong><span>Prova de exemplo · 40 questões</span></div><span class="preview-exam-tag">Pronta</span></div>
+                    <div class="preview-exam"><span class="preview-file" aria-hidden="true"><svg class="icon"><use href="#i-file" /></svg></span><div><strong>Língua portuguesa</strong><span>Prova de exemplo · 20 questões</span></div><span class="preview-exam-tag">Pronta</span></div>
+                    <div class="preview-study-note"><svg class="icon" aria-hidden="true"><use href="#i-book" /></svg><span>Uma biblioteca. Muitas formas de aprender.</span></div>
+                  </div>
+                  <div class="preview-panel" id="panel-praticar" role="tabpanel" aria-labelledby="tab-praticar" tabindex="0" hidden>
+                    <div class="preview-title-row"><h2>Uma de cada vez.</h2><span class="preview-exam-tag">Questão de exemplo</span></div>
+                    <p class="preview-subtitle">Língua portuguesa · interpretação de texto</p>
+                    <div class="preview-question"><span class="small-label">QUESTÃO 01</span><p>Na sua rotina de estudos, revisar os erros ajuda a:</p></div>
+                    <div class="preview-answer"><span>A</span><span>Reconhecer o que precisa de atenção.</span><svg class="icon" aria-hidden="true"><use href="#i-check" /></svg></div>
+                    <div class="preview-answer is-neutral"><span>B</span><span>Substituir toda a prática por leitura.</span></div>
+                    <div class="preview-study-note"><svg class="icon" aria-hidden="true"><use href="#i-list" /></svg><span>Escolha as questões. Encontre o seu ritmo.</span></div>
+                  </div>
+                  <div class="preview-panel" id="panel-revisar" role="tabpanel" aria-labelledby="tab-revisar" tabindex="0" hidden>
+                    <div class="preview-title-row"><h2>Cada erro, um passo.</h2><span class="preview-exam-tag">Sua revisão</span></div>
+                    <p class="preview-subtitle">Volte aos pontos que merecem mais atenção.</p>
+                    <div class="preview-review-heading"><svg class="icon" aria-hidden="true"><use href="#i-review" /></svg><strong>Caderno de erros</strong></div>
+                    <div class="preview-review-row"><div><strong>Interpretação de texto</strong><span>Língua portuguesa</span></div><span>Revisar <svg class="icon" aria-hidden="true"><use href="#i-arrow" /></svg></span></div>
+                    <div class="preview-review-row"><div><strong>Porcentagens</strong><span>Raciocínio lógico</span></div><span>Revisar <svg class="icon" aria-hidden="true"><use href="#i-arrow" /></svg></span></div>
+                    <div class="preview-study-note"><svg class="icon" aria-hidden="true"><use href="#i-chart" /></svg><span>Seu histórico ajuda a orientar a próxima prática.</span></div>
+                  </div>
+                </div>
+              </div>
+              <div class="preview-caption"><span class="caption-dot" aria-hidden="true"></span> Prévia da interface · dados ilustrativos</div>
+            </div>
+          </div>
+          <div class="hero-bottom"><span>Leitura. Prática. Revisão.</span><span>Um caminho que você constrói.</span><a href="#como-funciona" aria-label="Ir para como funciona"><svg class="icon" aria-hidden="true"><use href="#i-arrow" /></svg></a></div>
+        </div>
+      </section>
+
+      <section class="workflow section" id="como-funciona" aria-labelledby="workflow-title">
+        <div class="container workflow-grid">
+          <div class="workflow-intro">
+            <p class="eyebrow">Como funciona</p>
+            <h2 id="workflow-title">Do PDF à sua<br />próxima <em>revisão.</em></h2>
+            <p>Menos arquivos espalhados.<br />Mais clareza sobre o que estudar.</p>
+            <div class="workflow-paper" aria-hidden="true"><svg class="icon"><use href="#i-file" /></svg><span>prova.pdf</span><span class="paper-arrow"><svg class="icon"><use href="#i-arrow" /></svg></span><span class="paper-result"><svg class="icon"><use href="#i-list" /></svg> questões</span></div>
+          </div>
+          <ol class="workflow-steps">
+            <li><span class="step-number">01</span><div><h3>Encontre ou traga sua prova</h3><p>Pesquise por banca, cargo ou concurso. Você também pode importar um PDF ou informar o link da prova.</p></div></li>
+            <li><span class="step-number">02</span><div><h3>Transforme o arquivo em estudo</h3><p>O aplicativo extrai as questões e usa OCR quando o PDF é digitalizado. Adicione o gabarito e confira a extração antes de praticar.</p></div></li>
+            <li><span class="step-number">03</span><div><h3>Pratique e volte ao que importa</h3><p>Resolva questões, monte simulados e acompanhe os resultados. Seu caderno de erros mostra onde a próxima revisão pode começar.</p></div></li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="features section" id="recursos" aria-labelledby="features-title">
+        <div class="container">
+          <div class="section-heading"><div><p class="eyebrow">Seu estudo, do início ao próximo passo</p><h2 id="features-title">Um espaço para<br /><em>seguir em frente.</em></h2></div><p>A prova deixa de ser só um arquivo.<br />Ela vira parte da sua rotina.</p></div>
+          <div class="feature-grid">
+            <article class="feature"><svg class="icon feature-icon" aria-hidden="true"><use href="#i-search" /></svg><h3>Encontre a sua próxima prova</h3><p>Busque o material que combina com seu objetivo, usando os filtros da pesquisa.</p><span class="feature-index" aria-hidden="true">01 / ENCONTRAR</span></article>
+            <article class="feature"><svg class="icon feature-icon" aria-hidden="true"><use href="#i-file" /></svg><h3>PDFs que viram questões</h3><p>Importe por arquivo ou link. Extração de texto e OCR ajudam a preparar o conteúdo para estudar.</p><span class="feature-index" aria-hidden="true">02 / PREPARAR</span></article>
+            <article class="feature"><svg class="icon feature-icon" aria-hidden="true"><use href="#i-library" /></svg><h3>Uma biblioteca organizada</h3><p>Reúna suas provas em um só lugar e encontre novamente o material que você adicionou.</p><span class="feature-index" aria-hidden="true">03 / ORGANIZAR</span></article>
+            <article class="feature"><svg class="icon feature-icon" aria-hidden="true"><use href="#i-list" /></svg><h3>A prática no seu ritmo</h3><p>Resolva questões e crie simulados com o conteúdo da sua biblioteca. Retome o seu caminho.</p><span class="feature-index" aria-hidden="true">04 / PRATICAR</span></article>
+            <article class="feature"><svg class="icon feature-icon" aria-hidden="true"><use href="#i-review" /></svg><h3>Erros que orientam a revisão</h3><p>Volte às questões que pedem atenção e use seu histórico e suas estatísticas para direcionar o estudo.</p><span class="feature-index" aria-hidden="true">05 / REVISAR</span></article>
+            <article class="feature"><svg class="icon feature-icon" aria-hidden="true"><use href="#i-sync" /></svg><h3>Sua conta acompanha você</h3><p>Entre com o Google para acessar sua biblioteca e sincronizar o progresso entre os aplicativos.</p><span class="feature-index" aria-hidden="true">06 / CONTINUAR</span></article>
+          </div>
+          <div class="processing-note"><svg class="icon" aria-hidden="true"><use href="#i-monitor" /></svg><p><strong>O processamento acontece no aplicativo.</strong> Sua conta e a sincronização precisam de internet. O tempo de extração varia com o arquivo e com o dispositivo.</p></div>
+        </div>
+      </section>
+
+      <section class="downloads section" id="downloads" aria-labelledby="downloads-title">
+        <div class="container">
+          <div class="section-heading"><div><p class="eyebrow">Comece por aqui</p><h2 id="downloads-title">Seu estudo.<br /><em>No seu dispositivo.</em></h2></div><p>Escolha o aplicativo e leve suas provas<br />para o lugar em que você estuda.</p></div>
+          <div class="download-grid">
+            <article class="download-card windows-card" aria-labelledby="windows-title">
+              <div class="download-card-top"><svg class="icon platform-icon" aria-hidden="true"><use href="#i-monitor" /></svg><span class="release-badge">Versão 0.1.2</span></div>
+              <h3 id="windows-title">Windows</h3><p class="download-description">Uma mesa de estudo no seu computador.</p>
+              <p class="requirements">Windows 10 ou 11 · 64 bits · WebView2</p>
+              <a class="button button-primary download-button" href="{{WINDOWS_EXE_URL}}" data-download="windows-exe">Baixar para Windows <svg class="icon" aria-hidden="true"><use href="#i-download" /></svg></a>
+              <div class="download-file-meta"><span>Instalador EXE</span><span>{{WINDOWS_EXE_SIZE}}</span></div>
+              <a class="download-alternative" href="{{WINDOWS_MSI_URL}}">Prefere o MSI? <span>Baixar instalador · {{WINDOWS_MSI_SIZE}}</span><svg class="icon" aria-hidden="true"><use href="#i-arrow" /></svg></a>
+              <details class="file-details"><summary>Verificar os arquivos <svg class="icon" aria-hidden="true"><use href="#i-plus" /></svg></summary><div><p>Compare o SHA-256 do arquivo baixado com o valor publicado.</p><div class="checksum"><span>EXE · SHA-256</span><code>{{WINDOWS_EXE_SHA256}}</code><button type="button" class="copy-button" data-copy="{{WINDOWS_EXE_SHA256}}" data-copy-label="SHA-256 do instalador EXE"><svg class="icon" aria-hidden="true"><use href="#i-copy" /></svg> Copiar SHA-256 do EXE</button></div><div class="checksum"><span>MSI · SHA-256</span><code>{{WINDOWS_MSI_SHA256}}</code><button type="button" class="copy-button" data-copy="{{WINDOWS_MSI_SHA256}}" data-copy-label="SHA-256 do instalador MSI"><svg class="icon" aria-hidden="true"><use href="#i-copy" /></svg> Copiar SHA-256 do MSI</button></div></div></details>
+            </article>
+            <article class="download-card android-card" aria-labelledby="android-title">
+              <div class="download-card-top"><svg class="icon platform-icon" aria-hidden="true"><use href="#i-phone" /></svg><span class="release-badge experimental-badge">Experimental</span></div>
+              <h3 id="android-title">Android</h3><p class="download-description">O próximo passo também cabe no celular.</p>
+              <p class="requirements">Android 7 ou superior · ARM64</p>
+              <a class="button button-secondary download-button" href="{{ANDROID_APK_URL}}" data-download="android-apk">Baixar APK para Android <svg class="icon" aria-hidden="true"><use href="#i-download" /></svg></a>
+              <div class="download-file-meta"><span>Versão 0.1.5 · código 6</span><span>{{ANDROID_APK_SIZE}}</span></div>
+              <div class="android-notice"><strong>Antes de instalar</strong><p>Este APK precisa ser validado no seu aparelho. A compatibilidade pode variar. Inclui o motor de processamento e bibliotecas alinhadas a 16 KB.</p></div>
+              <details class="file-details"><summary>Instalação e verificação <svg class="icon" aria-hidden="true"><use href="#i-plus" /></svg></summary><div><p>Abra o APK baixado. Se o Android solicitar, permita a instalação para o aplicativo usado no download. Desative essa permissão depois de concluir.</p><p>Esta versão é para dispositivos ARM64. Se houver aviso de incompatibilidade ou fechamento ao abrir, ela ainda precisa de validação para o seu aparelho.</p><div class="checksum"><span>APK · SHA-256</span><code>{{ANDROID_APK_SHA256}}</code><button type="button" class="copy-button" data-copy="{{ANDROID_APK_SHA256}}" data-copy-label="SHA-256 do APK Android"><svg class="icon" aria-hidden="true"><use href="#i-copy" /></svg> Copiar SHA-256 do APK</button></div></div></details>
+            </article>
+          </div>
+          <div class="downloads-footnote"><p>Versões para iOS e Linux ainda não estão disponíveis.</p><a class="text-link" href="{{CHECKSUMS_URL}}">Ver todos os checksums <svg class="icon" aria-hidden="true"><use href="#i-arrow" /></svg></a></div>
+        </div>
+      </section>
+
+      <section class="faq section" id="duvidas" aria-labelledby="faq-title">
+        <div class="container faq-grid">
+          <div><p class="eyebrow">Antes do primeiro passo</p><h2 id="faq-title">Pode <em>perguntar.</em></h2><p class="faq-intro">Alguns detalhes para você<br />começar com mais clareza.</p></div>
+          <div class="faq-list">
+            <details><summary>Como começo a estudar?<svg class="icon" aria-hidden="true"><use href="#i-plus" /></svg></summary><div><p>Instale o aplicativo, entre com sua conta Google e encontre uma prova na pesquisa ou importe seu PDF. Confira as questões e o gabarito, adicione o material à biblioteca e comece a praticar.</p></div></details>
+            <details><summary>Posso usar uma prova que já tenho em PDF?<svg class="icon" aria-hidden="true"><use href="#i-plus" /></svg></summary><div><p>Sim. Você pode importar o arquivo ou informar seu link. O aplicativo extrai o texto e usa OCR para páginas digitalizadas. A qualidade do PDF influencia o resultado: confira a extração e o gabarito antes de estudar.</p></div></details>
+            <details><summary>Preciso de internet para usar a plataforma?<svg class="icon" aria-hidden="true"><use href="#i-plus" /></svg></summary><div><p>O login Google, a pesquisa, o acesso à biblioteca compartilhada e a sincronização precisam de internet. A extração e o OCR acontecem no aplicativo. Isso não significa que todos os recursos funcionem sem conexão.</p></div></details>
+            <details><summary>Meu progresso aparece no computador e no celular?<svg class="icon" aria-hidden="true"><use href="#i-plus" /></svg></summary><div><p>Use a mesma conta Google nos aplicativos para acessar a mesma biblioteca e sincronizar os resultados. É necessário estar conectado, e a versão experimental do Android ainda precisa de validação no seu aparelho.</p></div></details>
+            <details><summary>O APK funciona em qualquer celular Android?<svg class="icon" aria-hidden="true"><use href="#i-plus" /></svg></summary><div><p>A versão disponível é experimental, destinada a Android 7 ou superior com arquitetura ARM64. Ela inclui ajustes para páginas de memória de 16 KB, mas ainda precisa de validação no dispositivo. Essa informação não garante compatibilidade com todos os modelos.</p></div></details>
+            <details><summary>Qual arquivo devo baixar para Windows?<svg class="icon" aria-hidden="true"><use href="#i-plus" /></svg></summary><div><p>O instalador EXE é a opção principal. O MSI é uma alternativa de instalação da mesma versão. Ambos são para Windows 10 ou 11 de 64 bits e usam WebView2.</p></div></details>
+          </div>
+        </div>
+      </section>
+
+      <section class="closing section" aria-labelledby="closing-title"><div class="container closing-inner"><p class="eyebrow">Uma questão de cada vez</p><h2 id="closing-title">Seu estudo merece<br />um <em>lugar.</em></h2><a class="button button-primary" href="#downloads">Encontrar meu aplicativo <svg class="icon" aria-hidden="true"><use href="#i-arrow" /></svg></a><p>Leitura. Prática. Revisão. E o próximo passo.</p></div></section>
+    </main>
+
+    <footer class="site-footer"><div class="container footer-inner"><a class="brand" href="#inicio" aria-label="concurse.io, voltar ao início"><img src="./assets/favicon.svg" alt="" width="28" height="28" /><span>concurse<span class="brand-suffix">.io</span></span></a><p>Um lugar para construir o seu caminho.</p><a class="text-link" href="{{REPOSITORY_URL}}">Projeto no GitHub <svg class="icon" aria-hidden="true"><use href="#i-arrow" /></svg></a></div></footer>
+    <div class="copy-status" role="status" aria-live="polite" aria-atomic="true" data-copy-status></div>
+  </body>
+</html>
