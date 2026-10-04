@@ -9,6 +9,10 @@ A [página pública de apresentação e instalação](https://leandro-santana013
 usa os mesmos artefatos deste inventário. O código e as instruções de publicação ficam em
 [`landing/README.md`](../landing/README.md).
 
+Os ícones do código-fonte foram atualizados para preto e branco em 04/10/2026.
+Os instaladores desta pasta mantêm o ícone embutido na compilação original;
+a atualização dos arquivos de imagem não altera esses binários.
+
 ## Windows
 
 Os dois instaladores são equivalentes: o MSI é adequado para implantação

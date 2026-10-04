@@ -8,7 +8,7 @@
     "dev": "tauri dev",
     "engine:build": "powershell -ExecutionPolicy Bypass -File scripts/build-engine.ps1",
     "build": "npm run engine:build && npm run icons && tauri build",
-    "icons": "tauri icon concurse-icon.png",
+    "icons": "tauri icon icon-source.svg",
     "android:init": "tauri android init",
     "android:prepare": "node scripts/prepare-android-engine.mjs",
     "android:dev": "tauri android dev",

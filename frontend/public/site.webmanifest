@@ -4,8 +4,8 @@
   "description": "Provas e simulados para estudar com constância.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#863bff",
-  "theme_color": "#863bff",
+  "background_color": "#f7f7f5",
+  "theme_color": "#f7f7f5",
   "icons": [
     {
       "src": "/concurse-icon-192.png",
