@@ -54,7 +54,9 @@ para GitHub Pages com fonte GitHub Actions, e o ambiente `github-pages` deve
 permitir essa branch. A página gerada inclui os três instaladores atuais, seus
 hashes, metadados de compartilhamento, robots e sitemap.
 
-O Android é apresentado como beta: APK 0.1.5/code6 ARM64, Android 7.0 ou mais
-recente, com validação no aparelho e confirmação dos fluxos remotos pendentes.
+O Android é apresentado como beta: APK 0.1.7/code8 ARM64, Android 7.0 ou mais
+recente. Motor, PDF, OCR e busca pública IDCAP foram verificados no Redmi; a busca com a sessão
+do usuário e a publicação central permanecem pendentes. Consulte o
+[diagnóstico](../docs/mobile-search-0.1.7-validation.md).
 Isso não significa compatibilidade universal nem funcionamento totalmente
 offline.

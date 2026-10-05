@@ -8,6 +8,9 @@ const landing = fileURLToPath(new URL('../', import.meta.url));
 const output = path.join(landing, 'dist');
 const html = await readFile(path.join(output, 'index.html'), 'utf8');
 const manifest = JSON.parse(await readFile(path.join(output, 'releases.json'), 'utf8'));
+const android = manifest.downloads.ANDROID_APK;
+assert(html.includes(`Versão ${android.version} · código ${android.androidVersionCode}`),
+  'A versão exibida do Android deve corresponder ao APK do manifesto.');
 assert(!/\{\{.*?\}\}/.test(html), 'Variável de build não resolvida.');
 assert(/<html[^>]*lang="pt-BR"/.test(html), 'Idioma ausente.');
 assert.equal((html.match(/<h1[\s>]/g) || []).length, 1, 'A página deve ter um título principal.');

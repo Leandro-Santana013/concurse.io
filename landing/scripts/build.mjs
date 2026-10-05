@@ -31,6 +31,11 @@ for (const [key, artifact] of Object.entries(manifest.downloads)) {
   if (!/^[\w.-]+$/.test(artifact.file)) throw new Error(`Nome de download inválido: ${artifact.file}`);
   const url = `https://media.githubusercontent.com/media/${manifest.repository}/${manifest.artifactCommit}/downloads/${encodeURIComponent(artifact.file)}`;
   values[`${key}_URL`] = url;
+  values[`${key}_VERSION`] = artifact.version;
+  if (key === 'ANDROID_APK') {
+    if (!Number.isSafeInteger(artifact.androidVersionCode) || artifact.androidVersionCode < 1) throw new Error('Código Android inválido.');
+    values.ANDROID_APK_CODE = artifact.androidVersionCode;
+  }
   values[`${key}_SIZE`] = size(artifact.bytes);
   values[`${key}_SHA256`] = artifact.sha256;
   published[key] = { ...artifact, url };

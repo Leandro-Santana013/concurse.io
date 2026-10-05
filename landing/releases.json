@@ -1,6 +1,6 @@
 {
   "repository": "Leandro-Santana013/concurse.io",
-  "artifactCommit": "c62bc2d60e1a15c3d433af723912268896d2196e",
+  "artifactCommit": "eb45f72633826bce4d03fba669fe70547d4b7b97",
   "siteUrl": "https://leandro-santana013.github.io/concurse.io/",
   "downloads": {
     "WINDOWS_EXE": {
@@ -16,10 +16,11 @@
       "sha256": "2ce374a5076e4acfc915e70cfcd25478326a98e8017e3403cd59c2b0534c549e"
     },
     "ANDROID_APK": {
-      "file": "concurse-mobile-aarch64-release-v0.1.6-code7-16k.apk",
-      "version": "0.1.6",
-      "bytes": 158110064,
-      "sha256": "613dcd0886b4f7b7f7e521ae1b1a18651fb3050479d547d304397ea654dcb8fc"
+      "file": "concurse-mobile-aarch64-release-v0.1.7-code8-16k.apk",
+      "version": "0.1.7",
+      "androidVersionCode": 8,
+      "bytes": 158589296,
+      "sha256": "3add80ff7fc57e5e82c6487191cf74a368ff8e02427ab570435b2c503549c859"
     }
   }
 }
