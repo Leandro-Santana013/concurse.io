@@ -29,14 +29,16 @@ enviada ao Supabase e os arquivos ao Oracle. Biblioteca, tentativas,
 estatísticas, caderno de erros e ranking usam os dados centrais pelo gateway;
 o SQLite do motor não é a biblioteca principal.
 
-O APK Android `0.1.6/code7` usa o mesmo gateway e inclui um motor de
+O APK Android `0.1.7/code8` usa o mesmo gateway e inclui um motor de
 extração/OCR embarcado, com a mesma lógica de processamento de provas do
 desktop. O SQLite do Android guarda a fila e os dados de trabalho; a biblioteca
-e as tentativas usam os serviços centrais. A revisão corrige uma falha do
-OpenSSL capturada no Redmi 14C que impedia o motor de iniciar e tornava a busca
-indisponível. O usuário informou ter substituído a função `app-gateway` no
-painel Supabase; a validação remota autenticada e o teste desta revisão no
-aparelho continuam pendentes. Consulte a
+e as tentativas usam os serviços centrais. A revisão preserva a correção do
+OpenSSL e corrige a localização de `libmupdfcpp.so`, que ainda impedia o motor
+de iniciar em 0.1.6. Motor, PDF, OCR e margens nativas passaram no teste release
+do Redmi 14C. Falhas temporárias do serviço de login não são tratadas como
+sessão expirada. O usuário informou ter substituído a função `app-gateway` no
+painel Supabase; a busca autenticada e a publicação central ainda precisam de
+validação. Consulte a
 [auditoria mobile](docs/mobile-migration-audit.md) antes de considerar a migração
 operacionalmente concluída.
 
@@ -49,7 +51,7 @@ acompanhado pelo SHA-256 em [`downloads/SHA256SUMS.txt`](downloads/SHA256SUMS.tx
 | --- | --- | --- |
 | Windows x64 | [`concurse.io_0.1.2_x64-setup.exe`](downloads/concurse.io_0.1.2_x64-setup.exe) | Instalador interativo atual; exige WebView2 |
 | Windows x64 | [`concurse.io_0.1.2_x64_en-US.msi`](downloads/concurse.io_0.1.2_x64_en-US.msi) | Instalador MSI atual; exige WebView2 |
-| Android ARM64 | [`concurse-mobile-aarch64-release-v0.1.6-code7-16k.apk`](downloads/concurse-mobile-aarch64-release-v0.1.6-code7-16k.apk) | Revisão beta, Android 7.0 ou superior; motor OCR embarcado; teste no aparelho pendente |
+| Android ARM64 | [`concurse-mobile-aarch64-release-v0.1.7-code8-16k.apk`](downloads/concurse-mobile-aarch64-release-v0.1.7-code8-16k.apk) | Beta, Android 7.0 ou superior; motor, PDF e OCR testados no Redmi; busca autenticada pendente |
 
 O APK Android apresenta três páginas sobre biblioteca, prática e
 revisão, seguidas do login. O carrossel permite deslizar, usar a paginação e
@@ -79,12 +81,14 @@ A falha de DNS no login foi resolvida após o usuário retomar o projeto Supabas
 em 03/10/2026. A verificação remota confirmou o serviço Auth respondendo com
 Google habilitado e a autorização redirecionando para `accounts.google.com`.
 O usuário confirmou o retorno do Google ao aplicativo na versão instalada
-0.1.3. A interface, o login, a busca e o processamento da revisão 0.1.6 ainda
-precisam de teste no aparelho: o Redmi não está disponível na conexão ADB.
+0.1.3. Em 0.1.7, o teste instrumental confirmou inicialização, PDF, OCR,
+criptografia, sessão local e HTTPS do serviço Auth no Redmi. A busca pela
+interface, o download para a biblioteca e a publicação central ainda precisam
+de validação com a sessão do usuário.
 As versões anteriores usam uma chave de desenvolvimento; uma distribuição
 de produção exige uma chave de release própria.
 
-O APK `0.1.5/code6` permanece no histórico. Os instaladores Windows `0.1.2`
+Os APKs `0.1.5/code6` e `0.1.6/code7` permanecem no histórico. A 0.1.6 ainda falhava ao carregar uma dependência nativa do PyMuPDF; a correção está documentada no [diagnóstico da busca](docs/mobile-search-0.1.7-validation.md). Os instaladores Windows `0.1.2`
 não foram recompilados nesta revisão; as mudanças nos componentes e ícones
 compartilhados estão nas fontes e só chegam ao instalador após um novo build.
 A branch de distribuição é `codex/concurse-app`. O
@@ -153,8 +157,10 @@ completo de desenvolvimento e armazenamento.
 
 O fluxo Windows/web usa Supabase para autenticação e dados centrais. Os
 instaladores Windows continuam na versão `0.1.2`; a revisão Android é
-`0.1.6/code7` e permanece beta. A verificação desta revisão passou em 29 testes
-de backend, com um ignorado, 52 testes do pipeline e de regressão, 20 testes
-frontend e seis testes de navegador. Esses resultados não substituem o teste
-do APK no Redmi nem a validação autenticada da função remota que o usuário
-informou ter atualizado. Login e sincronização exigem conexão com a internet.
+`0.1.7/code8` e permanece beta. Nesta revisão passaram 23 testes de autenticação,
+bootstrap e empacotamento, cinco testes da integração mobile e o teste
+instrumental no Redmi. A revisão anterior passou em 29 testes de backend,
+com um ignorado, 52 do pipeline e regressões, 20 frontend e seis de navegador.
+O [diagnóstico da busca](docs/mobile-search-0.1.7-validation.md) registra os
+resultados e a validação autenticada ainda pendente. Login e sincronização
+exigem conexão com a internet.

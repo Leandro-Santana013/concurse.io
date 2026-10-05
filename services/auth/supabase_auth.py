@@ -22,6 +22,32 @@ class SupabaseAuthError(RuntimeError):
     """Erro esperado ao validar um token do Supabase Auth."""
 
 
+class SupabaseAuthUnavailableError(SupabaseAuthError):
+    """O serviço não pôde validar a sessão; não significa token inválido."""
+
+
+def _network_error_kinds(error: BaseException) -> str:
+    """Log only exception types and error numbers, never URLs or credentials."""
+    pending = [error]
+    seen = set()
+    kinds = []
+    while pending and len(seen) < 12:
+        current = pending.pop(0)
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        name = type(current).__name__
+        number = getattr(current, "errno", None)
+        kinds.append(f"{name}[errno={number}]" if isinstance(number, int) else name)
+        pending.extend(value for value in (
+            getattr(current, "__cause__", None),
+            getattr(current, "__context__", None),
+            getattr(current, "reason", None),
+            *getattr(current, "args", ()),
+        ) if isinstance(value, BaseException))
+    return " -> ".join(kinds)
+
+
 def _project_url() -> str:
     return str(os.environ.get("SUPABASE_URL") or "").strip().rstrip("/")
 
@@ -71,14 +97,21 @@ def verify_supabase_access_token(access_token: str) -> Dict[str, Any]:
         payload = response.json()
     except requests.HTTPError as exc:
         status = getattr(exc.response, "status_code", "unknown")
+        if status not in (401, 403):
+            LOGGER.warning("Supabase identity service unavailable (status=%s).", status)
+            raise SupabaseAuthUnavailableError(
+                "O serviço de login está indisponível. Tente novamente em instantes."
+            ) from exc
         LOGGER.info("Supabase access token rejected (status=%s).", status)
         raise SupabaseAuthError("A sessão do Supabase expirou ou é inválida.") from exc
     except (requests.RequestException, ValueError, TypeError) as exc:
-        LOGGER.warning("Supabase identity request failed (%s).", type(exc).__name__)
-        raise SupabaseAuthError("Não foi possível validar a sessão do Supabase.") from exc
+        LOGGER.warning("Supabase identity request failed (%s).", _network_error_kinds(exc))
+        raise SupabaseAuthUnavailableError(
+            "Não foi possível conectar ao serviço de login. Confira sua conexão e tente novamente."
+        ) from exc
 
     if not isinstance(payload, dict):
-        raise SupabaseAuthError("Resposta de identidade do Supabase inválida.")
+        raise SupabaseAuthUnavailableError("Resposta de identidade do Supabase inválida.")
     subject = str(payload.get("id") or "").strip()
     email = str(payload.get("email") or "").strip()
     if not subject or not email:

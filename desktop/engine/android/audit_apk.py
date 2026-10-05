@@ -7,8 +7,42 @@ import io
 import json
 from pathlib import Path
 import zipfile
+from posixpath import basename, dirname, join
 
 from normalize_native_wheels import elf_info
+
+
+def validate_dependency_locations(native: list[dict]) -> None:
+    """SONAME-less wheels still need their libraries beside the extension.
+
+    Chaquopy preloads named dependencies from chaquopy/lib. Android cannot
+    reliably match a library loaded by absolute path to a DT_NEEDED name when
+    that library has no SONAME, so its original $ORIGIN location must survive.
+    Requirement archives share the same extraction directory on Android.
+    """
+    requirements = {
+        item["path"].split("!/", 1)[1]: item
+        for item in native
+        if "requirements" in item["path"] and "!/" in item["path"]
+    }
+    shared = {
+        basename(path): item for path, item in requirements.items()
+        if path.startswith("chaquopy/lib/")
+    }
+    for name in shared:
+        if ".cpython-" in name:
+            raise ValueError(f"Python extension moved out of its package: {name}")
+    for path, item in requirements.items():
+        for needed in item["needed"]:
+            dependency = shared.get(needed)
+            if not dependency or dependency["soname"] == needed:
+                continue
+            sibling = join(dirname(path), needed)
+            if sibling not in requirements:
+                raise ValueError(
+                    f"SONAME-less dependency {needed} missing beside {path}; "
+                    "preserve the wheel's $ORIGIN library location"
+                )
 
 
 def audit(apk: Path, source_manifest: Path) -> dict:
@@ -51,6 +85,7 @@ def audit(apk: Path, source_manifest: Path) -> dict:
                 raise ValueError(f"Missing engine module: {module}")
         if not any("requirements" in item for item in assets) or len(native) < 64:
             raise ValueError("Embedded Python native requirements are missing")
+    validate_dependency_locations(native)
     return {"apk": str(apk.resolve()), "sha256": hashlib.file_digest(apk.open("rb"), "sha256").hexdigest(),
             "bytes": apk.stat().st_size, "source_count": len(app_files), "archives": assets, "native": native}
 

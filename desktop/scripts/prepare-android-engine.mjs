@@ -85,7 +85,8 @@ await fs.copyFile(path.join(engineRoot, 'MainActivity.kt'), path.join(androidRoo
 await fs.copyFile(path.join(engineRoot, 'ProcessingService.kt'), path.join(androidRoot, 'app', 'src', 'main', 'java', 'io', 'concurse', 'desktop', 'ProcessingService.kt'));
 const testDir = path.join(androidRoot, 'app', 'src', 'androidTest', 'java', 'io', 'concurse', 'desktop');
 await fs.mkdir(testDir, { recursive: true });
-await fs.copyFile(path.join(engineRoot, 'EngineSmokeTest.kt'), path.join(testDir, 'EngineSmokeTest.kt'));
+await fs.rm(path.join(testDir, 'EngineSmokeTest.kt'), { force: true });
+await fs.copyFile(path.join(engineRoot, 'EngineSmokeTest.java'), path.join(testDir, 'EngineSmokeTest.java'));
 await fs.copyFile(path.join(engineRoot, 'engine.pro'), path.join(androidRoot, 'app', 'concurse-engine.pro'));
 await fs.copyFile(path.join(engineRoot, 'network_security_config.xml'), path.join(androidRoot, 'app', 'src', 'main', 'res', 'xml', 'engine_network_security_config.xml'));
 const manifestFile = path.join(androidRoot, 'app', 'src', 'main', 'AndroidManifest.xml');

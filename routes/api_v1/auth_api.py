@@ -32,6 +32,7 @@ from services.auth import (
 )
 from services.auth.supabase_auth import (
     SupabaseAuthError,
+    SupabaseAuthUnavailableError,
     supabase_auth_configured,
     verify_supabase_access_token,
 )
@@ -169,6 +170,8 @@ def exchange_supabase_session(
     access_token = str(payload.get("access_token") or "").strip()
     try:
         identity = verify_supabase_access_token(access_token)
+    except SupabaseAuthUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except SupabaseAuthError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 

@@ -14,6 +14,51 @@ from services.auth import create_session_token, read_session_token
 from app_security import identifier_lookup_values
 from fastapi_app import _OAuthAccessLogFilter
 from services.auth import auth_service
+from services.auth import supabase_auth
+
+
+@pytest.mark.parametrize("status,unavailable", [(401, False), (403, False), (429, True), (503, True)])
+def test_supabase_http_failures_distinguish_authentication_from_outage(monkeypatch, status, unavailable):
+    monkeypatch.setenv("SUPABASE_URL", "https://project.supabase.co")
+    monkeypatch.setenv("SUPABASE_PUBLISHABLE_KEY", "public-test-key")
+    response = supabase_auth.requests.Response()
+    response.status_code = status
+    monkeypatch.setattr(supabase_auth.requests, "get", lambda *args, **kwargs: response)
+    with pytest.raises(supabase_auth.SupabaseAuthError) as rejected:
+        supabase_auth.verify_supabase_access_token("invalid-test-token-at-least-20-characters")
+    assert isinstance(rejected.value, supabase_auth.SupabaseAuthUnavailableError) == unavailable
+
+
+def test_network_diagnostic_excludes_credentials(monkeypatch, caplog):
+    import socket
+    monkeypatch.setenv("SUPABASE_URL", "https://project.supabase.co")
+    monkeypatch.setenv("SUPABASE_PUBLISHABLE_KEY", "private-test-key")
+    cause = socket.gaierror(-2, "do not log private-test-key or private-test-token")
+    error = supabase_auth.requests.ConnectionError(cause)
+    def unavailable(*args, **kwargs):
+        raise error
+    monkeypatch.setattr(supabase_auth.requests, "get", unavailable)
+    with caplog.at_level(logging.WARNING), pytest.raises(supabase_auth.SupabaseAuthUnavailableError):
+        supabase_auth.verify_supabase_access_token("private-test-token-at-least-20-characters")
+    assert "gaierror[errno=-2]" in caplog.text
+    assert "private-test" not in caplog.text
+
+
+@pytest.mark.parametrize("error,status", [
+    (supabase_auth.SupabaseAuthError("Token inválido"), 401),
+    (supabase_auth.SupabaseAuthUnavailableError("Serviço indisponível"), 503),
+])
+def test_supabase_exchange_failure_does_not_create_user(auth_client, monkeypatch, error, status):
+    client, session_factory = auth_client
+    monkeypatch.setattr(auth_api, "supabase_auth_configured", lambda: True)
+    def rejected(_token):
+        raise error
+    monkeypatch.setattr(auth_api, "verify_supabase_access_token", rejected)
+    response = client.post("/api/v1/auth/supabase/exchange", json={"access_token": "invalid-test-token"})
+    assert response.status_code == status
+    assert not response.cookies
+    with session_factory() as db:
+        assert db.query(User).count() == 0
 
 
 def test_signed_session_rejects_tampering_and_expiration(monkeypatch):

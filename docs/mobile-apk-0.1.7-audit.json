@@ -1,0 +1,2140 @@
+{
+  "apk": "downloads/concurse-mobile-aarch64-release-v0.1.7-code8-16k.apk",
+  "sha256": "3add80ff7fc57e5e82c6487191cf74a368ff8e02427ab570435b2c503549c859",
+  "bytes": 158589296,
+  "source_count": 102,
+  "archives": [
+    "assets/chaquopy/app.imy",
+    "assets/chaquopy/bootstrap.imy",
+    "assets/chaquopy/requirements-arm64-v8a.imy",
+    "assets/chaquopy/requirements-common.imy",
+    "assets/chaquopy/requirements-native-wheel-audit.json.imy",
+    "assets/chaquopy/stdlib-arm64-v8a.imy",
+    "assets/chaquopy/stdlib-common.imy"
+  ],
+  "native": [
+    {
+      "path": "lib/arm64-v8a/libchaquopy_java.so",
+      "sha256": "44f186f4a4daf1c65acabf0803703f41f7d2748799e8e94ba73217b7ba7b14a1",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": "libchaquopy_java-3.12.so",
+      "needed": [
+        "libpython3.12.so",
+        "liblog.so",
+        "libm.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "lib/arm64-v8a/libconcurse_desktop_lib.so",
+      "sha256": "6a87e98b7bce50e0446a6e271712568739dfed0c5b5e6c927b87c983b75f416e",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libandroid.so",
+        "libdl.so",
+        "liblog.so",
+        "libm.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "lib/arm64-v8a/libcrypto_chaquopy.so",
+      "sha256": "766c1744b32da624ca78d3996806b43631f28222576ba80bb5688e5c3041f0be",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384
+      ],
+      "soname": "libcrypto_chaquopy.so",
+      "needed": [
+        "libm.so",
+        "libcrypto_python.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "lib/arm64-v8a/libcrypto_python.so",
+      "sha256": "c6c31b928c480e77ca85f9e34286ca922d6c56fd79567b34d442bbcc6817d10e",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": "libcrypto_python.so",
+      "needed": [
+        "libm.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "lib/arm64-v8a/libpython3.12.so",
+      "sha256": "47c7da8d833f504b76c7720ecd76cf57f80f597e390cac1b6321f9b8f40dcf3c",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "lib/arm64-v8a/libsqlite3_chaquopy.so",
+      "sha256": "1e348dceef9c46754e6be14f2a58e6d34441afb03974b36fa0710f8ee50ebf2d",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384
+      ],
+      "soname": "libsqlite3_chaquopy.so",
+      "needed": [
+        "libm.so",
+        "libsqlite3_python.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "lib/arm64-v8a/libsqlite3_python.so",
+      "sha256": "6b0f0012ffff95d2420e88fd420d0d65dc4d63d943c1011567978f6203d118dd",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": "libsqlite3_python.so",
+      "needed": [
+        "libm.so",
+        "libz.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "lib/arm64-v8a/libssl_chaquopy.so",
+      "sha256": "024d7a7696e789443642645df35929994aa8a4a3cb4d46b2fe7415d64f9a2282",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384
+      ],
+      "soname": "libssl_chaquopy.so",
+      "needed": [
+        "libm.so",
+        "libssl_python.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "lib/arm64-v8a/libssl_python.so",
+      "sha256": "60b083de76e184b19bb830e80f9f6b155f6db87e309018d007db6439db45145e",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": "libssl_python.so",
+      "needed": [
+        "libm.so",
+        "libcrypto_python.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/_cffi_backend.so",
+      "sha256": "158850ce0a3f406294d1e058c8775d9cf8f693a7e56089415e0087cf0d3e5809",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/PIL/_imaging.so",
+      "sha256": "065310b452bde8b627ca9f2c2f371bfc11204f7ee92d71a6b75cb853ad1db9bf",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libz.so",
+        "libjpeg.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/PIL/_imagingft.so",
+      "sha256": "c40b6df4503a2b6d03ec97f707576d4b93b2bd569c9d5432006f749b5d2323de",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libz.so",
+        "libfreetype.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/PIL/_imagingmath.so",
+      "sha256": "ab74d32c2e51c739365374ea895df891bdd79fd52eacdd24070abd1180005982",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libz.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/PIL/_imagingmorph.so",
+      "sha256": "b446b9873a11d347bac95a2ca85d3e2883e1392bc477a5e612b5008d1ae3e2c2",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libz.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/PIL/_imagingtk.so",
+      "sha256": "f9bfed907c047ddc93bf926c00fdf7769c28eb104a0c3dc7ec49eed909f5abb8",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libz.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/PIL/_webp.so",
+      "sha256": "ef7a42843d18579d77105b8f1086415961cbb4db0d5942ab26c71402af206b5c",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libz.so",
+        "libwebp.so",
+        "libwebpmux.so",
+        "libwebpdemux.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/chaquopy/lib/libc++_shared.so",
+      "sha256": "f4e1e97c1943e60311e47e8b024d78f5b3b7229b3ccc65feb33af83d6025a670",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384,
+        16384
+      ],
+      "soname": "libc++_shared.so",
+      "needed": [
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/chaquopy/lib/libexslt.so",
+      "sha256": "1cbe63336bcd9d92f362366b1500bbfcaa19e9c828573df7fc1387e96c3343a9",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": "libexslt.so",
+      "needed": [
+        "libxslt.so",
+        "libm.so",
+        "libxml2.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/chaquopy/lib/libfreetype.so",
+      "sha256": "afa9048e7f00cd387c960663ad522a1afce453110f9243fc4011b664c2c9c236",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": "libfreetype.so",
+      "needed": [
+        "libm.so",
+        "libz.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/chaquopy/lib/libgeos.so",
+      "sha256": "77986b44df6849529356a9b936807c63f7961070ab05a3f4feb58596284300eb",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": "libgeos.so",
+      "needed": [
+        "libm.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/chaquopy/lib/libgeos_c.so",
+      "sha256": "beca784761a7c66e3240a1d9f2adc6f67a0e0b813df43004f520fbfb12b4826d",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": "libgeos_c.so",
+      "needed": [
+        "libm.so",
+        "libgeos.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/chaquopy/lib/libjpeg.so",
+      "sha256": "ead29cffe7ca8ee3c7c5fbf6a0dbf11fc6f19cd9c9234318942d6330fe63bb22",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": "libjpeg.so",
+      "needed": [
+        "libm.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/chaquopy/lib/libmupdf.so",
+      "sha256": "119392479ad3b18f2174963876109e34a5de6a4d47f82cd2c421cd13709cdc43",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": "libmupdf.so",
+      "needed": [
+        "libm.so",
+        "liblog.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/chaquopy/lib/libmupdfcpp.so",
+      "sha256": "ad0a0f72fc58a3fffd99081f0b3096c6c9036e37b3f090d56c034a389c74b0bb",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libmupdf.so",
+        "libm.so",
+        "liblog.so",
+        "libpython3.12.so",
+        "libc++_shared.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/chaquopy/lib/libsharpyuv.so",
+      "sha256": "2849a21b8abf54a9207ac0f5f2a66deafb9e69077ddc593574deade279762c02",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": "libsharpyuv.so",
+      "needed": [
+        "libm.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/chaquopy/lib/libturbojpeg.so",
+      "sha256": "c637b83f0e2a0441994a924932593158e42bfb5c00cfbfa9352c0f36a6bb03fb",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": "libturbojpeg.so",
+      "needed": [
+        "libm.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/chaquopy/lib/libwebp.so",
+      "sha256": "a807bd83f8dfe1a7816139d002e436bf59cf8d2e1154fb3b008d5099070a5e3a",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": "libwebp.so",
+      "needed": [
+        "libsharpyuv.so",
+        "libm.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/chaquopy/lib/libwebpdemux.so",
+      "sha256": "8200843f03af437380ead2b3131236c48da22217f3b49555f490184699baabde",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384
+      ],
+      "soname": "libwebpdemux.so",
+      "needed": [
+        "libm.so",
+        "libwebp.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/chaquopy/lib/libwebpmux.so",
+      "sha256": "9fea6e024d8f09dac5e35913d11300a34ef4684785f15fc5404adb99a8baad57",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384
+      ],
+      "soname": "libwebpmux.so",
+      "needed": [
+        "libm.so",
+        "libwebp.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/chaquopy/lib/libxml2.so",
+      "sha256": "049511b11aec4c3ad47595bdfceaa9724b1714bdf367cd0b1521ac8604764adb",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": "libxml2.so",
+      "needed": [
+        "libm.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/chaquopy/lib/libxslt.so",
+      "sha256": "78eb0797508f832c62301d3a32d634d09ec12f213a84e3c98b7c88aa135277b0",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": "libxslt.so",
+      "needed": [
+        "libm.so",
+        "libxml2.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/chaquopy/lib/libyaml.so",
+      "sha256": "c6d730d1e47302dfae95819f9f08295b9ac82e954c203e61e20ffc2381e61833",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384
+      ],
+      "soname": "libyaml.so",
+      "needed": [
+        "libm.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/cryptography/hazmat/bindings/_rust.abi3.so",
+      "sha256": "030da8ffeb4aeb3c3ca0f1259c765b770958b4b4fc921445335a59eea7cee48e",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/cv2/cv2.abi3.so",
+      "sha256": "f21e973a42e699c2ddc21fd9407e97b3131aa04d29e1c139446d5f0b4c03fe71",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libpython3.12.so",
+        "libandroid.so",
+        "liblog.so",
+        "libmediandk.so",
+        "libcamera2ndk.so",
+        "libz.so",
+        "libdl.so",
+        "libm.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/greenlet/_greenlet.so",
+      "sha256": "5b9b0e3fde3cef31a243a7233dd94bfcb3a32f28321674ae52db00a5db0405ef",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libc++_shared.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/greenlet/tests/_test_extension.so",
+      "sha256": "fa0cf5dce1cd2919f60f2ad069f9c4ca4b3e4910312121113962bcd7c2dff117",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/greenlet/tests/_test_extension_cpp.so",
+      "sha256": "cd48d6f6cd3b9d903f562681c4db9e91baec7bd63e5c492c6dbc89903fd1ae45",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libc++_shared.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/lxml/_elementpath.so",
+      "sha256": "c2b3a168d284995521463f83c465771aa2a3ca52728f190a3f825cf3ae868d00",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/lxml/builder.so",
+      "sha256": "62b9802ac7f9c7ef3be6a74330c15259826629000412d46d9fa6f6ae3b5a645e",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/lxml/etree.so",
+      "sha256": "51837898fe2c64ee6aa15b7129e6bc448eb0e2781cc2adfa7541f58c8c7c5089",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libxslt.so",
+        "libexslt.so",
+        "libxml2.so",
+        "libz.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/lxml/objectify.so",
+      "sha256": "2a552c99af30e4d3456810f8ac7e06c10441ab0ac3710105d4f92ee8b7bafb2b",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libxslt.so",
+        "libexslt.so",
+        "libxml2.so",
+        "libz.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/lxml/sax.so",
+      "sha256": "96dfc6c7d486685ee5c932f28924215b5e19e2e1fd1d37a0f234a1c5926c8e1c",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/lxml/html/_difflib.so",
+      "sha256": "ec77c9bb0c0bdab48c606f4cc64dff0084f01eb8963cb29a102ee47277d6cba1",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/lxml/html/diff.so",
+      "sha256": "51924ad4a05d4349f32475482d96dbde7e6bdc80e1ce39e361b1643c06a32668",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/numpy/_core/_multiarray_tests.so",
+      "sha256": "247c710247957441b677af42b35ae8d5981fa57d1a1c1646e9e0169bab99846b",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/numpy/_core/_multiarray_umath.so",
+      "sha256": "395ce519e7b492421cbedbfa029ea43a4e8e7fc3e63007a91f6f86ba0277809b",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/numpy/_core/_operand_flag_tests.so",
+      "sha256": "2ce82daf8fddb15b138685ec813766f4cd272fe245b398a6af3c6790dc0a6ec0",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libpython3.12.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/numpy/_core/_rational_tests.so",
+      "sha256": "70e1cdf86214ab693876062f5ca3b69319ccafe3a6f911bce23fd8d97e425aac",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libpython3.12.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/numpy/_core/_simd.so",
+      "sha256": "80af25c59ed11970ce8bf8e0c1ed8f4613504fefed41bdfecd1ee862d1d91399",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/numpy/_core/_struct_ufunc_tests.so",
+      "sha256": "de2e65500294bdaaf061cbfd4a20cdd91a53e649978ba99fceb7e7ae8716a193",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libpython3.12.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/numpy/_core/_umath_tests.so",
+      "sha256": "2c037090cbf3836b3b3d081bacba5c68446ca5f0846844c15abf9822033fb55a",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libpython3.12.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/numpy/fft/_pocketfft_umath.so",
+      "sha256": "953e9f07af98af79e417050c637b945ec80c1757c1b0821bdb38a6622fd8dda2",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libc++_shared.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/numpy/linalg/_umath_linalg.so",
+      "sha256": "a443ac886288f9ce96c2bfaa13c2c76026137073e14a225c05abf6f7d8c855b2",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/numpy/linalg/lapack_lite.so",
+      "sha256": "cf4999f8839fb8f1ca47256a9b8fb2403c19b4102a90c0b657870a9e1728c985",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/numpy/random/_bounded_integers.so",
+      "sha256": "3325ed09fde356775a607e630e7935353c2ef92681a80e4b24d54c214abb03ff",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/numpy/random/_common.so",
+      "sha256": "c8a62454933d6e9c83cabb257224c303ba1e9378f4ee1d6ad9c8e0d764ca66c1",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libpython3.12.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/numpy/random/_generator.so",
+      "sha256": "45ce30f59464b652caaec9b79c7d78a329cfbb9a4ece8469bfd235147ac86d77",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/numpy/random/_mt19937.so",
+      "sha256": "a505131b62fa05fd3bf4a4f942f48b3be9890e156154132b32f08407bec07577",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libpython3.12.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/numpy/random/_pcg64.so",
+      "sha256": "543feb652c9f3a44e688bd4cbc24586236edde51ddcee885fc4030fed438f191",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libpython3.12.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/numpy/random/_philox.so",
+      "sha256": "66818666e7d42a13f36c469d0ab01376d1fbc8940d451f8c9cec3c5588a0f5b2",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libpython3.12.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/numpy/random/_sfc64.so",
+      "sha256": "1e6c5d03bbccb176124e7ecf8c8c26ea5170712bf87c51ba5ce6c99010e03a5e",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libpython3.12.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/numpy/random/bit_generator.so",
+      "sha256": "e09e3c3cc80a332a7f8304162302adab0f9f1365eafcc0f8f2f6572fc4341301",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libpython3.12.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/numpy/random/mtrand.so",
+      "sha256": "44ab948fa381815c8905d4f72dab3f1bd4cf54ffc5b0b7cd1741b44cf9127dbb",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/onnxruntime/capi/onnxruntime_pybind11_state.so",
+      "sha256": "dda991d82fc38ac2f95394306845e3340eb858b59b725ac2e6224763eb386ca6",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libdl.so",
+        "libpython3.12.so",
+        "liblog.so",
+        "libm.so",
+        "libc++_shared.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/opt/bin/xmlcatalog",
+      "sha256": "585d617e5eec4acae23106d8d30818b9cee38ca1d975e2f311ed2adb4d2b7031",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libxml2.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/opt/bin/xmllint",
+      "sha256": "a0c7fa6229f6e8bda59170e96fc960134430a9957d939037d005df5d6e695b0a",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libxml2.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/primp/primp.abi3.so",
+      "sha256": "df0ff08303073eda27075fa93841a9dc3d5782c77fa3ef978c6e5d4027c18fc0",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libpython3.12.so",
+        "libdl.so",
+        "libm.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/pyclipper/_pyclipper.so",
+      "sha256": "bbbdfc6d241562b2eda61d5145b675e7f450a4f65b34ecd942edaacdd18d03fe",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libc++_shared.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/pydantic_core/_pydantic_core.so",
+      "sha256": "41efe50642fbb85bbca152b4d3fad875695ad43ae96fac88f9d6da844cb0e1e4",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/pymupdf/_extra.so",
+      "sha256": "42dab9015b0e4a4b8c3498e4d1905c210bc9921bc13fe1ddddb99c4a14517396",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libmupdf.so",
+        "libmupdfcpp.so",
+        "libdl.so",
+        "libm.so",
+        "libc++_shared.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/pymupdf/_mupdf.so",
+      "sha256": "56a8b49a01c44abea0261ff2975d96d8236f7d0571b8643c67668b724914b827",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libdl.so",
+        "libm.so",
+        "libmupdfcpp.so",
+        "libmupdf.so",
+        "liblog.so",
+        "libpython3.12.so",
+        "libc++_shared.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/pymupdf/libmupdfcpp.so",
+      "sha256": "ad0a0f72fc58a3fffd99081f0b3096c6c9036e37b3f090d56c034a389c74b0bb",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libmupdf.so",
+        "libm.so",
+        "liblog.so",
+        "libpython3.12.so",
+        "libc++_shared.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/shapely/_geometry_helpers.so",
+      "sha256": "50f91cfd7d564aaad10b26e26a05f1ec0323f00ae2a63570a3b5b6363a3b60ff",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libgeos_c.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/shapely/_geos.so",
+      "sha256": "ab70f006c7ac155d24f783c4397f8a8b591353abf2c53f9a8209abeb21bac401",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libgeos_c.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/shapely/lib.so",
+      "sha256": "c5f26c113f89db52e3ae97fee89f5744a863ae63bfc16afbb66270e87b928c6e",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libgeos_c.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/requirements-common.imy!/yaml/_yaml.so",
+      "sha256": "39f41e44ea57a0dc65d2d21fdab7695717983e54b9bf277527bdbe37fcc03b30",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libyaml.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_asyncio.cpython-312.so",
+      "sha256": "e662b8c33c5ff05ee0e8ca30f6a05b0a4ac36483057a4fd4b25a0fc241a17709",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_bisect.cpython-312.so",
+      "sha256": "cc9c0c4fdf369102cd687d83f7875e7c9a597333b504360795a6fe560e31b1a6",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_blake2.cpython-312.so",
+      "sha256": "7b3ac1d6dc33abfc38fcbcd98e76abe026b7d44f81fa24344e0cdb44ca6e9dea",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_codecs_cn.cpython-312.so",
+      "sha256": "b57f03da725f3216af40c62138beb73ac0043e0d8d013ca1c687c3abf2c69c8c",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_codecs_hk.cpython-312.so",
+      "sha256": "d48eb88aee7a8527ac30130eb40eb951c8fa5f04ea8e613fb6e316d7df98c8aa",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_codecs_iso2022.cpython-312.so",
+      "sha256": "d4a8e1cf70bde52c8d25a5a009b56a487b6e34f6843b95dc337fc54615e29827",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_codecs_jp.cpython-312.so",
+      "sha256": "622a70e06ded36abd2aa27495e3f65718abfab86b1f0b27ebce13d66fc3969a3",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_codecs_kr.cpython-312.so",
+      "sha256": "e9ea145f3c0337ac53e0fc9a3a23bd9cb3be6ac34b87452611452c5bba0d584e",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_codecs_tw.cpython-312.so",
+      "sha256": "d4362fbb445737880be7a74ee36a9a65d8a0ddaa0aadfbf9d9169c17d206b70c",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_contextvars.cpython-312.so",
+      "sha256": "9aaad224c14ac9733e362d0f7536bae9674a4ecd2abdf98066e87f50f927c110",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_csv.cpython-312.so",
+      "sha256": "a28efb3e0d9e61aed6ea47b1b1198645137359d9a262055f9a35a1c66c1cd654",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_decimal.cpython-312.so",
+      "sha256": "aef7e777bb70515ff0787cb77a60094028b2c18d2351c44be95095cc03400de9",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_elementtree.cpython-312.so",
+      "sha256": "97df72f1fb81e9810fca74c1b9ccaacec52fcfd7b31acd6d8a660eeec023182f",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_hashlib.cpython-312.so",
+      "sha256": "b91f7cb29b39aacb5631950ecbe70d184d7e292f07ffbeb0ac840d860e068992",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libcrypto_python.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_heapq.cpython-312.so",
+      "sha256": "b280fac49c2a53d34554b8b1a556c5251e1c216ca07feb7aa65c5307e1aff1e4",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_json.cpython-312.so",
+      "sha256": "66ec4f7b83dab97ba69d71ac75407f427389b3296f894e667a65d921dbafa704",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_lsprof.cpython-312.so",
+      "sha256": "6198fc4b778f7c558f7d5e1b1e32a2a7cedb0393a0ef4a0bc8afafbea60bfdfb",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_md5.cpython-312.so",
+      "sha256": "c6df7519ef25abf9f84589e383ec8cf2b55c65b2081eb16d58dacdeaa71e8d3b",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_multibytecodec.cpython-312.so",
+      "sha256": "2e8f42ea1a770ccb4386ea61ed10aa4d89e9a18d14c0338020063479df839b8f",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_multiprocessing.cpython-312.so",
+      "sha256": "fb7c50afeacd9210c43e77bf84d59f0a6f6c4e05d692ee6199faf67ef763a28d",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_opcode.cpython-312.so",
+      "sha256": "48e8dd5f81817123a5e52caed0a0ae354c65e3b79e95d6b5241851a618e1512d",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_pickle.cpython-312.so",
+      "sha256": "e1fd051d4252fb6112a802533e973ef294044b14acce04ba5966e57860a6ce91",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_posixsubprocess.cpython-312.so",
+      "sha256": "7b78f2c5ada459435d40c54c19541c517008817777072c4ccaa20fc5eece85cb",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_queue.cpython-312.so",
+      "sha256": "380d5aa5e205081711bb968dedba4139307a13334a221c3f9627c626079e06bd",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_sha1.cpython-312.so",
+      "sha256": "75471f26714763782601761bab11b7ec3ce8f330a64189cad8207901def8657f",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_sha3.cpython-312.so",
+      "sha256": "63d76ee0efb82528ea54edf2901442c775b25407346d3da272ae0ce1a6389414",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_socket.cpython-312.so",
+      "sha256": "6b43684382562a80226985fd19a38ed90e689219c41d5424c4254f109953722b",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_sqlite3.cpython-312.so",
+      "sha256": "66cb765dc2a0b0fb6d58e5d470ef4f783e0c548120066c656a87e5b11793d3d4",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libsqlite3_python.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_ssl.cpython-312.so",
+      "sha256": "1f91370ba068d0a223b2a7132145b2256aa0f9e509d64a93bf936904a25287cb",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libssl_python.so",
+        "libcrypto_python.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_statistics.cpython-312.so",
+      "sha256": "0652dc1851506a3cbb6908e0b604a102f17507d5094f34f198be03c1a7a25dc9",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_xxinterpchannels.cpython-312.so",
+      "sha256": "c900dc312e7dedd51d639b1cad663054d25dec74954b69790b258e635b4458bd",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_xxsubinterpreters.cpython-312.so",
+      "sha256": "277e7cb1eee0ca1d2b4d4347c81c05a779da75fd96314a64343f9a02fba0e133",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_xxtestfuzz.cpython-312.so",
+      "sha256": "d842ff9bde413366ae851dfebfc03c8b405fe1c89f8bd3d16eddacdb12c14790",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/_zoneinfo.cpython-312.so",
+      "sha256": "9500d48ad5771ecc86c24801044c1a79babe264b3722cc0fdebd28bdfad317a8",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/array.cpython-312.so",
+      "sha256": "26480def4d38418b4c8884edc6924a80c16723bcf25c1856be95578e8503767e",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/audioop.cpython-312.so",
+      "sha256": "2c69434b0b538fe1aaf66e45326349d8bb19ee54ba0889979e46edfe77f1c8b6",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/cmath.cpython-312.so",
+      "sha256": "bfebcf4c24c50868f2f78c51181c875003c48a5c632ea2b0bd1843cd55dff55c",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/fcntl.cpython-312.so",
+      "sha256": "5ac9600ba51627e02f4f6ed0dbaff46e3a40d8a915033980ac2ccee8b22d18f7",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/ossaudiodev.cpython-312.so",
+      "sha256": "572938a27a95f1dcfa9824d16b93d79ea3392a0406b51144370cf4c877b1a83b",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/pyexpat.cpython-312.so",
+      "sha256": "fdde238928fcd2af6890c04930df070e9f9aa3dcca8acdc7bf47e5dc605a8104",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/resource.cpython-312.so",
+      "sha256": "dc966d450038f7e48b425b64563f6212baf5878ad124a3f661030bb2c04e7b61",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/select.cpython-312.so",
+      "sha256": "62fd8bface83e4d4d8cd79852d6cef341e01583fab353fd8f8357958a9772846",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/syslog.cpython-312.so",
+      "sha256": "5f204dabb55f4d7997ed8493d468b9175b39642c21411a244b3cdc7d11ee8bcb",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/termios.cpython-312.so",
+      "sha256": "69e21e12425dc695b28a114c3e9adcfc2a95d9761267d5f11eea36b97d8cfa69",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/unicodedata.cpython-312.so",
+      "sha256": "9891418c1e4912d197c259228815909b988702d3a596255058f0c0fc99a955fe",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/xxlimited.cpython-312.so",
+      "sha256": "47ba58a12ec77c59aab02075723a2c38a6f5160f6d4e0f421e2909b70158140f",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/xxlimited_35.cpython-312.so",
+      "sha256": "d25ed8d98084b94e606f3b690ba709c3ee90dc9ae4f80ab4c73743e92db80915",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    },
+    {
+      "path": "assets/chaquopy/stdlib-arm64-v8a.imy!/xxsubtype.cpython-312.so",
+      "sha256": "3648af4f295ace323102e4eeabad59242a8187c9b6d1686c1ce07e71fd4809e5",
+      "machine": 183,
+      "load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "soname": null,
+      "needed": [
+        "libm.so",
+        "libpython3.12.so",
+        "libdl.so",
+        "libc.so"
+      ]
+    }
+  ]
+}

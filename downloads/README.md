@@ -1,7 +1,7 @@
 # Arquivos para download
 
 Esta pasta reúne os artefatos publicados na branch `codex/concurse-app`. O APK
-Android 0.1.6/code7 e o bundle do gateway estão no GitHub. Os nomes mantêm a
+Android 0.1.7/code8 e o bundle do gateway estão no GitHub. Os nomes mantêm a
 versão real gravada no instalador. Verifique o arquivo `SHA256SUMS.txt` antes
 de instalar.
 
@@ -9,7 +9,7 @@ A [página pública de apresentação e instalação](https://leandro-santana013
 usa os mesmos artefatos deste inventário. O código e as instruções de publicação ficam em
 [`landing/README.md`](../landing/README.md).
 
-O APK code7 inclui o ícone correto C com check em preto e branco. A interface
+O APK code8 inclui o ícone correto C com check em preto e branco. A interface
 troca entre branco no preto e preto no branco conforme os 12 temas disponíveis.
 Os instaladores Windows 0.1.2 preservam o ícone da compilação original; suas
 fontes compartilhadas já usam as novas variantes, mas não foram recompilados.
@@ -31,7 +31,8 @@ Os instaladores `0.1.0` anteriores permanecem disponíveis para retrocesso.
 
 Os arquivos de download desta pasta são:
 
-- `concurse-mobile-aarch64-release-v0.1.6-code7-16k.apk`: APK Android atual, beta.
+- `concurse-mobile-aarch64-release-v0.1.7-code8-16k.apk`: APK Android atual, beta.
+- `concurse-mobile-aarch64-release-v0.1.6-code7-16k.apk`: APK anterior com falha de carregamento de `libmupdfcpp.so`.
 - `concurse-mobile-aarch64-release-v0.1.5-code6-16k.apk`: APK anterior com motor embarcado e falha de inicialização do OpenSSL.
 - `concurse-mobile-aarch64-release-v0.1.4-code5-16k.apk`: APK Android anterior.
 - `concurse-mobile-aarch64-release-v0.1.3-code4-16k.apk`: APK Android de
@@ -50,16 +51,19 @@ Os arquivos de download desta pasta são:
 ## Android
 
 O novo arquivo é
-[`concurse-mobile-aarch64-release-v0.1.6-code7-16k.apk`](concurse-mobile-aarch64-release-v0.1.6-code7-16k.apk):
-versão `0.1.6`, código Android `7`, ABI `arm64-v8a` e alinhamento de 16 KB.
+[`concurse-mobile-aarch64-release-v0.1.7-code8-16k.apk`](concurse-mobile-aarch64-release-v0.1.7-code8-16k.apk):
+versão `0.1.7`, código Android `8`, ABI `arm64-v8a` e alinhamento de 16 KB.
 Foi gerado e assinado localmente com a mesma chave de desenvolvimento do APK
-anterior, permitindo instalá-lo como atualização. Tem 158.110.064 bytes e SHA-256
-`613dcd0886b4f7b7f7e521ae1b1a18651fb3050479d547d304397ea654dcb8fc`.
+anterior, permitindo instalá-lo como atualização. Tem 158.589.296 bytes e SHA-256
+`3add80ff7fc57e5e82c6487191cf74a368ff8e02427ab570435b2c503549c859`.
 O estado dos testes no Redmi e das rotas autenticadas está no
 [registro da migração](../docs/mobile-migration-audit.md).
 
-Esta revisão corrige o motor que falhava antes de iniciar por causa do
-provedor legado do OpenSSL. Corrige a busca de Fiscal de Postura/IDCAP,
+Esta revisão preserva a correção do OpenSSL e corrige a organização de
+`libmupdfcpp.so`, que ainda impedia o motor de iniciar na versão 0.1.6.
+Motor, PDF, OCR e margens do Android passaram no teste release do Redmi.
+Falhas de rede do login não são tratadas como sessão expirada. A busca
+autenticada e a publicação central ainda precisam de validação. Corrige a busca de Fiscal de Postura/IDCAP,
 inclusive `idecap`, exclui cargos diferentes e localiza a cópia pública oficial
 do mesmo caderno quando disponível. O parser preserva as 50 respostas e as
 alternativas completas da matriz IDCAP de Ibirataia 2024; o cache foi renovado.
@@ -69,7 +73,7 @@ de provas do desktop. O Supabase mantém a biblioteca, questões e tentativas;
 os arquivos são enviados ao Oracle quando a extração termina. A barra inferior
 contém cinco ícones em uma única linha. O topo compacto aprovado fica abaixo
 das barras do Android, com menu para revisão, ranking e importação.
-A auditoria verificou 123 bibliotecas ARM64, incluindo as dos arquivos Python,
+A auditoria verificou 124 bibliotecas ARM64, incluindo as dos arquivos Python,
 com alinhamento para páginas de 16 KB e sem bancos ou chaves privadas no pacote.
 
 O arquivo [`app-gateway-mobile-hard-switch.ts`](app-gateway-mobile-hard-switch.ts)
@@ -134,7 +138,7 @@ junto com os artefatos desta pasta.
 - `desktop/engine/android/requirements.txt`
 - `desktop/engine/android/normalize_native_wheels.py`
 - `desktop/engine/android/audit_apk.py`
-- `desktop/engine/android/EngineSmokeTest.kt`
+- `desktop/engine/android/EngineSmokeTest.java`
 - `desktop/scripts/prepare-android-engine.mjs`
 - `desktop/scripts/collect-android-startup.ps1`
 

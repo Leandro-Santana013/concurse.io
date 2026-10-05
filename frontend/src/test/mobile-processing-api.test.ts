@@ -60,6 +60,28 @@ describe('processamento embarcado no mobile', () => {
     expect(fetchMock.mock.calls.filter(([url]) => url.endsWith('/auth/supabase/exchange'))).toHaveLength(1);
   });
 
+  it('permite repetir a busca após indisponibilidade do login sem tratar a conta como expirada', async () => {
+    let exchangeAttempts = 0;
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith('/health')) return new Response('{}');
+      if (url.endsWith('/auth/supabase/exchange')) {
+        exchangeAttempts += 1;
+        return exchangeAttempts === 1
+          ? new Response('{"detail":"Serviço indisponível"}', { status: 503 })
+          : new Response('{"session_token":"engine-token"}');
+      }
+      if (url.includes('/search?')) return new Response('{"items":[],"total":0}');
+      return new Response('{}');
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { api, AuthRequiredError } = await import('../services/api');
+    const failed = api.searchExams('Fiscal de Postura IDCAP');
+    await expect(failed).rejects.toThrow('Confira sua conexão');
+    await expect(failed).rejects.not.toBeInstanceOf(AuthRequiredError);
+    await expect(api.searchExams('Fiscal de Postura IDCAP')).resolves.toBeDefined();
+    expect(exchangeAttempts).toBe(2);
+  });
+
   it('envia PDF, gabarito e imagens uma vez e conserva apenas IDs centrais na biblioteca', async () => {
     const fetchMock = vi.fn(async (url: string, options?: RequestInit) => {
       if (url.endsWith('/health')) return new Response('{}');

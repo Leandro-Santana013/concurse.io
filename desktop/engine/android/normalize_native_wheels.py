@@ -61,7 +61,9 @@ def normalize(root: Path) -> list[dict]:
                 continue
             info = elf_info(data)
             target = source.with_name(re.sub(r"\.cpython-312[^.]*\.so$", ".so", source.name))
-            if source.name.startswith("lib"):
+            python_extension = bool(re.search(r"\.cpython-\d+[^.]*\.so$", source.name))
+            shared_library = bool(re.match(r"^lib[^.]+\.so(?:\.\d+)*$", source.name)) and not python_extension
+            if shared_library:
                 target = library_dir / (info["soname"] or source.name)
             if target != source:
                 # All moves stay within this generated, verified task directory.
@@ -71,7 +73,13 @@ def normalize(root: Path) -> list[dict]:
                 if target.exists():
                     if target.read_bytes() != data:
                         raise ValueError(f"Conflicting shared library: {target.name}")
-                    source.unlink()
+                    if info["soname"] or not shared_library:
+                        source.unlink()
+                elif not info["soname"] and shared_library:
+                    # Android cannot resolve a preloaded absolute path against
+                    # DT_NEEDED reliably without SONAME. PyMuPDF's C++ library
+                    # uses $ORIGIN, so retain its original package location too.
+                    shutil.copyfile(source, target)
                 else:
                     shutil.move(str(source), str(target))
             report.append({"path": str(target.relative_to(root)).replace("\\", "/"),

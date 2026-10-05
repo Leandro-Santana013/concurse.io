@@ -18,6 +18,10 @@ android {
     }
 }
 
+dependencies {
+    implementation("androidx.tracing:tracing:1.3.0")
+}
+
 chaquopy {
     defaultConfig {
         version = "3.12"

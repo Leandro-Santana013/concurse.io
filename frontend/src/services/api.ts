@@ -274,6 +274,9 @@ const ensureLocalEngineSession = async (): Promise<void> => {
       body: JSON.stringify({ access_token: session.access_token }),
     }, 30000);
     if (response.status === 401) throw new AuthRequiredError();
+    if (response.status === 503) {
+      throw new Error('Não foi possível conectar ao serviço de login. Confira sua conexão e tente a busca novamente.');
+    }
     if (!response.ok) throw new Error('Não foi possível preparar o processamento para sua conta.');
     const payload = await response.json() as { session_token?: string };
     if (!payload.session_token) throw new Error('O processamento retornou uma sessão inválida.');
